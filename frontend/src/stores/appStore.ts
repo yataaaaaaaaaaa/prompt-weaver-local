@@ -1,6 +1,13 @@
 import { create } from 'zustand';
 import { api } from '../api';
 import { bootstrapWithRetry, dirnameFromPath, basenameFromPath, parseOptionalSeed, planSeed } from '../app/appHelpers';
+import {
+    filterSelectionLoraIds,
+    makeLoraMap,
+    removeLoraReferencesFromCategories,
+    removeMissingLoraReferencesFromCategories,
+    resolveLoraSelection,
+} from '../app/loraSelection';
 import { selectPrompts, selectPromptsWithCategoryCycle } from '../promptEngine';
 import type { AppState, ForbiddenAssociationEndpoint, GenerateRequest, PromptCategory, PromptEntry } from '../types';
 import { uniqueSlug } from '../utils';
@@ -27,6 +34,9 @@ type AppStore = {
     selectModelFile: () => Promise<void>;
     addLoraFiles: () => Promise<void>;
     removeLora: (loraId: string) => void;
+    setLoraSelected: (loraId: string, selected: boolean) => void;
+    clearSelectedLoras: () => void;
+    clearLoraPromptLinks: (loraId: string) => void;
     copyCurrentPrompt: () => Promise<void>;
 };
 
@@ -100,6 +110,7 @@ async function getLocalPersistencePresence(): Promise<{
     categories: boolean;
     forbidden: boolean;
     settings: boolean;
+    library: boolean;
     panelLayouts: boolean;
     workspaceZIndex: boolean;
     currentImage: boolean;
@@ -108,6 +119,7 @@ async function getLocalPersistencePresence(): Promise<{
         categories,
         forbidden,
         settings,
+        library,
         panelLayouts,
         workspaceZIndex,
         currentImage,
@@ -115,6 +127,7 @@ async function getLocalPersistencePresence(): Promise<{
         hasPersistedStoreData('categorie-store'),
         hasPersistedStoreData('forbidden-associations-store'),
         hasPersistedStoreData('settings-store'),
+        hasPersistedStoreData('library-store'),
         hasPersistedStoreData('panel-layouts-store'),
         hasPersistedStoreData('workspace-z-index-store'),
         hasPersistedStoreData('current-image-store'),
@@ -124,6 +137,7 @@ async function getLocalPersistencePresence(): Promise<{
         categories,
         forbidden,
         settings,
+        library,
         panelLayouts,
         workspaceZIndex,
         currentImage,
@@ -198,19 +212,21 @@ async function executeGenerate(): Promise<void> {
             nextCategorySeedState: settings.promptCategorySeedState,
             promptSeed: planSeed(settings.promptSeedBehavior, settings.promptSeedInput).requestSeed,
         };
-    const promptSelections = promptSelectionResult.selections;
-    const allLoraIds = Array.from(new Set([...library.selectedLoraIds, ...promptSelections.flatMap((item) => item.induced_lora_ids)]));
-    const loras = allLoraIds.map((loraId) => {
-        const lora = library.loras.find((item) => item.id === loraId);
-        if (!lora) {
-            throw new Error(`Unknown LoRA '${loraId}'.`);
-        }
-        return lora;
-    });
+    const loraResolution = resolveLoraSelection(library, library.selectedLoraIds, promptSelectionResult.selections);
+    const lorasById = makeLoraMap(library);
+    const promptSelections = filterSelectionLoraIds(promptSelectionResult.selections, new Set(lorasById.keys()));
+    if (loraResolution.missingIds.length > 0) {
+        useLibraryStore.getState().setSelectedLoraIds(loraResolution.selectedIds);
+        const categoriesStore = useCategoriesStore.getState();
+        categoriesStore.setCategories(removeMissingLoraReferencesFromCategories(
+            categoriesStore.categories,
+            new Set(lorasById.keys()),
+        ));
+    }
     const prompt = promptSelections.map((item) => item.prompt_text).filter(Boolean).join(', ');
     const request: GenerateRequest = {
         model,
-        loras,
+        loras: loraResolution.activeLoras,
         prompt,
         selections: promptSelections,
         width: settings.width,
@@ -259,23 +275,27 @@ export const useAppStore = create<AppStore>((set, get) => ({
             const payload = await bootstrapWithRetry(signal, (error) => useGenerationStore.getState().setError(String(error)));
             const persistence = await getLocalPersistencePresence();
             useGenerationStore.getState().setDataDir(payload.data_dir);
-            useLibraryStore.getState().setLibrary(payload.library);
+            if (!persistence.library) {
+                useLibraryStore.getState().setLibrary(payload.library);
+            }
 
             const libraryStore = useLibraryStore.getState();
-            if (!libraryStore.selectedModelId) {
+            const validLoraIds = new Set(libraryStore.loras.map((item) => item.id));
+            if (!persistence.library && !libraryStore.selectedModelId) {
                 libraryStore.setSelectedModelId(payload.state.last_model_id ?? payload.library.models[0]?.id ?? '');
             }
-            if (libraryStore.selectedLoraIds.length === 0 && (payload.state.last_lora_ids?.length ?? 0) > 0) {
+            if (!persistence.library && libraryStore.selectedLoraIds.length === 0 && (payload.state.last_lora_ids?.length ?? 0) > 0) {
                 libraryStore.setSelectedLoraIds(payload.state.last_lora_ids ?? []);
             }
-            if (!libraryStore.lastModelDir) {
+            if (!persistence.library && !libraryStore.lastModelDir) {
                 libraryStore.setLastModelDir(payload.state.last_model_dir);
             }
-            if (!libraryStore.lastLoraDir) {
+            if (!persistence.library && !libraryStore.lastLoraDir) {
                 libraryStore.setLastLoraDir(payload.state.last_lora_dir);
             }
+            libraryStore.setSelectedLoraIds(libraryStore.selectedLoraIds);
 
-            const categories = payload.state.categories.map((category) => ({
+            const categories = removeMissingLoraReferencesFromCategories(payload.state.categories.map((category) => ({
                 text: category.name,
                 activation_text: category.activation_text,
                 priority: clampNumber(Number(category.priority), 1),
@@ -285,7 +305,7 @@ export const useAppStore = create<AppStore>((set, get) => ({
                     state: resolveSubPromptState(category, prompt),
                     extraLoraIds: [...prompt.extra_lora_ids],
                 })),
-            }));
+            })), validLoraIds);
             if (!persistence.categories) {
                 useCategoriesStore.getState().setCategories(categories);
             }
@@ -460,13 +480,26 @@ export const useAppStore = create<AppStore>((set, get) => ({
     removeLora: (loraId) => {
         useLibraryStore.getState().removeLora(loraId);
         const categoriesStore = useCategoriesStore.getState();
-        categoriesStore.setCategories(categoriesStore.categories.map((category) => ({
-            ...category,
-            subPrompts: category.subPrompts.map((subPrompt) => ({
-                ...subPrompt,
-                extraLoraIds: subPrompt.extraLoraIds.filter((item) => item !== loraId),
-            })),
-        })));
+        categoriesStore.setCategories(removeLoraReferencesFromCategories(categoriesStore.categories, loraId));
+    },
+    setLoraSelected: (loraId, selected) => {
+        const libraryStore = useLibraryStore.getState();
+        if (!libraryStore.loras.some((item) => item.id === loraId)) {
+            return;
+        }
+
+        const currentIds = libraryStore.selectedLoraIds;
+        const nextIds = selected
+            ? [...currentIds, loraId]
+            : currentIds.filter((item) => item !== loraId);
+        libraryStore.setSelectedLoraIds(nextIds);
+    },
+    clearSelectedLoras: () => {
+        useLibraryStore.getState().setSelectedLoraIds([]);
+    },
+    clearLoraPromptLinks: (loraId) => {
+        const categoriesStore = useCategoriesStore.getState();
+        categoriesStore.setCategories(removeLoraReferencesFromCategories(categoriesStore.categories, loraId));
     },
     addLoraFiles: async () => {
         const paths = await window.promptWeaverDesktop?.pickFiles({

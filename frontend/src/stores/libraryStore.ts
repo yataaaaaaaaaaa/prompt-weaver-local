@@ -1,5 +1,6 @@
 import { create } from 'zustand';
 import { createJSONStorage, persist } from 'zustand/middleware';
+import { filterKnownLoraIds } from '../app/loraSelection';
 import type { LibraryState, LoRASpec, ModelSpec } from '../types';
 import { createFileBackedStorage } from '../utils/createFileBackedStorage';
 
@@ -40,11 +41,15 @@ export const useLibraryStore = create<LibraryStore>()(
                 selectedLoraIds: state.selectedLoraIds.filter((item) => library.loras.some((lora) => lora.id === item)),
             })),
             setSelectedModelId: (selectedModelId) => set({ selectedModelId }),
-            setSelectedLoraIds: (selectedLoraIds) => set({ selectedLoraIds: Array.from(new Set(selectedLoraIds)) }),
+            setSelectedLoraIds: (selectedLoraIds) => set((state) => ({
+                selectedLoraIds: filterKnownLoraIds(selectedLoraIds, state),
+            })),
             toggleSelectedLoraId: (loraId) => set((state) => ({
-                selectedLoraIds: state.selectedLoraIds.includes(loraId)
-                    ? state.selectedLoraIds.filter((item) => item !== loraId)
-                    : [...state.selectedLoraIds, loraId],
+                selectedLoraIds: !state.loras.some((item) => item.id === loraId)
+                    ? state.selectedLoraIds
+                    : state.selectedLoraIds.includes(loraId)
+                        ? state.selectedLoraIds.filter((item) => item !== loraId)
+                        : [...state.selectedLoraIds, loraId],
             })),
             addModel: (model) => set((state) => ({
                 models: state.models.some((item) => item.id === model.id) ? state.models : [...state.models, model],
@@ -76,6 +81,26 @@ export const useLibraryStore = create<LibraryStore>()(
                 lastModelDir: state.lastModelDir,
                 lastLoraDir: state.lastLoraDir,
             }),
+            merge: (persisted, current) => {
+                const persistedState = persisted as Partial<LibraryStore>;
+                const next = {
+                    ...current,
+                    ...persistedState,
+                    models: persistedState.models ?? current.models,
+                    loras: persistedState.loras ?? current.loras,
+                    selectedModelId: persistedState.selectedModelId ?? current.selectedModelId,
+                    selectedLoraIds: persistedState.selectedLoraIds ?? current.selectedLoraIds,
+                    lastModelDir: persistedState.lastModelDir ?? current.lastModelDir,
+                    lastLoraDir: persistedState.lastLoraDir ?? current.lastLoraDir,
+                };
+                return {
+                    ...next,
+                    selectedModelId: next.models.some((item) => item.id === next.selectedModelId)
+                        ? next.selectedModelId
+                        : next.models[0]?.id ?? '',
+                    selectedLoraIds: filterKnownLoraIds(next.selectedLoraIds, next),
+                };
+            },
         },
     ),
 );

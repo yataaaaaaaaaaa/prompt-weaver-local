@@ -270,7 +270,7 @@ wheels = [
 [[package]]
 name = "diffusion-lora-runtime"
 version = "0.1.4"
-source = { git = "file:///D:/Anything/libs/diffusion-lora-runtime?tag=0.1.4#cf65dcb2ddc8c467fc1e864a85700dfd3dee0b2d" }
+source = { editable = "../../libs/diffusion-lora-runtime" }
 dependencies = [
     { name = "accelerate" },
     { name = "diffusers" },
@@ -279,6 +279,18 @@ dependencies = [
     { name = "safetensors" },
     { name = "transformers" },
 ]
+
+[package.metadata]
+requires-dist = [
+    { name = "accelerate", specifier = ">=0.17.0" },
+    { name = "diffusers", specifier = ">=0.35.0,<0.36.0" },
+    { name = "peft", specifier = ">=0.13.0" },
+    { name = "pillow", specifier = ">=11.0.0" },
+    { name = "pytest", marker = "extra == 'dev'", specifier = ">=8.0.0" },
+    { name = "safetensors", specifier = ">=0.4.5" },
+    { name = "transformers", specifier = ">=4.45.0,<4.57.0" },
+]
+provides-extras = ["dev"]
 
 [[package]]
 name = "fastapi"
@@ -862,7 +874,7 @@ dependencies = [
 
 [package.metadata]
 requires-dist = [
-    { name = "diffusion-lora-runtime", git = "file:///D:/Anything/libs/diffusion-lora-runtime?tag=0.1.4" },
+    { name = "diffusion-lora-runtime", editable = "../../libs/diffusion-lora-runtime" },
     { name = "fastapi", specifier = ">=0.115.0" },
     { name = "pillow", specifier = ">=11.0.0" },
     { name = "pydantic", specifier = ">=2.9.0" },

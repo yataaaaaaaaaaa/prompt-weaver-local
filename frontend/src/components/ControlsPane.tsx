@@ -1,4 +1,4 @@
-import type { ChangeEvent } from 'react';
+import { useMemo, type ChangeEvent } from 'react';
 import { useAppStore } from '../stores/appStore';
 import { useCategoriesStore } from '../stores/categoriesStore';
 import { useGenerationStore } from '../stores/generationStore';
@@ -27,6 +27,9 @@ export default function ControlsPane(): JSX.Element {
     const selectModelFile = useAppStore((state) => state.selectModelFile);
     const addLoraFiles = useAppStore((state) => state.addLoraFiles);
     const removeLora = useAppStore((state) => state.removeLora);
+    const setLoraSelected = useAppStore((state) => state.setLoraSelected);
+    const clearSelectedLoras = useAppStore((state) => state.clearSelectedLoras);
+    const clearLoraPromptLinks = useAppStore((state) => state.clearLoraPromptLinks);
     const copyCurrentPrompt = useAppStore((state) => state.copyCurrentPrompt);
 
     const categories = useCategoriesStore((state) => state.categories);
@@ -41,7 +44,6 @@ export default function ControlsPane(): JSX.Element {
     const selectedModelId = useLibraryStore((state) => state.selectedModelId);
     const selectedLoraIds = useLibraryStore((state) => state.selectedLoraIds);
     const setSelectedModelId = useLibraryStore((state) => state.setSelectedModelId);
-    const toggleSelectedLoraId = useLibraryStore((state) => state.toggleSelectedLoraId);
 
     const width = useSettingsStore((state) => state.width);
     const height = useSettingsStore((state) => state.height);
@@ -64,6 +66,14 @@ export default function ControlsPane(): JSX.Element {
 
     const progressRatio = progress && progress.total_steps > 0 ? Math.max(0, Math.min(1, progress.current_step / progress.total_steps)) : 0;
     const promptSeedManagedPerCategory = promptSeedBehavior === 'per_category_cycle';
+    const loraIds = useMemo(() => new Set(loras.map((lora) => lora.id)), [loras]);
+    const promptLinkedLoraIds = useMemo(
+        () => Array.from(new Set(categories.flatMap((category) => category.subPrompts.flatMap((prompt) => prompt.extraLoraIds))))
+            .filter((loraId) => loraIds.has(loraId)),
+        [categories, loraIds],
+    );
+    const promptLinkedLoraIdSet = useMemo(() => new Set(promptLinkedLoraIds), [promptLinkedLoraIds]);
+    const activeLoraCount = new Set([...selectedLoraIds, ...promptLinkedLoraIds]).size;
 
     return (
         <div className="pane-content-scroll">
@@ -153,18 +163,35 @@ export default function ControlsPane(): JSX.Element {
             <div className="panel-section">
                 <div className="panel-title-row">
                     <h3>LoRAs</h3>
-                    <button className="ghost-button slim-button" onClick={addLoraFiles} type="button">Add files</button>
+                    <div className="inline-actions">
+                        <button className="ghost-button slim-button" onClick={clearSelectedLoras} disabled={selectedLoraIds.length === 0} type="button">Clear</button>
+                        <button className="ghost-button slim-button" onClick={addLoraFiles} type="button">Add files</button>
+                    </div>
                 </div>
                 {loras.length ? (
                     <div className="lora-library-list">
                         {loras.map((lora) => {
                             const selected = selectedLoraIds.includes(lora.id);
+                            const promptLinked = promptLinkedLoraIdSet.has(lora.id);
                             return (
                                 <div key={lora.id} className="lora-library-row">
                                     <label className="lora-library-toggle">
-                                        <input type="checkbox" checked={selected} onChange={() => toggleSelectedLoraId(lora.id)} />
-                                        <span className="lora-library-name">{lora.name}</span>
+                                        <input type="checkbox" checked={selected} onChange={(event) => setLoraSelected(lora.id, event.target.checked)} />
+                                        <span className="lora-library-name">
+                                            <span>{lora.name}</span>
+                                            {promptLinked ? <span className="lora-library-note">Prompt-linked</span> : null}
+                                        </span>
                                     </label>
+                                    {promptLinked ? (
+                                        <button
+                                            type="button"
+                                            className="ghost-button lora-row-action"
+                                            title={`Remove prompt links to ${lora.name}`}
+                                            onClick={() => clearLoraPromptLinks(lora.id)}
+                                        >
+                                            Unlink
+                                        </button>
+                                    ) : null}
                                     <button
                                         type="button"
                                         className="selected-lora-remove-button"
@@ -179,7 +206,9 @@ export default function ControlsPane(): JSX.Element {
                         })}
                     </div>
                 ) : <div className="muted">No LoRAs loaded.</div>}
-                <div className="muted small-text">Active LoRAs: {selectedLoraIds.length}</div>
+                <div className="muted small-text">
+                    Default selected: {selectedLoraIds.length} · Prompt-linked: {promptLinkedLoraIds.length} · Possible active: {activeLoraCount}
+                </div>
             </div>
 
             <div className="panel-section">

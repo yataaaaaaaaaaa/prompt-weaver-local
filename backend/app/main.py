@@ -216,10 +216,25 @@ def _default_library() -> LibraryState:
     return LibraryState.model_validate(DEFAULT_LIBRARY)
 
 
+def _strip_missing_lora_references(state: AppState, library: LibraryState) -> AppState:
+    valid_lora_ids = {item.id for item in library.loras}
+    next_state = state.model_copy(deep=True)
+    next_state.last_lora_ids = [
+        lora_id for lora_id in next_state.last_lora_ids if lora_id in valid_lora_ids
+    ]
+    for category in next_state.categories:
+        for prompt in category.prompts:
+            prompt.extra_lora_ids = [
+                lora_id for lora_id in prompt.extra_lora_ids if lora_id in valid_lora_ids
+            ]
+    return next_state
+
+
 @app.get("/api/bootstrap", response_model=BootstrapResponse)
 def bootstrap() -> BootstrapResponse:
     state = storage.load_state()
     library = storage.load_library()
+    state = _strip_missing_lora_references(state, library)
     outputs = storage.list_outputs()
 
     current_output = None

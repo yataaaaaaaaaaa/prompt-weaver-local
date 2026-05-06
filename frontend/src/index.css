@@ -678,9 +678,28 @@ select[multiple] {
 .lora-library-name {
 	flex: 1 1 auto;
 	min-width: 0;
+	display: flex;
+	flex-direction: column;
+	gap: 2px;
+	overflow: hidden;
+}
+
+.lora-library-name span:first-child {
 	overflow: hidden;
 	text-overflow: ellipsis;
 	white-space: nowrap;
+}
+
+.lora-library-note {
+	color: #fbbf24;
+	font-size: 0.74rem;
+	line-height: 1.1;
+}
+
+.lora-row-action {
+	flex: 0 0 auto;
+	padding: 4px 8px;
+	font-size: 0.78rem;
 }
 
 .subpanel {

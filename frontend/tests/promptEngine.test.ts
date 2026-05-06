@@ -1,8 +1,9 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
+import { filterKnownLoraIds, filterSelectionLoraIds, resolveLoraSelection } from '../src/app/loraSelection';
 import { selectPromptsWithCategoryCycle } from '../src/promptEngine';
 import { makeRuntimePromptEndpoint, ruleMatchesPrompt } from '../src/utils';
-import type { AppState, ForbiddenRule, PromptCategory } from '../src/types';
+import type { AppState, ForbiddenRule, GenerationSelection, LibraryState, PromptCategory } from '../src/types';
 
 function makeCategory(name: string, prompts: string[], options: Partial<PromptCategory> = {}): PromptCategory {
     const id = name.toLowerCase();
@@ -126,4 +127,38 @@ test('per-category cycle does not touch skipped category counters because skippe
 
     assert.deepEqual(result.selections.map((item) => item.category_name), ['Alpha']);
     assert.equal('beta' in result.nextCategorySeedState, false);
+});
+
+test('LoRA selection resolver drops stale ids instead of returning unknown runtime entries', () => {
+    const library: LibraryState = {
+        models: [],
+        loras: [
+            { id: 'portrait', name: 'portrait.safetensors', path: 'D:/loras/portrait.safetensors' },
+            { id: 'style', name: 'style.safetensors', path: 'D:/loras/style.safetensors' },
+        ],
+    };
+    const selections: GenerationSelection[] = [
+        { category_name: 'Subject', prompt_text: 'person', locked: false, induced_lora_ids: ['style', 'missing-prompt-lora'] },
+    ];
+
+    const resolved = resolveLoraSelection(library, ['portrait', 'missing-selected-lora'], selections);
+
+    assert.deepEqual(resolved.selectedIds, ['portrait']);
+    assert.deepEqual(resolved.promptLinkedIds, ['style']);
+    assert.deepEqual(resolved.activeIds, ['portrait', 'style']);
+    assert.deepEqual(resolved.missingIds, ['missing-selected-lora', 'missing-prompt-lora']);
+    assert.deepEqual(resolved.activeLoras.map((item) => item.id), ['portrait', 'style']);
+});
+
+test('LoRA helpers sanitize persisted and generated selection payloads', () => {
+    const library: LibraryState = {
+        models: [],
+        loras: [{ id: 'known', name: 'known.safetensors', path: 'D:/loras/known.safetensors' }],
+    };
+    const selections: GenerationSelection[] = [
+        { category_name: 'Style', prompt_text: 'painted', locked: false, induced_lora_ids: ['known', 'unknown', 'known'] },
+    ];
+
+    assert.deepEqual(filterKnownLoraIds(['unknown', 'known', 'known'], library), ['known']);
+    assert.deepEqual(filterSelectionLoraIds(selections, new Set(['known']))[0].induced_lora_ids, ['known']);
 });
