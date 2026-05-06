@@ -212,17 +212,9 @@ async function executeGenerate(): Promise<void> {
             nextCategorySeedState: settings.promptCategorySeedState,
             promptSeed: planSeed(settings.promptSeedBehavior, settings.promptSeedInput).requestSeed,
         };
-    const loraResolution = resolveLoraSelection(library, library.selectedLoraIds, promptSelectionResult.selections);
     const lorasById = makeLoraMap(library);
     const promptSelections = filterSelectionLoraIds(promptSelectionResult.selections, new Set(lorasById.keys()));
-    if (loraResolution.missingIds.length > 0) {
-        useLibraryStore.getState().setSelectedLoraIds(loraResolution.selectedIds);
-        const categoriesStore = useCategoriesStore.getState();
-        categoriesStore.setCategories(removeMissingLoraReferencesFromCategories(
-            categoriesStore.categories,
-            new Set(lorasById.keys()),
-        ));
-    }
+    const loraResolution = resolveLoraSelection(library, library.selectedLoraIds, promptSelections);
     const prompt = promptSelections.map((item) => item.prompt_text).filter(Boolean).join(', ');
     const request: GenerateRequest = {
         model,
@@ -259,7 +251,6 @@ async function executeGenerate(): Promise<void> {
                 : settings.promptCategorySeedState,
         });
         currentImage.setCurrentRecord(generated);
-        useLibraryStore.getState().setSelectedLoraIds(generated.active_lora_ids);
     } finally {
         currentAbortController = null;
         useGenerationStore.getState().setGenerating(false);

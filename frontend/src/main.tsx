@@ -21,12 +21,19 @@ class RootErrorBoundary extends React.Component<React.PropsWithChildren, RootErr
         console.error('Prompt Weaver frontend crashed while rendering.', error);
     }
 
+    private clearError = (): void => {
+        this.setState({ error: null });
+    };
+
     public render(): React.ReactNode {
         if (this.state.error) {
             return (
                 <div className="loading-screen">
                     <div className="global-error-panel">
-                        <h1>Frontend render error</h1>
+                        <div className="global-error-title-row">
+                            <h1>Frontend render error</h1>
+                            <button type="button" className="global-error-dismiss-button" onClick={this.clearError}>Close</button>
+                        </div>
                         <pre>{this.state.error.stack || this.state.error.message}</pre>
                     </div>
                 </div>

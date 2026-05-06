@@ -129,7 +129,19 @@ export default function App(): JSX.Element {
     }, [nextImage, previousImage, runShortcutCommand]);
 
     if (loading) {
-        return <div className="loading-screen">{error || 'Loading…'}</div>;
+        return (
+            <div className="loading-screen">
+                {error ? (
+                    <div className="global-error-panel">
+                        <div className="global-error-title-row">
+                            <h1>Startup error</h1>
+                            <button type="button" className="global-error-dismiss-button" onClick={() => setError(null)}>Close</button>
+                        </div>
+                        <pre>{error}</pre>
+                    </div>
+                ) : 'Loading…'}
+            </div>
+        );
     }
 
     const showCategories = visibilityMode !== 'panes-only';
@@ -138,7 +150,12 @@ export default function App(): JSX.Element {
     return (
         <div className="app-shell">
             <div className="workspace-surface">
-                {error ? <div className="global-error">{error}</div> : null}
+                {error ? (
+                    <div className="global-error" role="alert">
+                        <span>{error}</span>
+                        <button type="button" className="global-error-inline-dismiss" aria-label="Close error" onClick={() => setError(null)}>×</button>
+                    </div>
+                ) : null}
 
                 {showCategories && categories.map((category) => (
                     <CategoryCard key={category.text} categoryId={CategoryId.from(category.text)} />

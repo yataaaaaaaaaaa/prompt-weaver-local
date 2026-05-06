@@ -129,7 +129,7 @@ test('per-category cycle does not touch skipped category counters because skippe
     assert.equal('beta' in result.nextCategorySeedState, false);
 });
 
-test('LoRA selection resolver drops stale ids instead of returning unknown runtime entries', () => {
+test('LoRA selection resolver derives runtime entries without owning stale id repair', () => {
     const library: LibraryState = {
         models: [],
         loras: [
@@ -146,7 +146,6 @@ test('LoRA selection resolver drops stale ids instead of returning unknown runti
     assert.deepEqual(resolved.selectedIds, ['portrait']);
     assert.deepEqual(resolved.promptLinkedIds, ['style']);
     assert.deepEqual(resolved.activeIds, ['portrait', 'style']);
-    assert.deepEqual(resolved.missingIds, ['missing-selected-lora', 'missing-prompt-lora']);
     assert.deepEqual(resolved.activeLoras.map((item) => item.id), ['portrait', 'style']);
 });
 

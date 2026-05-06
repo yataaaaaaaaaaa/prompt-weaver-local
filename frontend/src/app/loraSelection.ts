@@ -10,7 +10,6 @@ export type ResolvedLoraSelection = {
     selectedIds: string[];
     promptLinkedIds: string[];
     activeIds: string[];
-    missingIds: string[];
     selectedLoras: LoRASpec[];
     promptLinkedLoras: LoRASpec[];
     activeLoras: LoRASpec[];
@@ -39,13 +38,10 @@ export function resolveLoraSelection(
     const selectedIds = uniqueStable(selectedLoraIds).filter((loraId) => lorasById.has(loraId));
     const promptLinkedIds = uniqueStable(promptLoraIds).filter((loraId) => lorasById.has(loraId));
     const activeIds = uniqueStable([...selectedIds, ...promptLinkedIds]);
-    const missingIds = uniqueStable([...selectedLoraIds, ...promptLoraIds].filter((loraId) => !lorasById.has(loraId)));
-
     return {
         selectedIds,
         promptLinkedIds,
         activeIds,
-        missingIds,
         selectedLoras: selectedIds.map((loraId) => lorasById.get(loraId)).filter((item): item is LoRASpec => item != null),
         promptLinkedLoras: promptLinkedIds.map((loraId) => lorasById.get(loraId)).filter((item): item is LoRASpec => item != null),
         activeLoras: activeIds.map((loraId) => lorasById.get(loraId)).filter((item): item is LoRASpec => item != null),

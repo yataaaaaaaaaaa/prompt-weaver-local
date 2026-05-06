@@ -61,11 +61,48 @@ button {
 	left: 50%;
 	transform: translateX(-50%);
 	z-index: 9999;
+	display: flex;
+	align-items: center;
+	gap: 10px;
+	max-width: min(720px, calc(100vw - 32px));
 	padding: 7px 9px;
 	border-radius: 14px;
 	background: rgba(127, 29, 29, 0.92);
 	color: #fecaca;
 	border: 1px solid rgba(248, 113, 113, 0.55);
+	box-shadow: 0 10px 28px rgba(0, 0, 0, 0.32);
+}
+
+.global-error span {
+	min-width: 0;
+	overflow-wrap: anywhere;
+}
+
+.global-error-inline-dismiss,
+.global-error-dismiss-button {
+	border: 1px solid rgba(248, 113, 113, 0.55);
+	background: rgba(127, 29, 29, 0.48);
+	color: #fecaca;
+	cursor: pointer;
+}
+
+.global-error-inline-dismiss {
+	flex: 0 0 auto;
+	width: 24px;
+	height: 24px;
+	border-radius: 999px;
+	font-size: 1rem;
+	line-height: 1;
+}
+
+.global-error-dismiss-button {
+	padding: 6px 10px;
+	border-radius: 999px;
+}
+
+.global-error-inline-dismiss:hover,
+.global-error-dismiss-button:hover {
+	background: rgba(153, 27, 27, 0.72);
 }
 
 .panel-section {
@@ -893,8 +930,16 @@ select[multiple] {
 }
 
 .global-error-panel h1 {
-	margin-bottom: 12px;
+	margin: 0;
 	font-size: 1.1rem;
+}
+
+.global-error-title-row {
+	display: flex;
+	align-items: center;
+	justify-content: space-between;
+	gap: 16px;
+	margin-bottom: 12px;
 }
 
 .global-error-panel pre {
