@@ -1,10 +1,12 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { api } from '../api/client';
 import { LORA_WEIGHT_DEFAULTS } from '../api/defaults.gen';
-import type { AppState, BootstrapResponse, OutputRecord } from '../api/types';
+import type { AppState, BootstrapResponse, CharacterCollection, OutputRecord } from '../api/types';
 import { flushPersistence } from '../persistence/persist';
 import { createMemoryStoreBackend, setStoreBackend, type StoreBackend } from '../persistence/storeBackend';
+import { BOB, BOB_ID, characterCollection } from '../test/characterData';
 import { useCategoriesStore } from './categoriesStore';
+import { useCharactersStore } from './charactersStore';
 import { useForbiddenRulesStore } from './forbiddenRulesStore';
 import { useGenerationSettingsStore, type GenerationSettingsState } from './generationSettingsStore';
 import { useLibraryStore, type LibraryState } from './libraryStore';
@@ -103,6 +105,8 @@ beforeEach(() => {
 	vi.spyOn(api, 'getOutput').mockImplementation(async (outputId) => record(outputId));
 	// No download running in the backend (resumeInstalls at boot).
 	vi.spyOn(api, 'listInstalls').mockResolvedValue([]);
+	// No character yet (loaded in the background at boot).
+	vi.spyOn(api, 'listCharacters').mockResolvedValue(characterCollection([]));
 });
 
 afterEach(() => {
@@ -321,6 +325,57 @@ describe('sessionStore.start: model library installs', () => {
 		expect(session()).toMatchObject({ phase: 'ready', bootError: null });
 		expect(useNotificationsStore.getState().notifications).toEqual([]);
 		expect(useModelCatalogStore.getState().installs).toEqual({});
+	});
+});
+
+describe('sessionStore.start: characters', () => {
+	it('loads the characters in the background once the saved data is hydrated', async () => {
+		vi.spyOn(api, 'bootstrap').mockResolvedValue(payload());
+		spyOnSeeding();
+		const answer = new Promise<CharacterCollection>(() => undefined);
+		const listCharacters = vi.mocked(api.listCharacters).mockReturnValue(answer);
+
+		await session().start();
+
+		// Boot does not wait for the characters.
+		expect(session().phase).toBe('ready');
+		expect(listCharacters).toHaveBeenCalledTimes(1);
+		expect(useCharactersStore.getState().loadStatus).toBe('loading');
+	});
+
+	it('fills the characters store when the answer arrives', async () => {
+		vi.spyOn(api, 'bootstrap').mockResolvedValue(payload());
+		spyOnSeeding();
+		vi.mocked(api.listCharacters).mockResolvedValue(characterCollection([BOB], BOB_ID));
+
+		await session().start();
+		await new Promise((resolve) => setTimeout(resolve, 0));
+
+		expect(useCharactersStore.getState()).toMatchObject({ characters: [BOB], activeId: BOB_ID, loadStatus: 'ready' });
+	});
+
+	it('does not fail boot when the characters cannot be read', async () => {
+		vi.spyOn(api, 'bootstrap').mockResolvedValue(payload());
+		spyOnSeeding();
+		vi.mocked(api.listCharacters).mockRejectedValue(new Error('characters.json is corrupt'));
+
+		await session().start();
+		await new Promise((resolve) => setTimeout(resolve, 0));
+
+		expect(session()).toMatchObject({ phase: 'ready', bootError: null });
+		expect(useCharactersStore.getState()).toMatchObject({ loadStatus: 'failed', loadError: 'characters.json is corrupt' });
+		expect(useNotificationsStore.getState().notifications).toEqual([]);
+	});
+
+	it('does not load the characters when the saved data cannot be read', async () => {
+		setStoreBackend({ read: async () => Promise.reject(new Error('disk error')), write: async () => undefined, remove: async () => undefined });
+		vi.spyOn(api, 'bootstrap').mockResolvedValue(payload());
+		spyOnSeeding();
+
+		await session().start();
+
+		expect(session().phase).toBe('failed');
+		expect(api.listCharacters).not.toHaveBeenCalled();
 	});
 });
 

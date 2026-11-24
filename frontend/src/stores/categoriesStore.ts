@@ -1,5 +1,6 @@
 // Prompt categories store: single truth holder of categories and sub-prompts (persisted as 'categorie-store').
-// Category algorithms live in src/domain/categories.ts; reachability in src/domain/reachability.ts.
+// Category algorithms live in src/domain/categories.ts; reachability in src/domain/reachability.ts (it includes the
+// active character's pinned categories, read from useCharactersStore in the hooks, never at module top level).
 import { create } from 'zustand';
 import { persist } from 'zustand/middleware';
 import { useShallow } from 'zustand/react/shallow';
@@ -25,12 +26,14 @@ import {
 	type SubPromptState,
 	type SubPromptUiState,
 } from '../domain/categories';
+import { characterCategories, type CharacterGenerationInput } from '../domain/characters';
 import type { ForbiddenRule } from '../domain/forbiddenRules';
 import { categoryWindowKey, type ArrangeItem, type Viewport } from '../domain/layout';
 import { buildReachabilitySnapshot, categoryUiStateOf, subPromptUiStateOf, type ReachabilitySnapshot } from '../domain/reachability';
 import { uniqueStrings } from '../domain/text';
 import { persistedStoreOptions } from '../persistence/persist';
 import { STORE_NAMES } from '../persistence/storeNames';
+import { selectActiveCharacter, useCharactersStore } from './charactersStore';
 import { useForbiddenRulesStore } from './forbiddenRulesStore';
 import { useNotificationsStore } from './notificationsStore';
 import { useWorkspaceStore } from './workspaceStore';
@@ -320,30 +323,45 @@ export function useBulkText(key: CategoryKey): string {
 	});
 }
 
-// One reachability computation shared by every card (memoized on the categories and rules identities).
-let reachabilityMemo: { categories: readonly Category[]; rules: readonly ForbiddenRule[]; snapshot: ReachabilitySnapshot } | null = null;
+// One reachability computation shared by every card (memoized on the categories, rules and character identities).
+let reachabilityMemo: {
+	categories: readonly Category[];
+	rules: readonly ForbiddenRule[];
+	character: CharacterGenerationInput | null;
+	snapshot: ReachabilitySnapshot;
+} | null = null;
 
-/** Reachability snapshot of (categories, rules), computed once per change of either. */
-export function selectReachability(categories: readonly Category[], rules: readonly ForbiddenRule[]): ReachabilitySnapshot {
-	if (!reachabilityMemo || reachabilityMemo.categories !== categories || reachabilityMemo.rules !== rules) {
-		reachabilityMemo = { categories, rules, snapshot: buildReachabilitySnapshot(categories, rules) };
+/** Reachability snapshot of (categories, rules, active character), computed once per change of any of them: the
+ *  character's pinned categories (characterCategories) are walked first, as the prompt engine selects them. */
+export function selectReachability(
+	categories: readonly Category[],
+	rules: readonly ForbiddenRule[],
+	character: CharacterGenerationInput | null = null,
+): ReachabilitySnapshot {
+	if (!reachabilityMemo || reachabilityMemo.categories !== categories || reachabilityMemo.rules !== rules || reachabilityMemo.character !== character) {
+		const snapshot = buildReachabilitySnapshot(categories, rules, characterCategories(character, categories));
+		reachabilityMemo = { categories, rules, character, snapshot };
 	}
 	return reachabilityMemo.snapshot;
 }
 
-/** Reachability-derived state (categories + forbidden rules), computed once per change and shared. */
+/** Reachability-derived state (categories + forbidden rules + active character), computed once per change and
+ *  shared: a sub-prompt the active character forbids is 'indirectly-disabled'. */
 export function useCategoryUiState(key: CategoryKey): CategoryUiState {
 	const rules = useForbiddenRulesStore((state) => state.rules);
+	const character = useCharactersStore(selectActiveCharacter);
 	return useCategoriesStore(
-		(state) => categoryUiStateOf(selectReachability(state.categories, rules), key) ?? findCategory(state.categories, key)?.state ?? 'normal',
+		(state) =>
+			categoryUiStateOf(selectReachability(state.categories, rules, character), key) ?? findCategory(state.categories, key)?.state ?? 'normal',
 	);
 }
 
 export function useSubPromptUiState(key: CategoryKey, promptKey: SubPromptKey): SubPromptUiState {
 	const rules = useForbiddenRulesStore((state) => state.rules);
+	const character = useCharactersStore(selectActiveCharacter);
 	return useCategoriesStore(
 		(state) =>
-			subPromptUiStateOf(selectReachability(state.categories, rules), key, promptKey) ??
+			subPromptUiStateOf(selectReachability(state.categories, rules, character), key, promptKey) ??
 			findSubPrompt(state.categories, key, promptKey)?.state ??
 			'normal',
 	);

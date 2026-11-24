@@ -26,7 +26,6 @@ import {
 	isInstallableRow,
 	isPeriodApplicable,
 	resolvedInstallKeys,
-	skippedResourcesText,
 	UNRESOLVED_RESOURCE,
 	type ImageFilters,
 	type ImageResolution,
@@ -36,9 +35,10 @@ import {
 } from '../domain/imageLibrary';
 import { weightedLorasText } from '../domain/loraSelection';
 import { installOutcomeEntry, type InstallOptions } from '../domain/modelCatalog';
-import { joinPromptTags } from '../domain/text';
+import { joinPromptTags, namedProblemsText } from '../domain/text';
 import { findCategory, useCategoriesStore } from './categoriesStore';
 import { copyTextWithFeedback } from './clipboardActions';
+import { withFlag } from './flags';
 import { useLibraryStore } from './libraryStore';
 import { useModelCatalogStore } from './modelCatalogStore';
 import { describeError, reportError, useNotificationsStore } from './notificationsStore';
@@ -92,14 +92,18 @@ export type ImageLibraryActions = {
 	/** api.resolveImageResources for the image (an image without resources is ready at once); while one runs for
 	 *  it, returns the running one (no second request); failures -> status 'failed' + error (no notification). */
 	resolveResources: (imageKey: string) => Promise<void>;
-	/** "Use these LoRAs": resolves the image when needed (joining a running resolution), then per LoRA row
-	 *  (imageLoraRows): 'in_library' -> its entry; resolved and installable (isInstallableRow) ->
-	 *  useModelCatalogStore.install(model, version, null, { select: false, announce: false }) (concurrently; a running
-	 *  install is joined; downloads show their progress) and the entry of its outcome; otherwise skipped with its
-	 *  reason. Then replaces the selection with exactly the usable LoRAs, in image order, deduped by entry, with
-	 *  their weights (appliedLoraWeight) via useLibraryStore.setLoraSelection (unchanged when none is usable).
-	 *  Success notification listing 'name (weight)'; a warning listing the skipped LoRAs with their reasons. No-op
-	 *  while it runs for the image (applyingLoras). Never rejects. */
+	/** The image's LoRAs as library entries with their weights (no notification, no selection change): resolves the
+	 *  image when needed (joining a running resolution), then per LoRA row (imageLoraRows): 'in_library' -> its entry;
+	 *  resolved and installable (isInstallableRow) -> useModelCatalogStore.install(model, version, null,
+	 *  { select: false, announce: false }) (concurrently; a running install is joined; downloads show their progress)
+	 *  and the entry of its outcome; otherwise skipped with its reason. Usable LoRAs come in image order, deduped by
+	 *  entry, with appliedLoraWeight. null for an unknown image. Shared by "Use these LoRAs" and the characters store
+	 *  ("Create character" from an image). Rejects only when the resolution itself throws unexpectedly. */
+	collectImageLoras: (imageKey: string) => Promise<ImageLoraCollection | null>;
+	/** "Use these LoRAs": collectImageLoras, then replaces the selection with exactly the usable LoRAs via
+	 *  useLibraryStore.setLoraSelection (unchanged when none is usable). Success notification listing
+	 *  'name (weight)'; a warning listing the skipped LoRAs with their reasons; info when the image publishes no LoRA.
+	 *  No-op while it runs for the image (applyingLoras). Never rejects. */
 	applyImageLoras: (imageKey: string) => Promise<void>;
 	/** Selects the image's checkpoint (imageCheckpointRow): its library entry (selectModel + success), else installs
 	 *  it through the catalog store with the default options (which selects and announces it, and notifies its
@@ -122,21 +126,23 @@ export type ImageLibraryActions = {
 
 export type ImageLibraryStore = ImageLibraryState & ImageLibraryActions;
 
+/** The LoRAs of an image as library entries (collectImageLoras). */
+export type ImageLoraCollection = {
+	/** LoRA rows of the image (imageLoraRows); 0 when it publishes none. */
+	rowCount: number;
+	/** Usable LoRAs: library entry id + appliedLoraWeight, in image order, deduped by entry. */
+	items: LoraWeight[];
+	/** Display name and weight of each usable LoRA (same order as items). */
+	applied: { name: string; weight: number }[];
+	/** LoRAs that cannot be used, with why. */
+	skipped: { name: string; problem: string }[];
+};
+
 /** The promise of each running resolution by imageKey (resolveResources of a resolving image joins it); only
  *  joined while the store's resolution is 'loading' (the store state is the truth of what runs). */
 const runningResolutions = new Map<string, Promise<void>>();
 /** imageKeys whose favorite toggle runs (further clicks are ignored until the answer). */
 const togglingFavorites = new Set<string>();
-
-/** `flags` with `key` set or removed. */
-function withFlag(flags: Record<string, true>, key: string, on: boolean): Record<string, true> {
-	if (on) {
-		return { ...flags, [key]: true };
-	}
-	const next = { ...flags };
-	delete next[key];
-	return next;
-}
 
 /** Install options of "Use these LoRAs": the selection is set afterwards with the weights, in one notification. */
 const IMAGE_LORA_INSTALL: InstallOptions = { select: false, announce: false };
@@ -289,35 +295,46 @@ export const useImageLibraryStore = create<ImageLibraryStore>()((set, get) => {
 			return running;
 		},
 
+		collectImageLoras: async (key) => {
+			const image = selectImage(key)(get());
+			if (!image) {
+				return null;
+			}
+			await ensureResolution(key);
+			const rows = imageLoraRows(image, resourceContext(key));
+			const uses = await Promise.all(rows.map((row) => rowLibraryEntry(row, IMAGE_LORA_INSTALL)));
+			const collection: ImageLoraCollection = { rowCount: rows.length, items: [], applied: [], skipped: [] };
+			rows.forEach((row, position) => {
+				const use = uses[position];
+				if ('problem' in use) {
+					collection.skipped.push({ name: row.name, problem: use.problem });
+				} else if (!collection.items.some((item) => item.id === use.entryId)) {
+					const weight = appliedLoraWeight(row.resource);
+					collection.items.push({ id: use.entryId, weight });
+					collection.applied.push({ name: row.name, weight });
+				}
+			});
+			return collection;
+		},
+
 		applyImageLoras: (key) =>
-			exclusively('applyingLoras', key, 'Could not use the LoRAs', async (image) => {
-				await ensureResolution(key);
-				const rows = imageLoraRows(image, resourceContext(key));
+			exclusively('applyingLoras', key, 'Could not use the LoRAs', async () => {
+				const collection = await get().collectImageLoras(key);
 				const { notify } = useNotificationsStore.getState();
-				if (rows.length === 0) {
+				if (!collection) {
+					return;
+				}
+				if (collection.rowCount === 0) {
 					notify('info', 'This image publishes no LoRA.');
 					return;
 				}
-				const uses = await Promise.all(rows.map((row) => rowLibraryEntry(row, IMAGE_LORA_INSTALL)));
-				const items: LoraWeight[] = [];
-				const applied: { name: string; weight: number }[] = [];
-				const skipped: { name: string; problem: string }[] = [];
-				rows.forEach((row, position) => {
-					const use = uses[position];
-					if ('problem' in use) {
-						skipped.push({ name: row.name, problem: use.problem });
-					} else if (!items.some((item) => item.id === use.entryId)) {
-						const weight = appliedLoraWeight(row.resource);
-						items.push({ id: use.entryId, weight });
-						applied.push({ name: row.name, weight });
-					}
-				});
+				const { items, applied, skipped } = collection;
 				if (items.length) {
 					useLibraryStore.getState().setLoraSelection(items);
 					notify('success', `LoRAs selected for generation: ${weightedLorasText(applied)}.`);
 				}
 				if (skipped.length) {
-					notify('warning', skippedResourcesText(skipped), {
+					notify('warning', namedProblemsText(skipped), {
 						title: items.length ? 'Some LoRAs of this image were skipped' : 'No LoRA of this image can be used: the selection is unchanged',
 					});
 				}

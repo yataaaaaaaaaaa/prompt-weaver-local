@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import type { OutputRecord } from '../api/types';
+import { outputCharacter } from '../test/characterData';
 import {
 	compareOutputIds,
 	formatOutputId,
@@ -8,6 +9,7 @@ import {
 	nearestOutputId,
 	nextOutputId,
 	normalizeOutputIds,
+	outputCharacterText,
 	outputDetails,
 	parseOutputId,
 	previousOutputId,
@@ -101,6 +103,7 @@ describe('outputDetails', () => {
 		selections: [],
 		image_path: 'D:\\data\\output\\0000000112.png',
 		metadata_path: 'D:\\data\\output\\0000000112.json',
+		character: null,
 	};
 
 	it('resolves names, keeps the LoRA weights and the image file name', () => {
@@ -121,6 +124,21 @@ describe('outputDetails', () => {
 			],
 			prompt: 'masterpiece, clothed',
 			negativePrompt: 'ugly',
+			character: null,
 		});
+	});
+
+	it('passes the output character through and describes how its references were used', () => {
+		const used = outputCharacter();
+		expect(outputDetails({ ...record, character: used }, 'Model A', []).character).toBe(used);
+		expect(outputCharacterText(used)).toBe('Alice · references applied (strength 0.6, 1 image)');
+		expect(
+			outputCharacterText(outputCharacter({ reference: { ...used.reference, strength: 0.1 + 0.2, image_ids: ['img-000000000001', 'img-000000000002'] } })),
+		).toBe('Alice · references applied (strength 0.3, 2 images)');
+		expect(
+			outputCharacterText(
+				outputCharacter({ reference: { applied: false, variant_id: null, strength: null, image_ids: [], reason: 'The character has no reference images.' } }),
+			),
+		).toBe('Alice · references not applied: The character has no reference images.');
 	});
 });

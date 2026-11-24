@@ -12,7 +12,9 @@ import {
 } from '../domain/forbiddenRules';
 import { flushPersistence, hydratePersistedStores } from '../persistence/persist';
 import { createMemoryStoreBackend, setStoreBackend } from '../persistence/storeBackend';
+import { character } from '../test/characterData';
 import { useCategoriesStore } from './categoriesStore';
+import { useCharactersStore } from './charactersStore';
 import { buildUsedSelectionRows, useForbiddenHighlight, useForbiddenRulesStore, useUsedSelectionRows } from './forbiddenRulesStore';
 import { useOutputsStore } from './outputsStore';
 
@@ -35,6 +37,7 @@ function record(selections: GenerationSelection[]): OutputRecord {
 		metadata_path: 'D:/out/0000000001.json',
 		model_id: 'model',
 		active_loras: [],
+		character: null,
 		prompt: selections.map((item) => item.prompt_text).join(', '),
 		negative_prompt: '',
 		width: 1024,
@@ -193,6 +196,20 @@ describe('useForbiddenHighlight', () => {
 
 		act(() => store().clearAssociationSource());
 		expect(result.current.b1).toBe('none');
+	});
+
+	it('a source from the active character (Used sub-prompts) is locked: purple highlights', () => {
+		const alice = character({ outfit_tags: [] });
+		useCategoriesStore.setState({ categories });
+		useForbiddenRulesStore.setState({ rules: [makeRule(specificMatcher('Character', '1girl, silver hair, blue eyes'), specificMatcher('Beta', 'b1'))] });
+		useCharactersStore.setState({ characters: [alice], activeId: null });
+		const { result } = renderHook(() => useForbiddenHighlight('beta', 'b1'));
+
+		act(() => store().pickAssociationEndpoint(endpoint('prompt', 'Character', '1girl, silver hair, blue eyes')));
+		expect(result.current).toBe('forbidden');
+
+		act(() => useCharactersStore.setState({ activeId: alice.id }));
+		expect(result.current).toBe('forbidden-locked');
 	});
 });
 

@@ -24,6 +24,152 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/characters": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List Characters
+         * @description Every character, in creation order, and the active one.
+         */
+        get: operations["list_characters_api_characters_get"];
+        put?: never;
+        /**
+         * Create Character
+         * @description Creates a character, importing its reference images (all or nothing).
+         */
+        post: operations["create_character_api_characters_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/characters/active": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        /**
+         * Set Active Character
+         * @description Activates a character for generation (null deactivates).
+         */
+        put: operations["set_active_character_api_characters_active_put"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/characters/{character_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        /**
+         * Update Character
+         * @description Replaces the editable fields of a character (its images are kept).
+         */
+        put: operations["update_character_api_characters__character_id__put"];
+        post?: never;
+        /**
+         * Delete Character
+         * @description Deletes a character and its images (deactivating it when it was active).
+         */
+        delete: operations["delete_character_api_characters__character_id__delete"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/characters/{character_id}/images/{image_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get Character Image
+         * @description PNG of a reference image or of the thumbnail.
+         */
+        get: operations["get_character_image_api_characters__character_id__images__image_id__get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/characters/{character_id}/reference-images": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Add Character Reference Image
+         * @description Imports a reference image (appended; it becomes the thumbnail when the character has none).
+         */
+        post: operations["add_character_reference_image_api_characters__character_id__reference_images_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/characters/{character_id}/reference-images/{image_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        /** Remove Character Reference Image */
+        delete: operations["remove_character_reference_image_api_characters__character_id__reference_images__image_id__delete"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/characters/{character_id}/thumbnail": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        /**
+         * Set Character Thumbnail
+         * @description Replaces the thumbnail with a downscaled copy of the source (e.g. one of the reference images).
+         */
+        put: operations["set_character_thumbnail_api_characters__character_id__thumbnail_put"];
+        post?: never;
+        /** Clear Character Thumbnail */
+        delete: operations["clear_character_thumbnail_api_characters__character_id__thumbnail_delete"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/downloads/{task_id}/cancel": {
         parameters: {
             query?: never;
@@ -176,6 +322,46 @@ export interface paths {
         get: operations["search_images_api_images_search_get"];
         put?: never;
         post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/ip-adapters": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Ip Adapter Status
+         * @description Every IP-Adapter variant with its files (on disk, downloading), and the reference support of model_path.
+         */
+        get: operations["ip_adapter_status_api_ip_adapters_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/ip-adapters/{variant_id}/install": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Install Ip Adapter
+         * @description Downloads the files of the variant that are not on disk yet (a running download is joined).
+         */
+        post: operations["install_ip_adapter_api_ip_adapters__variant_id__install_post"];
         delete?: never;
         options?: never;
         head?: never;
@@ -461,6 +647,17 @@ export interface paths {
 export type webhooks = Record<string, never>;
 export interface components {
     schemas: {
+        /**
+         * ActiveCharacterUpdate
+         * @description Body of PUT /api/characters/active.
+         */
+        ActiveCharacterUpdate: {
+            /**
+             * Id
+             * @description Character to activate for generation; null deactivates.
+             */
+            id: string | null;
+        };
         /** AppState */
         AppState: {
             /** Categories */
@@ -582,6 +779,244 @@ export interface components {
             width: number | null;
         };
         /**
+         * Character
+         * @description A character: a recognizable subject reused across generations (backend-owned, <data dir>/characters/).
+         */
+        Character: {
+            /**
+             * Created At
+             * Format: date-time
+             */
+            created_at: string;
+            /** Id */
+            id: string;
+            /**
+             * Identity Tags
+             * @description Appearance tags that identify the character (face, hair, eyes, body...): the locked sub-prompt of the pinned 'Character' category while the character is active.
+             */
+            identity_tags: string[];
+            /**
+             * Loras
+             * @description Character LoRAs (library entry ids) with their weights, applied while the character is active.
+             */
+            loras: components["schemas"]["LoraWeight-Output"][];
+            /** Name */
+            name: string;
+            /**
+             * Negative Tags
+             * @description Appended to the negative prompt while the character is active.
+             */
+            negative_tags: string[];
+            /**
+             * Outfit Tags
+             * @description Default outfit, kept separate from the identity: the locked sub-prompt of the pinned 'Character outfit' category (no such category when empty).
+             */
+            outfit_tags: string[];
+            /**
+             * Reference Focus
+             * @description IP-Adapter variant used for the reference images.
+             * @default face
+             * @enum {string}
+             */
+            reference_focus: "face" | "general";
+            /**
+             * Reference Images
+             * @description Reference images for the IP-Adapter, in order (at most REFERENCE_DEFAULTS.max_images).
+             */
+            reference_images: components["schemas"]["CharacterImage"][];
+            /**
+             * Reference Strength
+             * @description IP-Adapter strength of the reference images.
+             * @default 0.6
+             */
+            reference_strength: number;
+            /**
+             * Seed
+             * @description Image seed of the character (e.g. of the output it was made from).
+             */
+            seed: number | null;
+            /**
+             * Seed Locked
+             * @description While the character is active, generate with `seed` (the image seed field is left unchanged). Requires a seed.
+             * @default false
+             */
+            seed_locked: boolean;
+            /** @description Gallery picture (a downscaled copy). */
+            thumbnail: components["schemas"]["CharacterImage"] | null;
+            /**
+             * Updated At
+             * Format: date-time
+             */
+            updated_at: string;
+        };
+        /**
+         * CharacterCollection
+         * @description Every character (in creation order) and the active one.
+         */
+        CharacterCollection: {
+            /**
+             * Active Id
+             * @description The character active for generation; null when none is.
+             */
+            active_id: string | null;
+            /** Items */
+            items: components["schemas"]["Character"][];
+        };
+        /**
+         * CharacterCreateRequest
+         * @description Body of POST /api/characters.
+         */
+        CharacterCreateRequest: {
+            /**
+             * Identity Tags
+             * @description Appearance tags that identify the character (face, hair, eyes, body...): the locked sub-prompt of the pinned 'Character' category while the character is active.
+             */
+            identity_tags?: string[];
+            /**
+             * Loras
+             * @description Character LoRAs (library entry ids) with their weights, applied while the character is active.
+             */
+            loras?: components["schemas"]["LoraWeight-Input"][];
+            /** Name */
+            name: string;
+            /**
+             * Negative Tags
+             * @description Appended to the negative prompt while the character is active.
+             */
+            negative_tags?: string[];
+            /**
+             * Outfit Tags
+             * @description Default outfit, kept separate from the identity: the locked sub-prompt of the pinned 'Character outfit' category (no such category when empty).
+             */
+            outfit_tags?: string[];
+            /**
+             * Reference Focus
+             * @description IP-Adapter variant used for the reference images.
+             * @default face
+             * @enum {string}
+             */
+            reference_focus: "face" | "general";
+            /**
+             * Reference Sources
+             * @description Imported as reference images, in order, all or nothing (nothing is created when one fails); the first one also becomes the thumbnail. 'character_image' sources are refused (the character has no image yet).
+             */
+            reference_sources?: (components["schemas"]["OutputImageSource"] | components["schemas"]["FileImageSource"] | components["schemas"]["UrlImageSource"] | components["schemas"]["CharacterImageCopySource"])[];
+            /**
+             * Reference Strength
+             * @description IP-Adapter strength of the reference images.
+             * @default 0.6
+             */
+            reference_strength: number;
+            /**
+             * Seed
+             * @description Image seed of the character (e.g. of the output it was made from).
+             */
+            seed?: number | null;
+            /**
+             * Seed Locked
+             * @description While the character is active, generate with `seed` (the image seed field is left unchanged). Requires a seed.
+             * @default false
+             */
+            seed_locked: boolean;
+        };
+        /**
+         * CharacterDraft
+         * @description The editable fields of a character: body of PUT /api/characters/{character_id}, base of the create request
+         *     and of Character.
+         */
+        CharacterDraft: {
+            /**
+             * Identity Tags
+             * @description Appearance tags that identify the character (face, hair, eyes, body...): the locked sub-prompt of the pinned 'Character' category while the character is active.
+             */
+            identity_tags?: string[];
+            /**
+             * Loras
+             * @description Character LoRAs (library entry ids) with their weights, applied while the character is active.
+             */
+            loras?: components["schemas"]["LoraWeight-Input"][];
+            /** Name */
+            name: string;
+            /**
+             * Negative Tags
+             * @description Appended to the negative prompt while the character is active.
+             */
+            negative_tags?: string[];
+            /**
+             * Outfit Tags
+             * @description Default outfit, kept separate from the identity: the locked sub-prompt of the pinned 'Character outfit' category (no such category when empty).
+             */
+            outfit_tags?: string[];
+            /**
+             * Reference Focus
+             * @description IP-Adapter variant used for the reference images.
+             * @default face
+             * @enum {string}
+             */
+            reference_focus: "face" | "general";
+            /**
+             * Reference Strength
+             * @description IP-Adapter strength of the reference images.
+             * @default 0.6
+             */
+            reference_strength: number;
+            /**
+             * Seed
+             * @description Image seed of the character (e.g. of the output it was made from).
+             */
+            seed?: number | null;
+            /**
+             * Seed Locked
+             * @description While the character is active, generate with `seed` (the image seed field is left unchanged). Requires a seed.
+             * @default false
+             */
+            seed_locked: boolean;
+        };
+        /**
+         * CharacterImage
+         * @description An image stored with a character (<data dir>/characters/images/<id>.png), served by
+         *     GET /api/characters/{character_id}/images/{image_id}.
+         */
+        CharacterImage: {
+            /**
+             * Added At
+             * Format: date-time
+             */
+            added_at: string;
+            /** Height */
+            height: number;
+            /** Id */
+            id: string;
+            /**
+             * Source
+             * @description Where the image was imported from.
+             */
+            source: components["schemas"]["OutputImageSource"] | components["schemas"]["FileImageSource"] | components["schemas"]["UrlImageSource"] | components["schemas"]["CharacterImageCopySource"];
+            /** Width */
+            width: number;
+        };
+        /**
+         * CharacterImageCopySource
+         * @description Another image of the same character (e.g. a reference image used as the thumbnail).
+         */
+        CharacterImageCopySource: {
+            /** Image Id */
+            image_id: string;
+            /**
+             * @description discriminator enum property added by openapi-typescript
+             * @enum {string}
+             */
+            kind: "character_image";
+        };
+        /**
+         * CharacterImageRequest
+         * @description Body of POST /api/characters/{character_id}/reference-images and PUT /api/characters/{character_id}/thumbnail.
+         */
+        CharacterImageRequest: {
+            /** Source */
+            source: components["schemas"]["OutputImageSource"] | components["schemas"]["FileImageSource"] | components["schemas"]["UrlImageSource"] | components["schemas"]["CharacterImageCopySource"];
+        };
+        /**
          * DownloadTaskEvent
          * @description Progress of a file download (services/downloads.py DownloadManager). current/total are bytes (total 0 =
          *     unknown size); task_id is returned by the API call that started the download.
@@ -666,6 +1101,19 @@ export interface components {
             saved_at: string;
         };
         /**
+         * FileImageSource
+         * @description A local image file (picked with the desktop file dialog): PNG, JPEG, WebP or BMP.
+         */
+        FileImageSource: {
+            /**
+             * @description discriminator enum property added by openapi-typescript
+             * @enum {string}
+             */
+            kind: "file";
+            /** Path */
+            path: string;
+        };
+        /**
          * ForbiddenMatcher
          * @description One side of a forbidden rule. Also the persisted format of the frontend forbidden-rules store.
          */
@@ -692,6 +1140,11 @@ export interface components {
         };
         /** GenerateRequest */
         GenerateRequest: {
+            /**
+             * Character Id
+             * @description The active character (Character.id). Its identity/outfit tags, negative tags, LoRAs and seed lock are already part of this request (the frontend prompt engine injects them); the backend applies its reference images through the IP-Adapter when one is installed for the model's family (services/ip_adapters.py) and records OutputRecord.character.
+             */
+            character_id?: string | null;
             /**
              * Guidance Scale
              * @default 7
@@ -1094,6 +1547,108 @@ export interface components {
             source: components["schemas"]["ModelSource"];
         };
         /**
+         * IpAdapterFile
+         * @description One file an IP-Adapter variant needs (services/ip_adapters.py IP_ADAPTER_CATALOG owns the catalog).
+         */
+        IpAdapterFile: {
+            /** Id */
+            id: string;
+            /**
+             * Local Path
+             * @description Local copy (same name and size, or a cached hash match in its folder); null when it must be downloaded.
+             */
+            local_path: string | null;
+            /**
+             * Name
+             * @description Local file name (ComfyUI conventions: models/ipadapter, models/clip_vision).
+             */
+            name: string;
+            /**
+             * Role
+             * @enum {string}
+             */
+            role: "adapter" | "image_encoder";
+            /** Size Bytes */
+            size_bytes: number;
+            /**
+             * Task Id
+             * @description Running download of this file (DownloadTaskEvent on /ws/tasks).
+             */
+            task_id: string | null;
+        };
+        /**
+         * IpAdapterFolders
+         * @description Where IP-Adapter files live and are downloaded to (settings.py AppPaths).
+         */
+        IpAdapterFolders: {
+            /** Adapter */
+            adapter: string;
+            /** Image Encoder */
+            image_encoder: string;
+        };
+        /**
+         * IpAdapterInstallResponse
+         * @description POST /api/ip-adapters/{variant_id}/install.
+         */
+        IpAdapterInstallResponse: {
+            /**
+             * State
+             * @enum {string}
+             */
+            state: "installed" | "downloading";
+            /**
+             * Task Ids
+             * @description Downloads of the missing files (state 'downloading'; a running download is joined); follow them on /ws/tasks, then ask GET /api/ip-adapters again.
+             */
+            task_ids: string[];
+        };
+        /**
+         * IpAdapterStatus
+         * @description GET /api/ip-adapters: every variant with its files, and the support for a model when model_path is given.
+         */
+        IpAdapterStatus: {
+            /**
+             * Architecture
+             * @description Pipeline family of model_path (diffusion_lora_runtime.checkpoint_inspection.pipeline_architecture); null without model_path or when it has no IP-Adapter family.
+             */
+            architecture: ("sd15" | "sdxl") | null;
+            folders: components["schemas"]["IpAdapterFolders"];
+            /**
+             * Support
+             * @description One entry per ReferenceFocus for model_path; empty without it.
+             */
+            support: components["schemas"]["ReferenceSupport"][];
+            /** Variants */
+            variants: components["schemas"]["IpAdapterVariant"][];
+        };
+        /**
+         * IpAdapterVariant
+         * @description An IP-Adapter usable with one model family and focus (adapter weights + image encoder).
+         */
+        IpAdapterVariant: {
+            /**
+             * Architecture
+             * @enum {string}
+             */
+            architecture: "sd15" | "sdxl";
+            /** Files */
+            files: components["schemas"]["IpAdapterFile"][];
+            /**
+             * Focus
+             * @enum {string}
+             */
+            focus: "face" | "general";
+            /** Id */
+            id: string;
+            /** Label */
+            label: string;
+            /**
+             * Ready
+             * @description Every file is on disk.
+             */
+            ready: boolean;
+        };
+        /**
          * LibraryState
          * @description Legacy library.json format (read at bootstrap to seed the frontend library store).
          */
@@ -1123,7 +1678,26 @@ export interface components {
          *     library entry (GenerationLoRA), OutputRecord.active_loras records them, and services/runtime_adapter.py passes
          *     the weight to the runtime LoRASpec.
          */
-        LoraWeight: {
+        "LoraWeight-Input": {
+            /**
+             * Id
+             * @description LoRA library entry id (LoRASpec.id).
+             */
+            id: string;
+            /**
+             * Weight
+             * @default 1
+             */
+            weight: number;
+        };
+        /**
+         * LoraWeight
+         * @description A LoRA applied with a weight: THE representation of per-LoRA weights, end to end. The frontend library
+         *     store's selection ('library-store' selectedLoras) holds these, GenerateRequest.loras carries them with the
+         *     library entry (GenerationLoRA), OutputRecord.active_loras records them, and services/runtime_adapter.py passes
+         *     the weight to the runtime LoRASpec.
+         */
+        "LoraWeight-Output": {
             /**
              * Id
              * @description LoRA library entry id (LoRASpec.id).
@@ -1351,6 +1925,30 @@ export interface components {
             ok: boolean;
         };
         /**
+         * OutputCharacter
+         * @description The character active for a generation (snapshot of its id and name when the output was made).
+         */
+        OutputCharacter: {
+            /** Id */
+            id: string;
+            /** Name */
+            name: string;
+            reference: components["schemas"]["OutputReference"];
+        };
+        /**
+         * OutputImageSource
+         * @description A generated output's image (its PNG in the output folder).
+         */
+        OutputImageSource: {
+            /**
+             * @description discriminator enum property added by openapi-typescript
+             * @enum {string}
+             */
+            kind: "output";
+            /** Output Id */
+            output_id: string;
+        };
+        /**
          * OutputIndex
          * @description Ids of every complete output (both .png and .json present), ascending.
          */
@@ -1369,7 +1967,9 @@ export interface components {
              * Active Loras
              * @description LoRAs applied (selected + prompt-linked) with their weights. Files written before per-LoRA weights hold `active_lora_ids` instead: they load as weight LORA_WEIGHT_DEFAULTS.weight.
              */
-            active_loras: components["schemas"]["LoraWeight"][];
+            active_loras: components["schemas"]["LoraWeight-Output"][];
+            /** @description The character active for this generation (GenerateRequest.character_id) and how its reference images were used; null without a character and in files written before characters existed. */
+            character: components["schemas"]["OutputCharacter"] | null;
             /**
              * Generated At
              * Format: date-time
@@ -1412,6 +2012,34 @@ export interface components {
             steps: number;
             /** Width */
             width: number;
+        };
+        /**
+         * OutputReference
+         * @description How the active character's reference images were used for one output (IP-Adapter).
+         */
+        OutputReference: {
+            /** Applied */
+            applied: boolean;
+            /**
+             * Image Ids
+             * @description CharacterImage ids used, in order; empty when not applied.
+             */
+            image_ids: string[];
+            /**
+             * Reason
+             * @description Why the references were not applied (no reference image, model family without IP-Adapter, IP-Adapter not installed); null when applied.
+             */
+            reason: string | null;
+            /**
+             * Strength
+             * @description IP-Adapter scale used (Character.reference_strength); null when not applied.
+             */
+            strength: number | null;
+            /**
+             * Variant Id
+             * @description IpAdapterVariant.id used; null when not applied.
+             */
+            variant_id: string | null;
         };
         /** PaneLayout */
         PaneLayout: {
@@ -1529,6 +2157,68 @@ export interface components {
         ProviderTokenUpdate: {
             /** Token */
             token?: string | null;
+        };
+        /**
+         * ReferenceDefaults
+         * @description The single definition of character reference settings: IP-Adapter strength (default, range, UI step), the
+         *     default focus and how many reference images a character holds. Exported to the frontend as REFERENCE_DEFAULTS.
+         */
+        ReferenceDefaults: {
+            /**
+             * Focus
+             * @default face
+             * @enum {string}
+             */
+            focus: "face" | "general";
+            /**
+             * Max
+             * @default 1
+             */
+            max: number;
+            /**
+             * Max Images
+             * @default 4
+             */
+            max_images: number;
+            /**
+             * Min
+             * @default 0
+             */
+            min: number;
+            /**
+             * Step
+             * @default 0.05
+             */
+            step: number;
+            /**
+             * Strength
+             * @default 0.6
+             */
+            strength: number;
+        };
+        /**
+         * ReferenceSupport
+         * @description Whether reference images can be applied with `focus` to the model asked for: the same rule generation uses
+         *     (services/ip_adapters.py IpAdapterService.resolve).
+         */
+        ReferenceSupport: {
+            /**
+             * Focus
+             * @enum {string}
+             */
+            focus: "face" | "general";
+            /** Ready */
+            ready: boolean;
+            /**
+             * Reason
+             * @description Why references cannot be applied now; null when ready.
+             */
+            reason: string | null;
+            /**
+             * Variant Id
+             * @description Variant used for the model's family and this focus; null when none.
+             */
+            variant_id: string | null;
         };
         /** RemoteFile */
         RemoteFile: {
@@ -1704,6 +2394,19 @@ export interface components {
             /** Events */
             events: (components["schemas"]["GenerationTaskEvent"] | components["schemas"]["DownloadTaskEvent"])[];
         };
+        /**
+         * UrlImageSource
+         * @description An online image (e.g. RemoteImage.url of the image library), downloaded by the backend.
+         */
+        UrlImageSource: {
+            /**
+             * @description discriminator enum property added by openapi-typescript
+             * @enum {string}
+             */
+            kind: "url";
+            /** Url */
+            url: string;
+        };
         /** ValidationError */
         ValidationError: {
             /** Context */
@@ -1750,6 +2453,478 @@ export interface operations {
                 content: {
                     "application/json": components["schemas"]["BootstrapResponse"];
                 };
+            };
+        };
+    };
+    list_characters_api_characters_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CharacterCollection"];
+                };
+            };
+            /** @description characters.json cannot be read (it is never overwritten) */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    create_character_api_characters_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CharacterCreateRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Character"];
+                };
+            };
+            /** @description Unknown character, or the image source does not exist */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description The source is not a usable image */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description The image could not be downloaded */
+            502: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description characters.json cannot be read (it is never overwritten) */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    set_active_character_api_characters_active_put: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ActiveCharacterUpdate"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CharacterCollection"];
+                };
+            };
+            /** @description Unknown character or image */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+            /** @description characters.json cannot be read (it is never overwritten) */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    update_character_api_characters__character_id__put: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                character_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CharacterDraft"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Character"];
+                };
+            };
+            /** @description Unknown character or image */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+            /** @description characters.json cannot be read (it is never overwritten) */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    delete_character_api_characters__character_id__delete: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                character_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["OkResponse"];
+                };
+            };
+            /** @description Unknown character or image */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+            /** @description characters.json cannot be read (it is never overwritten) */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    get_character_image_api_characters__character_id__images__image_id__get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                character_id: string;
+                image_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "image/png": unknown;
+                };
+            };
+            /** @description Unknown character or image */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+            /** @description characters.json cannot be read (it is never overwritten) */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    add_character_reference_image_api_characters__character_id__reference_images_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                character_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CharacterImageRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Character"];
+                };
+            };
+            /** @description Unknown character, or the image source does not exist */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description The character has the maximum number of reference images */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description The source is not a usable image */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description The image could not be downloaded */
+            502: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description characters.json cannot be read (it is never overwritten) */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    remove_character_reference_image_api_characters__character_id__reference_images__image_id__delete: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                character_id: string;
+                image_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Character"];
+                };
+            };
+            /** @description Unknown character or image */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+            /** @description characters.json cannot be read (it is never overwritten) */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    set_character_thumbnail_api_characters__character_id__thumbnail_put: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                character_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CharacterImageRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Character"];
+                };
+            };
+            /** @description Unknown character, or the image source does not exist */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description The source is not a usable image */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description The image could not be downloaded */
+            502: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description characters.json cannot be read (it is never overwritten) */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    clear_character_thumbnail_api_characters__character_id__thumbnail_delete: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                character_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Character"];
+                };
+            };
+            /** @description Unknown character or image */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+            /** @description characters.json cannot be read (it is never overwritten) */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
             };
         };
     };
@@ -2060,6 +3235,76 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content?: never;
+            };
+        };
+    };
+    ip_adapter_status_api_ip_adapters_get: {
+        parameters: {
+            query?: {
+                /** @description Model (ModelSpec.path) to report the reference support of (IpAdapterStatus.support). */
+                model_path?: string | null;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["IpAdapterStatus"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    install_ip_adapter_api_ip_adapters__variant_id__install_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                variant_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["IpAdapterInstallResponse"];
+                };
+            };
+            /** @description Unknown variant */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
             };
         };
     };

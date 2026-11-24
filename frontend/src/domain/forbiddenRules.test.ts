@@ -225,4 +225,12 @@ describe('computeForbiddenHighlights', () => {
 		const byTag = computeForbiddenHighlights(categories, rules, endpoint('tag', 'Beta', 'b1, smile', 'Smile'));
 		expect([...byTag.entries()]).toEqual([['gamma::g1-1boy', 'forbidden']]);
 	});
+
+	it('a source from a pinned (character) category is locked; pinned categories are never highlighted', () => {
+		const pinned = [category('Character', [{ text: '1girl, silver hair', state: 'lock' }])];
+		const rules = [makeRule(specificMatcher('Character', '1girl, silver hair'), specificMatcher('Gamma', 'g2'))];
+		const source = endpoint('prompt', 'Character', '1girl, silver hair');
+		expect([...computeForbiddenHighlights(categories, rules, source).entries()]).toEqual([['gamma::g2', 'forbidden']]);
+		expect([...computeForbiddenHighlights(categories, rules, source, pinned).entries()]).toEqual([['gamma::g2', 'forbidden-locked']]);
+	});
 });

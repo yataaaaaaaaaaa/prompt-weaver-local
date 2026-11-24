@@ -30,7 +30,6 @@ import {
 	resolvedInstallKeys,
 	resolvedModelVersion,
 	resourceLibraryEntryId,
-	skippedResourcesText,
 	type ImageResolution,
 	type ImageResourceContext,
 	type ImageResourceRow,
@@ -281,14 +280,5 @@ describe('resource rows', () => {
 		expect(isInstallableRow(statusRow('resolving'))).toBe(false);
 		expect(isInstallableRow(row(3))).toBe(false);
 		expect(isInstallableRow({ ...row(3), status: 'remote' })).toBe(false);
-	});
-});
-
-describe('notification texts', () => {
-	it('lists skipped resources with their reasons', () => {
-		expect(skippedResourcesText([{ name: 'realistic filter [IL]', problem: 'No version id or hash published.' }])).toBe(
-			'realistic filter [IL]: No version id or hash published.',
-		);
-		expect(skippedResourcesText([{ name: 'a', problem: 'Disk full' }, { name: 'b', problem: ' Unsupported base model. ' }])).toBe('a: Disk full; b: Unsupported base model.');
 	});
 });

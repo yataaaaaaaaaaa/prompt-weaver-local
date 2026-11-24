@@ -337,6 +337,38 @@ describe('openImage and resolveResources', () => {
 // "Use these LoRAs"
 // ---------------------------------------------------------------------------
 
+describe('collectImageLoras', () => {
+	it('returns the usable LoRAs with their weights and the skipped ones, without notifying or selecting', async () => {
+		seedImages();
+		register(ADD_DETAIL_INSTALLED);
+		const library = mockLibraryActions();
+		mockInstall(async () => installed(KIM_INSTALLED, 'kim'));
+
+		const collection = await store().collectImageLoras(DETAIL_KEY);
+
+		expect(collection).toEqual({
+			rowCount: 3,
+			items: [
+				{ id: 'add-detail', weight: 1 },
+				{ id: 'kim', weight: 0.6 },
+			],
+			applied: [
+				{ name: 'Detail Tweaker LoRA - v1.0', weight: 1 },
+				{ name: 'Kim LoRA - v1', weight: 0.6 },
+			],
+			skipped: [{ name: 'realistic filter [IL]', problem: 'No version id or hash published.' }],
+		});
+		expect(library.setLoraSelection).not.toHaveBeenCalled();
+		expect(notifications()).toEqual([]);
+	});
+
+	it('answers null for an unknown image', async () => {
+		seedImages();
+
+		await expect(store().collectImageLoras('civitai:unknown')).resolves.toBeNull();
+	});
+});
+
 describe('applyImageLoras', () => {
 	it('installs only the missing LoRAs, then sets exactly the image LoRAs with their weights', async () => {
 		seedImages();

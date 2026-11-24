@@ -1,10 +1,11 @@
-// LoRA selection: which LoRAs a generation uses (the user's selection with its per-LoRA weights + the LoRAs induced
-// by the selected sub-prompts), which requested ids are missing from the library, and the pure edits of the
-// selection (LoraWeight items, the one representation: see src/api/types.ts). Pure module; the selection itself
-// lives in src/stores/libraryStore.ts.
+// LoRA selection: which LoRAs a generation uses (the active character's LoRAs + the user's selection with its
+// per-LoRA weights + the LoRAs induced by the selected sub-prompts), which requested ids are missing from the
+// library, and the pure edits of the selection (LoraWeight items, the one representation: see src/api/types.ts).
+// Pure module; the selection itself lives in src/stores/libraryStore.ts.
 import { LORA_WEIGHT_DEFAULTS } from '../api/defaults.gen';
 import type { GenerationLoRA, GenerationSelection, LoraWeight, LoRASpec } from '../api/types';
-import { uniqueStrings } from './text';
+import { clamp } from './guards';
+import { formatWeight, uniqueStrings } from './text';
 
 type LoraLibrary = { readonly loras: readonly LoRASpec[] };
 
@@ -15,19 +16,13 @@ export function clampLoraWeight(weight: number): number {
 	if (!Number.isFinite(weight)) {
 		return LORA_WEIGHT_DEFAULTS.weight;
 	}
-	return Math.min(LORA_WEIGHT_DEFAULTS.max, Math.max(LORA_WEIGHT_DEFAULTS.min, weight));
+	return clamp(weight, LORA_WEIGHT_DEFAULTS.min, LORA_WEIGHT_DEFAULTS.max);
 }
 
-/** Display text of a weight (at most 2 decimals, no trailing zeros): 1 -> '1', 0.6 -> '0.6', -1.25 -> '-1.25'.
- *  The one weight formatter of the views (LoRA list, output browser, image library). */
-export function formatLoraWeight(weight: number): string {
-	return String(Math.round(weight * 100) / 100);
-}
-
-/** Display text of named LoRAs with their weights: 'name (formatLoraWeight)' joined with ', ' (output browser,
+/** Display text of named LoRAs with their weights: 'name (formatWeight)' joined with ', ' (output browser,
  *  "Use these LoRAs" notification). */
 export function weightedLorasText(items: readonly { name: string; weight: number }[]): string {
-	return items.map(({ name, weight }) => `${name} (${formatLoraWeight(weight)})`).join(', ');
+	return items.map(({ name, weight }) => `${name} (${formatWeight(weight)})`).join(', ');
 }
 
 /** The LoRA at LORA_WEIGHT_DEFAULTS.weight: how a LoRA enters the selection without an explicit weight (checkbox,
@@ -76,38 +71,50 @@ export function withLoraWeight(selection: readonly LoraWeight[], loraId: string,
 }
 
 export type ResolvedLoraSelection = {
+	/** The known LoRAs of the active character (src/domain/characters.ts), unique, in order. */
+	characterIds: string[];
+	/** The known selected LoRAs (also when the character has them too), unique, in order. */
 	selectedIds: string[];
 	promptLinkedIds: string[];
-	/** selected ∪ prompt-linked, selected first. */
+	/** character ∪ selected ∪ prompt-linked, in that order. */
 	activeIds: string[];
-	/** The library LoRAs of activeIds with their weights: a selected LoRA keeps its selected weight, a LoRA that
-	 *  is only prompt-linked gets LORA_WEIGHT_DEFAULTS.weight. */
+	/** The library LoRAs of activeIds with their weights: a character LoRA has the character's weight (also when it
+	 *  is selected), a selected LoRA keeps its selected weight, a LoRA that is only prompt-linked gets
+	 *  LORA_WEIGHT_DEFAULTS.weight. */
 	activeLoras: GenerationLoRA[];
-	/** Requested ids absent from the library, unique, in request order: user-selected first, then prompt-linked. */
+	/** Requested ids absent from the library, unique, in request order: character first, then user-selected, then
+	 *  prompt-linked. */
 	missingIds: string[];
 };
 
+/** The LoRAs of a generation: `characterLoras` (the active character's, [] without one) first, then the user's
+ *  selection, then the LoRAs induced by the selected sub-prompts (see ResolvedLoraSelection). */
 export function resolveLoraSelection(
 	library: LoraLibrary,
 	selectedLoras: readonly LoraWeight[],
 	promptSelections: readonly Pick<GenerationSelection, 'induced_lora_ids'>[],
+	characterLoras: readonly LoraWeight[] = [],
 ): ResolvedLoraSelection {
 	const lorasById = makeLoraMap(library);
 	const known = (loraId: string) => lorasById.has(loraId);
+	const character = filterKnownLoras(characterLoras, library);
 	const selected = filterKnownLoras(selectedLoras, library);
-	const selectedWeights = new Map(selected.map((item) => [item.id, item.weight]));
-	const requestedIds = selectedLoras.map((item) => item.id);
+	// Later entries win: the character's weight over the selected one.
+	const weights = new Map([...selected, ...character].map((item) => [item.id, item.weight]));
+	const requestedIds = [...characterLoras, ...selectedLoras].map((item) => item.id);
 	const promptLoraIds = promptSelections.flatMap((item) => item.induced_lora_ids);
+	const characterIds = character.map((item) => item.id);
 	const selectedIds = selected.map((item) => item.id);
 	const promptLinkedIds = uniqueStrings(promptLoraIds).filter(known);
-	const activeIds = uniqueStrings([...selectedIds, ...promptLinkedIds]);
+	const activeIds = uniqueStrings([...characterIds, ...selectedIds, ...promptLinkedIds]);
 	return {
+		characterIds,
 		selectedIds,
 		promptLinkedIds,
 		activeIds,
 		activeLoras: activeIds.map((loraId) => ({
 			...lorasById.get(loraId)!,
-			weight: selectedWeights.get(loraId) ?? LORA_WEIGHT_DEFAULTS.weight,
+			weight: weights.get(loraId) ?? LORA_WEIGHT_DEFAULTS.weight,
 		})),
 		missingIds: uniqueStrings([...requestedIds, ...promptLoraIds]).filter((loraId) => !known(loraId)),
 	};

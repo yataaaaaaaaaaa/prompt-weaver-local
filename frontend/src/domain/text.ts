@@ -179,3 +179,15 @@ export function comparePriority(left: string, right: string): number {
 	}
 	return 0;
 }
+
+/** One sentence listing named problems ('name: problem' joined with '; ', e.g. resources skipped or downloads that
+ *  failed): each problem's trailing periods are dropped, one period ends the sentence. */
+export function namedProblemsText(items: readonly { name: string; problem: string }[]): string {
+	return `${items.map(({ name, problem }) => `${name}: ${problem.trim().replace(/\.+$/, '')}`).join('; ')}.`;
+}
+
+/** Display text of a weight (at most 2 decimals, no trailing zeros): 1 -> '1', 0.6 -> '0.6', -1.25 -> '-1.25'.
+ *  The one weight formatter of the views (LoRA weights, IP-Adapter reference strength). */
+export function formatWeight(weight: number): string {
+	return String(Math.round(weight * 100) / 100);
+}

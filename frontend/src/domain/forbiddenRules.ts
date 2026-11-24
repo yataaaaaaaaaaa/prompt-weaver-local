@@ -373,17 +373,20 @@ function isLockedPrompt(categories: readonly Category[], prompt: PromptRef): boo
  * - 'prompt' source: every rule matching (source prompt, sub-prompt);
  * - 'category' / 'tag' source: rules with one side equal to the source matcher and the other side matching the sub-prompt.
  * 'forbidden-locked' when the source prompt or the sub-prompt is locked. The source prompt itself is never highlighted.
+ * `pinned`: the active character's pinned categories (src/domain/characters.ts characterCategories); they have no
+ * card (never highlighted) but their locked sub-prompts count as locked sources.
  */
 export function computeForbiddenHighlights(
 	categories: readonly Category[],
 	rules: readonly ForbiddenRule[],
 	source: AssociationEndpoint | null,
+	pinned: readonly Category[] = [],
 ): ForbiddenHighlights {
 	if (!source || rules.length === 0) {
 		return NO_FORBIDDEN_HIGHLIGHTS;
 	}
 	const sourcePrompt = preparePrompt({ categoryName: source.categoryName, promptText: source.promptText });
-	const sourceLocked = isLockedPrompt(categories, sourcePrompt);
+	const sourceLocked = isLockedPrompt(pinned, sourcePrompt) || isLockedPrompt(categories, sourcePrompt);
 	let isForbidden: (target: PreparedPrompt) => boolean;
 	if (source.mode === 'prompt') {
 		isForbidden = (target) => rules.some((rule) => ruleMatchesPrompt(rule, sourcePrompt, target));

@@ -1,8 +1,9 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { GENERATION_DEFAULTS, LORA_WEIGHT_DEFAULTS } from '../api/defaults.gen';
 import type { LoRASpec, ModelSpec } from '../api/types';
+import { ALICE_ID, BOB, character } from '../test/characterData';
 import type { Category } from './categories';
-import { makeRule, specificMatcher } from './forbiddenRules';
+import { makeRule, specificMatcher, tagMatcher } from './forbiddenRules';
 import {
 	buildGenerationRequest,
 	DEFAULT_GENERATION_SETTINGS,
@@ -69,7 +70,7 @@ afterEach(() => {
 
 describe('buildGenerationRequest', () => {
 	it('builds the request from the selection, settings and library', () => {
-		const { request, nextCategorySeedState, missingLoraIds } = buildGenerationRequest(inputs());
+		const { request, nextCategorySeedState, missingLoraIds, imageSeedLocked } = buildGenerationRequest(inputs());
 		expect(request).toEqual({
 			model: MODEL,
 			// The selected LoRA with its weight, then the prompt-linked one at the default weight.
@@ -90,9 +91,11 @@ describe('buildGenerationRequest', () => {
 			prompt_seed: 100,
 			seed: 200,
 			negative_prompt: 'ugly',
+			character_id: null,
 		});
 		expect(nextCategorySeedState).toBe(SETTINGS.promptCategorySeedState);
 		expect(missingLoraIds).toEqual(['deleted', 'gone']);
+		expect(imageSeedLocked).toBe(false);
 	});
 
 	it('a LoRA both selected and prompt-linked keeps its selected weight', () => {
@@ -143,6 +146,87 @@ describe('buildGenerationRequest', () => {
 	});
 });
 
+describe('buildGenerationRequest with an active character', () => {
+	const ALICE = character({
+		loras: [
+			{ id: 'style', weight: 0.3 },
+			{ id: 'missing-character-lora', weight: 1 },
+		],
+		negative_tags: ['short hair', 'UGLY'],
+		seed: 4242,
+		seed_locked: true,
+	});
+
+	it('builds the full request: pinned selections first, character LoRAs, negative tags, locked seed, character_id', () => {
+		const { request, nextCategorySeedState, missingLoraIds, imageSeedLocked } = buildGenerationRequest(inputs({ character: ALICE }));
+		expect(request).toEqual({
+			model: MODEL,
+			// The character's LoRA with its weight (wins over the prompt-linked default), then the selected one.
+			loras: [
+				{ ...LORAS[0], weight: 0.3 },
+				{ ...LORAS[1], weight: 0.6 },
+			],
+			prompt: '1girl, silver hair, blue eyes, school uniform, 1girl, smile, oil painting',
+			selections: [
+				{ category_name: 'Character', prompt_text: '1girl, silver hair, blue eyes', locked: true, induced_lora_ids: [] },
+				{ category_name: 'Character outfit', prompt_text: 'school uniform', locked: true, induced_lora_ids: [] },
+				{ category_name: 'Main', prompt_text: '1girl, smile', locked: true, induced_lora_ids: ['style'] },
+				{ category_name: 'Empty text', prompt_text: '', locked: false, induced_lora_ids: [] },
+				{ category_name: 'Style', prompt_text: 'oil painting', locked: false, induced_lora_ids: [] },
+			],
+			width: 768,
+			height: 1344,
+			steps: 28,
+			guidance_scale: 3,
+			prompt_seed: 100,
+			seed: 4242,
+			negative_prompt: 'ugly, short hair',
+			character_id: ALICE_ID,
+		});
+		expect(nextCategorySeedState).toBe(SETTINGS.promptCategorySeedState);
+		expect(missingLoraIds).toEqual(['missing-character-lora', 'deleted', 'gone']);
+		expect(imageSeedLocked).toBe(true);
+	});
+
+	it('an unlocked character seed leaves the planned image seed', () => {
+		const { request, imageSeedLocked } = buildGenerationRequest(inputs({ character: { ...ALICE, seed_locked: false } }));
+		expect(request.seed).toBe(200);
+		expect(request.character_id).toBe(ALICE_ID);
+		expect(imageSeedLocked).toBe(false);
+	});
+
+	it('pins the character against the USER categories (a user category named Character keeps its name)', () => {
+		const categories: Category[] = [{ ...CATEGORIES[0], text: 'Character' }];
+		const { request } = buildGenerationRequest(inputs({ categories, character: BOB }));
+		expect(request.selections?.map((item) => [item.category_name, item.prompt_text])).toEqual([
+			['character-2', '1boy, black hair'],
+			['Character', '1girl, smile'],
+		]);
+	});
+
+	it('honours forbidden rules with the character (the user sub-prompt gives way)', () => {
+		const rules = [makeRule(tagMatcher('Character', 'silver hair'), specificMatcher('Style', 'oil painting'))];
+		vi.spyOn(console, 'warn').mockImplementation(() => undefined);
+		const { request } = buildGenerationRequest(inputs({ rules, character: ALICE }));
+		expect(request.selections?.map((item) => item.category_name)).toEqual(['Character', 'Character outfit', 'Main', 'Empty text']);
+	});
+
+	it('cycle mode: no counter for the character and the same prompt seed', () => {
+		const settings: GenerationSettings = {
+			...SETTINGS,
+			promptSeedBehavior: 'per_category_cycle',
+			promptCategorySeedState: { main: { seed: 3, remaining: 1, prompt_count: 1 }, 'empty-text': { seed: 7, remaining: 1, prompt_count: 1 } },
+		};
+		vi.spyOn(Math, 'random').mockReturnValue(0.25);
+		const withCharacter = buildGenerationRequest(inputs({ settings, character: ALICE }));
+		const without = buildGenerationRequest(inputs({ settings }));
+		expect(withCharacter.request.prompt_seed).toBe(7);
+		expect(withCharacter.request.prompt_seed).toBe(without.request.prompt_seed);
+		expect(withCharacter.nextCategorySeedState).toEqual(without.nextCategorySeedState);
+		expect(Object.keys(withCharacter.nextCategorySeedState)).toEqual(['main', 'empty-text', 'style']);
+	});
+});
+
 describe('nextSeedSnapshot', () => {
 	const response = { prompt_seed: 100, image_seed: 200, seed: 200 };
 
@@ -165,6 +249,16 @@ describe('nextSeedSnapshot', () => {
 	it('randomize: the field shows a new random seed', () => {
 		vi.spyOn(Math, 'random').mockReturnValue(0.25);
 		expect(nextSeedSnapshot({ ...SETTINGS, imageSeedBehavior: 'randomize' }, response, {}).seedInput).toBe('536870912');
+	});
+
+	it('keeps the image seed field when the character locked the image seed; the prompt seed still advances', () => {
+		const locked = { ...response, image_seed: 4242, seed: 4242 };
+		expect(nextSeedSnapshot({ ...SETTINGS, promptSeedBehavior: 'increment' }, locked, {}, { imageSeedLocked: true })).toEqual({ promptSeedInput: '101' });
+		const next = { main: { seed: 1, remaining: 1, prompt_count: 1 } };
+		expect(nextSeedSnapshot({ ...SETTINGS, promptSeedBehavior: 'per_category_cycle' }, locked, next, { imageSeedLocked: true })).toEqual({
+			promptCategorySeedState: next,
+		});
+		expect(nextSeedSnapshot(SETTINGS, response, {}, { imageSeedLocked: false })).toEqual({ seedInput: '201', promptSeedInput: '100' });
 	});
 });
 

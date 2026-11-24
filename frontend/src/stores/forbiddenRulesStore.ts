@@ -5,6 +5,7 @@ import { create } from 'zustand';
 import { persist } from 'zustand/middleware';
 import type { GenerationSelection } from '../api/types';
 import { sameCategoryName, type Category, type CategoryKey, type SubPromptKey } from '../domain/categories';
+import { characterCategories, type CharacterGenerationInput } from '../domain/characters';
 import {
 	computeForbiddenHighlights,
 	forbiddenHighlightOf,
@@ -27,6 +28,7 @@ import { splitPromptTags } from '../domain/text';
 import { persistedStoreOptions } from '../persistence/persist';
 import { STORE_NAMES } from '../persistence/storeNames';
 import { useCategoriesStore } from './categoriesStore';
+import { selectActiveCharacter, useCharactersStore } from './charactersStore';
 import { selectCurrentSelections, useOutputsStore } from './outputsStore';
 
 export type ForbiddenRulesState = {
@@ -180,17 +182,27 @@ let highlightsMemo: {
 	categories: readonly Category[];
 	rules: readonly ForbiddenRule[];
 	source: AssociationEndpoint | null;
+	character: CharacterGenerationInput | null;
 	highlights: ForbiddenHighlights;
 } | null = null;
 
-/** Highlights of every sub-prompt against the association source, computed once per (categories, rules, source). */
+/** Highlights of every sub-prompt against the association source, computed once per (categories, rules, source,
+ *  active character): a source from the character's pinned categories (Used sub-prompts pane) is locked. */
 export function selectForbiddenHighlights(
 	categories: readonly Category[],
 	rules: readonly ForbiddenRule[],
 	source: AssociationEndpoint | null,
+	character: CharacterGenerationInput | null = null,
 ): ForbiddenHighlights {
-	if (!highlightsMemo || highlightsMemo.categories !== categories || highlightsMemo.rules !== rules || highlightsMemo.source !== source) {
-		highlightsMemo = { categories, rules, source, highlights: computeForbiddenHighlights(categories, rules, source) };
+	if (
+		!highlightsMemo ||
+		highlightsMemo.categories !== categories ||
+		highlightsMemo.rules !== rules ||
+		highlightsMemo.source !== source ||
+		highlightsMemo.character !== character
+	) {
+		const highlights = computeForbiddenHighlights(categories, rules, source, characterCategories(character, categories));
+		highlightsMemo = { categories, rules, source, character, highlights };
 	}
 	return highlightsMemo.highlights;
 }
@@ -200,7 +212,8 @@ export function selectForbiddenHighlights(
 export function useForbiddenHighlight(key: CategoryKey, promptKey: SubPromptKey): ForbiddenHighlight {
 	const rules = useForbiddenRulesStore((state) => state.rules);
 	const source = useForbiddenRulesStore((state) => state.associationSource);
+	const character = useCharactersStore(selectActiveCharacter);
 	return useCategoriesStore((state) =>
-		source ? forbiddenHighlightOf(selectForbiddenHighlights(state.categories, rules, source), key, promptKey) : 'none',
+		source ? forbiddenHighlightOf(selectForbiddenHighlights(state.categories, rules, source, character), key, promptKey) : 'none',
 	);
 }

@@ -1,6 +1,11 @@
 // Prompt selection engine: picks one sub-prompt per active category, in
 // generation order (priority, then name), honoring skips, locks, activation texts and forbidden rules.
 // Operates directly on the categories store data; cycle counters are keyed by category key.
+// PINNED categories (the active character's, src/domain/characters.ts characterCategories) are selected first, in
+// their given order, before every user category: each contributes its locked sub-prompt (flagged `locked`) unless a
+// rule forbids it together with an earlier pinned choice; they never read or write cycle counters and never draw from
+// the seeded random sequence, so the user categories are selected exactly as without them, except that their
+// choices must not be forbidden together with the pinned ones.
 // Pure module (same semantics as the pre-refactor src/promptEngine.ts).
 import type { ForbiddenRule, GenerationSelection } from '../api/types';
 import {
@@ -99,11 +104,16 @@ function isCategoryEntirelyForbidden(rules: readonly ForbiddenRule[], category: 
 	});
 }
 
+function lockedCandidate(category: Category): Candidate | null {
+	const locked = category.subPrompts.find((subPrompt) => subPrompt.state === 'lock');
+	return locked ? makeCandidate(category, locked, true) : null;
+}
+
 /** The locked sub-prompt alone, else every non-skipped sub-prompt in random order. */
 function candidatesForCategory(category: Category, random: () => number): Candidate[] {
-	const locked = category.subPrompts.find((subPrompt) => subPrompt.state === 'lock');
+	const locked = lockedCandidate(category);
 	if (locked) {
-		return [makeCandidate(category, locked, true)];
+		return [locked];
 	}
 	const candidates = category.subPrompts.filter((subPrompt) => subPrompt.state !== 'skip').map((subPrompt) => makeCandidate(category, subPrompt, false));
 	shuffleInPlace(candidates, random);
@@ -126,12 +136,41 @@ function toGenerationSelections(chosen: readonly Candidate[]): GenerationSelecti
 	}));
 }
 
-function activeCategories(categories: readonly Category[]): Category[] {
-	const ordered = sortCategories(categories.filter((category) => category.state !== 'skip'));
-	if (!ordered.length) {
+function isActiveCategory(category: Category): boolean {
+	return category.state !== 'skip';
+}
+
+/** The non-skipped categories: the pinned ones in their given order, the user ones in generation order. Throws when
+ *  there are none at all. */
+function activeCategories(categories: readonly Category[], pinned: readonly Category[]): { pinned: Category[]; user: Category[] } {
+	const active = { pinned: pinned.filter(isActiveCategory), user: sortCategories(categories.filter(isActiveCategory)) };
+	if (!active.pinned.length && !active.user.length) {
 		throw new PromptSelectionError('No active categories available. Unskip at least one category.');
 	}
-	return ordered;
+	return active;
+}
+
+/** The choices of the (active) pinned categories, in order, shared by both selection modes: each one's locked
+ *  sub-prompt, skipped with a warning when a rule forbids it together with an earlier pinned choice (an optional
+ *  pinned category is skipped when not triggered). No random draw, no counter. Throws for a pinned category without
+ *  a lock. */
+function choosePinned(pinned: readonly Category[], rules: readonly ForbiddenRule[]): Candidate[] {
+	const chosen: Candidate[] = [];
+	for (const category of pinned) {
+		if (!activationTriggered(category, chosen)) {
+			continue;
+		}
+		const locked = lockedCandidate(category);
+		if (!locked) {
+			throw new PromptSelectionError(`Pinned category '${category.text}' has no locked prompt.`);
+		}
+		if (conflictsWithChosen(rules, locked, chosen)) {
+			console.warn(`Category '${category.text}' skipped because its locked prompt is forbidden.`);
+			continue;
+		}
+		chosen.push(locked);
+	}
+	return chosen;
 }
 
 function positiveModulo(value: number, divisor: number): number {
@@ -140,16 +179,21 @@ function positiveModulo(value: number, divisor: number): number {
 }
 
 /**
- * Random selection seeded by `seed` (Math.random when null): per active category, the lock or a shuffled
- * candidate that no forbidden rule excludes together with the previous choices. Categories with activation
- * terms are optional (skipped when not triggered, empty or entirely forbidden).
+ * Random selection seeded by `seed` (Math.random when null): the `pinned` categories first (choosePinned), then per
+ * active user category, the lock or a shuffled candidate that no forbidden rule excludes together with the previous
+ * choices. Categories with activation terms are optional (skipped when not triggered, empty or entirely forbidden).
  */
-export function selectPrompts(categories: readonly Category[], rules: readonly ForbiddenRule[], seed: number | null): GenerationSelection[] {
+export function selectPrompts(
+	categories: readonly Category[],
+	rules: readonly ForbiddenRule[],
+	seed: number | null,
+	pinned: readonly Category[] = [],
+): GenerationSelection[] {
 	const random = createSeededRandom(seed);
-	const ordered = activeCategories(categories);
-	const chosen: Candidate[] = [];
+	const active = activeCategories(categories, pinned);
+	const chosen = choosePinned(active.pinned, rules);
 
-	for (const category of ordered) {
+	for (const category of active.user) {
 		const optional = hasActivationTerms(category.activation_text);
 		if (optional && !activationTriggered(category, chosen)) {
 			continue;
@@ -176,21 +220,23 @@ export function selectPrompts(categories: readonly Category[], rules: readonly F
 }
 
 /**
- * 'per_category_cycle' selection: each category walks its sub-prompts through its own counter
- * (seed -> index seed mod count), skipping skipped/forbidden ones, and restarts randomly after a full cycle.
+ * 'per_category_cycle' selection: the `pinned` categories first (choosePinned: no counter, no effect on the prompt
+ * seed), then each user category walks its sub-prompts through its own counter (seed -> index seed mod count),
+ * skipping skipped/forbidden ones, and restarts randomly after a full cycle.
  * Locks are used without touching the counter; a category disabled by a category-wide rule keeps its counter.
  */
 export function selectPromptsWithCategoryCycle(
 	categories: readonly Category[],
 	rules: readonly ForbiddenRule[],
 	categorySeedState: CategorySeedState,
+	pinned: readonly Category[] = [],
 ): CategoryCycleSelectionResult {
-	const ordered = activeCategories(categories);
-	const chosen: Candidate[] = [];
+	const active = activeCategories(categories, pinned);
+	const chosen = choosePinned(active.pinned, rules);
 	const nextCategorySeedState: CategorySeedState = {};
 	let firstUsedSeed: number | null = null;
 
-	for (const category of ordered) {
+	for (const category of active.user) {
 		const key = categoryKeyOf(category.text);
 		const promptCount = category.subPrompts.length;
 		const normalizedEntry = normalizeCategorySeedEntry(categorySeedState[key], promptCount);
@@ -213,14 +259,13 @@ export function selectPromptsWithCategoryCycle(
 			continue;
 		}
 
-		const lockedSubPrompt = category.subPrompts.find((subPrompt) => subPrompt.state === 'lock');
+		const locked = lockedCandidate(category);
 		let selected: Candidate | null = null;
 		let nextEntry: CategorySeedEntry = normalizedEntry;
 
-		if (lockedSubPrompt) {
-			const lockedCandidate = makeCandidate(category, lockedSubPrompt, true);
-			if (!conflictsWithChosen(rules, lockedCandidate, chosen)) {
-				selected = lockedCandidate;
+		if (locked) {
+			if (!conflictsWithChosen(rules, locked, chosen)) {
+				selected = locked;
 			} else {
 				console.warn(`Category '${category.text}' skipped because its locked prompt is forbidden.`);
 			}

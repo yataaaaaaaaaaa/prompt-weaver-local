@@ -1,8 +1,10 @@
 // Ports every case of the pre-refactor tests/promptEngine.test.ts (prompt engine part) plus selectPrompts coverage.
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import type { ForbiddenRule } from '../api/types';
+import { character } from '../test/characterData';
 import type { Category, SubPrompt } from './categories';
-import { containsMatcher, makeRule, specificMatcher } from './forbiddenRules';
+import { characterCategories } from './characters';
+import { categoryMatcher, containsMatcher, makeRule, specificMatcher, tagMatcher } from './forbiddenRules';
 import { PromptSelectionError, selectPrompts, selectPromptsWithCategoryCycle } from './promptEngine';
 
 function makeCategory(text: string, subPrompts: (string | Partial<SubPrompt>)[], options: Partial<Category> = {}): Category {
@@ -221,5 +223,123 @@ describe('selectPrompts', () => {
 			'No prompt could be selected with the current category configuration.',
 		);
 		expect(() => selectPrompts([], [], 1)).toThrow(PromptSelectionError);
+	});
+});
+
+describe('pinned categories (active character)', () => {
+	const IDENTITY = '1girl, silver hair, blue eyes';
+	const OUTFIT = 'school uniform';
+	const IDENTITY_SELECTION = { category_name: 'Character', prompt_text: IDENTITY, locked: true, induced_lora_ids: [] };
+	const OUTFIT_SELECTION = { category_name: 'Character outfit', prompt_text: OUTFIT, locked: true, induced_lora_ids: [] };
+	const SEEDS = Array.from({ length: 24 }, (_, index) => index + 1);
+
+	const user = [
+		makeCategory('Late', ['l1', 'l2'], { priority: 9 }),
+		makeCategory('Main', ['m1', 'm2', 'm3'], { priority: 0 }),
+		makeCategory('Hair', ['black hair, ponytail', 'short hair', 'twintails'], { priority: 2 }),
+	];
+	const pinned = characterCategories(character(), user);
+	const picked = (selections: readonly { category_name: string; prompt_text: string }[], categoryName: string) =>
+		selections.find((item) => item.category_name === categoryName)?.prompt_text;
+
+	it('selects the pinned categories first, whatever the user priorities, without changing the user picks', () => {
+		const result = selectPrompts(user, [], 7, pinned);
+		expect(result.slice(0, 2)).toEqual([IDENTITY_SELECTION, OUTFIT_SELECTION]);
+		expect(result.map((item) => item.category_name)).toEqual(['Character', 'Character outfit', 'Main', 'Hair', 'Late']);
+		// Pinned categories draw nothing from the seeded sequence.
+		expect(result.slice(2)).toEqual(selectPrompts(user, [], 7));
+	});
+
+	it.each([
+		['an exact prompt rule (tag order insensitive)', makeRule(specificMatcher('Character', 'blue eyes, 1girl, silver hair'), specificMatcher('Hair', 'short hair'))],
+		['a category-wide Character rule', makeRule(categoryMatcher('Character'), specificMatcher('Hair', 'short hair'))],
+		['a tag rule', makeRule(tagMatcher(null, 'Silver Hair'), tagMatcher('Hair', 'short_hair'))],
+	])('never picks a user sub-prompt forbidden with the identity: %s', (_label, rule) => {
+		const hairs = new Set<string | undefined>();
+		for (const seed of SEEDS) {
+			const result = selectPrompts(user, [rule], seed, pinned);
+			expect(result.slice(0, 2)).toEqual([IDENTITY_SELECTION, OUTFIT_SELECTION]);
+			hairs.add(picked(result, 'Hair'));
+		}
+		expect([...hairs].sort()).toEqual(['black hair, ponytail', 'twintails']);
+	});
+
+	it('skips a user category entirely forbidden with the identity, also a locked one: the character wins', () => {
+		const warn = vi.spyOn(console, 'warn').mockImplementation(() => undefined);
+		const rules = [
+			makeRule(categoryMatcher('Character'), categoryMatcher('Hair')),
+			makeRule(tagMatcher('Character', '1girl'), specificMatcher('Main', 'm2')),
+		];
+		const withLock = user.map((category) =>
+			category.text === 'Main' ? makeCategory('Main', ['m1', { text: 'm2', state: 'lock' }], { priority: 0 }) : category,
+		);
+		for (const seed of SEEDS) {
+			const result = selectPrompts(withLock, rules, seed, characterCategories(character(), withLock));
+			expect(result.map((item) => item.category_name)).toEqual(['Character', 'Character outfit', 'Late']);
+		}
+		expect(warn).toHaveBeenCalledWith("Category 'Hair' skipped because forbidden associations exclude all usable prompts.");
+		expect(warn).toHaveBeenCalledWith("Category 'Main' skipped because forbidden associations exclude all usable prompts.");
+	});
+
+	it("triggers a user category's activation text with a character tag", () => {
+		const accessories = makeCategory('Accessories', ['hair ribbon'], { priority: 1, activation_text: 'silver hair' });
+		expect(selectPrompts([...user, accessories], [], 3, pinned).map((item) => item.category_name)).toContain('Accessories');
+		expect(selectPrompts([...user, accessories], [], 3).map((item) => item.category_name)).not.toContain('Accessories');
+	});
+
+	it('skips the outfit when a rule forbids it with the identity (both modes)', () => {
+		const warn = vi.spyOn(console, 'warn').mockImplementation(() => undefined);
+		const rules = [makeRule(tagMatcher('Character', '1girl'), categoryMatcher('Character outfit'))];
+		expect(selectPrompts(user, rules, 1, pinned).map((item) => item.category_name)).toEqual(['Character', 'Main', 'Hair', 'Late']);
+		expect(selectPromptsWithCategoryCycle(user, rules, {}, pinned).selections.map((item) => item.category_name)).toEqual([
+			'Character',
+			'Main',
+			'Hair',
+			'Late',
+		]);
+		expect(warn).toHaveBeenCalledTimes(2);
+		expect(warn).toHaveBeenCalledWith("Category 'Character outfit' skipped because its locked prompt is forbidden.");
+	});
+
+	it('cycle mode: pinned categories have no counter and leave the prompt seed alone', () => {
+		const state = {
+			character: { seed: 1, remaining: 1, prompt_count: 1 },
+			main: { seed: 4, remaining: 3, prompt_count: 3 },
+			hair: { seed: 0, remaining: 3, prompt_count: 3 },
+			late: { seed: 1, remaining: 2, prompt_count: 2 },
+		};
+		const withCharacter = selectPromptsWithCategoryCycle(user, [], state, pinned);
+		const without = selectPromptsWithCategoryCycle(user, [], state);
+		expect(withCharacter.selections.slice(0, 2)).toEqual([IDENTITY_SELECTION, OUTFIT_SELECTION]);
+		expect(withCharacter.selections.slice(2)).toEqual(without.selections);
+		expect(withCharacter.promptSeed).toBe(4);
+		expect(withCharacter.nextCategorySeedState).toEqual(without.nextCategorySeedState);
+		expect(Object.keys(withCharacter.nextCategorySeedState).sort()).toEqual(['hair', 'late', 'main']);
+	});
+
+	it('cycle mode: a user category disabled by a category-wide Character rule keeps its counter', () => {
+		vi.spyOn(console, 'warn').mockImplementation(() => undefined);
+		const hair = { seed: 1, remaining: 3, prompt_count: 3 };
+		const result = selectPromptsWithCategoryCycle(user, [makeRule(categoryMatcher('Character'), categoryMatcher('Hair'))], { hair }, pinned);
+		expect(result.selections.map((item) => item.category_name)).toEqual(['Character', 'Character outfit', 'Main', 'Late']);
+		expect(result.nextCategorySeedState.hair).toEqual(hair);
+	});
+
+	it('generates the character alone when every user category is skipped', () => {
+		const skipped = user.map((category) => ({ ...category, state: 'skip' as const }));
+		expect(selectPrompts(skipped, [], 1, pinned)).toEqual([IDENTITY_SELECTION, OUTFIT_SELECTION]);
+		expect(selectPromptsWithCategoryCycle([], [], {}, pinned)).toEqual({
+			selections: [IDENTITY_SELECTION, OUTFIT_SELECTION],
+			nextCategorySeedState: {},
+			promptSeed: null,
+		});
+		expect(() => selectPrompts(skipped, [], 1)).toThrow('No active categories available. Unskip at least one category.');
+		expect(() => selectPromptsWithCategoryCycle(skipped, [], {}, [])).toThrow('No active categories available. Unskip at least one category.');
+	});
+
+	it('rejects a pinned category without a locked sub-prompt', () => {
+		expect(() => selectPrompts(user, [], 1, [makeCategory('Pinned', ['free'])])).toThrow(
+			new PromptSelectionError("Pinned category 'Pinned' has no locked prompt."),
+		);
 	});
 });

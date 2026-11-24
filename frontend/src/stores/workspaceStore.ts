@@ -12,6 +12,7 @@ import {
 	frontZ,
 	maxWindowZ,
 	migrateLegacyWorkspace,
+	paneWindowKey,
 	sanitizeRect,
 	sanitizeWindowLayout,
 	sanitizeWindowLayouts,
@@ -55,6 +56,10 @@ export type WorkspaceActions = {
 	 *  A window's stored size takes precedence over the item's preferred (estimated) size. */
 	arrangeCategoryWindows: (items: ArrangeItem[], viewport: Viewport) => void;
 	setPaneVisible: (paneId: string, visible: boolean) => void;
+	/** Shows a registered pane in front of every window: makes it visible, brings its window to the front and leaves
+	 *  'categories-only' for 'all' (where panes are hidden). Cross-pane flows use it (e.g. "Create character" opens
+	 *  the Characters pane). */
+	revealPane: (paneId: string) => void;
 	cycleVisibilityMode: () => void;
 	/** Wholesale replacement (legacy import from app_state.json); incomplete rects are dropped. */
 	replaceWindows: (windows: Partial<Record<WindowKey, WindowLayout>>) => void;
@@ -136,6 +141,16 @@ export const useWorkspaceStore = create<WorkspaceStore>()(
 					}
 					return {
 						hiddenPaneIds: visible ? state.hiddenPaneIds.filter((id) => id !== paneId) : [...state.hiddenPaneIds, paneId],
+					};
+				}),
+			revealPane: (paneId) =>
+				set((state) => {
+					const key = paneWindowKey(paneId);
+					const z = frontZ(state.windows, key);
+					return {
+						hiddenPaneIds: state.hiddenPaneIds.includes(paneId) ? state.hiddenPaneIds.filter((id) => id !== paneId) : state.hiddenPaneIds,
+						windows: z === null ? state.windows : withZ(state.windows, key, z),
+						visibilityMode: state.visibilityMode === 'categories-only' ? 'all' : state.visibilityMode,
 					};
 				}),
 			cycleVisibilityMode: () => set((state) => ({ visibilityMode: NEXT_VISIBILITY_MODE[state.visibilityMode] })),

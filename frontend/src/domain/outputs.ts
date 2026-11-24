@@ -1,8 +1,9 @@
 // Output domain: output id format, ordering/navigation over the ascending id list, the current-output
 // selection index and the details view model. Pure; state lives in src/stores/outputsStore.ts.
-import type { GenerationSelection, LoRASpec, OutputRecord } from '../api/types';
+import type { GenerationSelection, LoRASpec, OutputCharacter, OutputRecord } from '../api/types';
 import { categoryKeyOf, subPromptKeyOf, type CategoryKey, type SubPromptKey } from './categories';
 import { basename } from './paths';
+import { formatWeight } from './text';
 
 /** Output files are named <10-digit id>.png / .json. */
 export const OUTPUT_ID_DIGITS = 10;
@@ -130,6 +131,8 @@ export type CurrentOutputDetails = {
 	loras: OutputLoraDetails[];
 	prompt: string;
 	negativePrompt: string;
+	/** The character active for the output and how its reference images were used (null without one). */
+	character: OutputCharacter | null;
 };
 
 /** Details shown by the output browser; LoRA ids missing from the library are shown as is (with their weight). */
@@ -149,5 +152,17 @@ export function outputDetails(record: OutputRecord, modelName: string, loras: re
 		loras: record.active_loras.map(({ id, weight }) => ({ name: loraNames.get(id) ?? id, weight })),
 		prompt: record.prompt,
 		negativePrompt: record.negative_prompt,
+		character: record.character ?? null,
 	};
+}
+
+/** Display text of an output's character: 'Alice · references applied (strength 0.6, 2 images)', or
+ *  'Alice · references not applied: <reason>' (the reason comes from the backend). */
+export function outputCharacterText(character: OutputCharacter): string {
+	const { reference } = character;
+	if (reference.applied) {
+		const images = reference.image_ids.length === 1 ? '1 image' : `${reference.image_ids.length} images`;
+		return `${character.name} · references applied (strength ${reference.strength === null ? '—' : formatWeight(reference.strength)}, ${images})`;
+	}
+	return `${character.name} · references not applied${reference.reason ? `: ${reference.reason}` : ''}`;
 }

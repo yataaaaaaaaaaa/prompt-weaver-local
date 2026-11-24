@@ -5,6 +5,7 @@ import { api } from '../api/client';
 import { buildGenerationRequest, nextSeedSnapshot } from '../domain/generationRequest';
 import { isRecord } from '../domain/guards';
 import { useCategoriesStore } from './categoriesStore';
+import { selectActiveCharacter, useCharactersStore } from './charactersStore';
 import { useForbiddenRulesStore } from './forbiddenRulesStore';
 import { selectGenerationSettings, selectSeedSnapshot, useGenerationSettingsStore } from './generationSettingsStore';
 import { selectSelectedModel, useLibraryStore } from './libraryStore';
@@ -18,9 +19,11 @@ export type GenerationState = {
 };
 
 export type GenerationActions = {
-	/** Builds the request from categories + forbidden rules + settings + library (src/domain/generationRequest.ts),
-	 *  calls api.generate, advances seeds (applySeedSnapshot), shows the output (useOutputsStore.showGenerated)
-	 *  and pushes an undo entry {type:'generate'} (useUndoStore.push). Errors -> reportError. No-op while generating. */
+	/** Builds the request from categories + forbidden rules + settings + library + the active character
+	 *  (selectActiveCharacter; src/domain/generationRequest.ts), calls api.generate, advances seeds (applySeedSnapshot;
+	 *  the image seed field is kept when the character locks the seed), shows the output
+	 *  (useOutputsStore.showGenerated) and pushes an undo entry {type:'generate'} (useUndoStore.push). Errors ->
+	 *  reportError. No-op while generating. */
 	generate: () => Promise<void>;
 	/** Starts the continuous loop, or stops it (aborts the request and calls api.cancelGeneration). */
 	toggleContinuous: () => Promise<void>;
@@ -47,11 +50,12 @@ export const useGenerationStore = create<GenerationStore>()((set, get) => {
 		const settings = selectGenerationSettings(useGenerationSettingsStore.getState());
 		const seedsBefore = selectSeedSnapshot(settings);
 		const previousOutputId = useOutputsStore.getState().currentId;
-		const { request, nextCategorySeedState, missingLoraIds } = buildGenerationRequest({
+		const { request, nextCategorySeedState, missingLoraIds, imageSeedLocked } = buildGenerationRequest({
 			categories: useCategoriesStore.getState().categories,
 			rules: useForbiddenRulesStore.getState().rules,
 			settings,
 			library: useLibraryStore.getState(),
+			character: selectActiveCharacter(useCharactersStore.getState()),
 		});
 		const newlyMissing = missingLoraIds.filter((id) => !warnedMissingLoraIds.has(id));
 		if (newlyMissing.length) {
@@ -66,7 +70,7 @@ export const useGenerationStore = create<GenerationStore>()((set, get) => {
 		set({ generating: true });
 		try {
 			const record = await api.generate(request, controller.signal);
-			useGenerationSettingsStore.getState().applySeedSnapshot(nextSeedSnapshot(settings, record, nextCategorySeedState));
+			useGenerationSettingsStore.getState().applySeedSnapshot(nextSeedSnapshot(settings, record, nextCategorySeedState, { imageSeedLocked }));
 			useOutputsStore.getState().showGenerated(record);
 			useUndoStore.getState().push({ type: 'generate', previousOutputId, seeds: seedsBefore });
 		} finally {

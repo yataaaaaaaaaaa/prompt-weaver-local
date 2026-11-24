@@ -2,7 +2,9 @@ import { describe, expect, it } from 'vitest';
 import {
 	areNameEquivalent,
 	comparePriority,
+	formatWeight,
 	joinPromptTags,
+	namedProblemsText,
 	normalizeIdPart,
 	normalizePromptName,
 	normalizeTagId,
@@ -124,5 +126,24 @@ describe('priorities', () => {
 		expect(comparePriority('1.2', '1.10')).toBeLessThan(0);
 		expect(comparePriority('1.1', '1')).toBeLessThan(0);
 		expect(comparePriority('3', '3')).toBe(0);
+	});
+});
+
+describe('namedProblemsText', () => {
+	it('lists named problems in one sentence', () => {
+		expect(namedProblemsText([{ name: 'realistic filter [IL]', problem: 'No version id or hash published.' }])).toBe(
+			'realistic filter [IL]: No version id or hash published.',
+		);
+		expect(namedProblemsText([{ name: 'a', problem: 'Disk full' }, { name: 'b', problem: ' Unsupported base model. ' }])).toBe('a: Disk full; b: Unsupported base model.');
+	});
+});
+
+describe('formatWeight', () => {
+	it('formats with at most 2 decimals and no trailing zeros', () => {
+		expect(formatWeight(1)).toBe('1');
+		expect(formatWeight(0.6)).toBe('0.6');
+		expect(formatWeight(-1.25)).toBe('-1.25');
+		expect(formatWeight(0.1 + 0.2)).toBe('0.3');
+		expect(formatWeight(0.333333)).toBe('0.33');
 	});
 });

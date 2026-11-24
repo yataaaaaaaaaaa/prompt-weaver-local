@@ -47,3 +47,13 @@ export const MODEL_SEARCH_QUERY_DEFAULTS: Readonly<components['schemas']['ModelS
 	"query": "",
 	"sort": "most_downloaded"
 });
+
+/** Defaults of the backend schema ReferenceDefaults. */
+export const REFERENCE_DEFAULTS: Readonly<components['schemas']['ReferenceDefaults']> = Object.freeze({
+	"focus": "face",
+	"max": 1,
+	"max_images": 4,
+	"min": 0,
+	"step": 0.05,
+	"strength": 0.6
+});

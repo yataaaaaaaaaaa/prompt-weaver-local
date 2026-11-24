@@ -13,3 +13,10 @@ const OUTPUT_IMAGE_PATH = '/api/outputs/{output_id}/image' satisfies keyof paths
 export function outputImageUrl(outputId: string): string {
 	return `${BACKEND_URL}${OUTPUT_IMAGE_PATH.replace('{output_id}', encodeURIComponent(outputId))}`;
 }
+
+const CHARACTER_IMAGE_PATH = '/api/characters/{character_id}/images/{image_id}' satisfies keyof paths;
+
+/** URL of a character image (a reference image or the thumbnail, CharacterImage.id), usable directly as <img src>. */
+export function characterImageUrl(characterId: string, imageId: string): string {
+	return `${BACKEND_URL}${CHARACTER_IMAGE_PATH.replace('{character_id}', encodeURIComponent(characterId)).replace('{image_id}', encodeURIComponent(imageId))}`;
+}

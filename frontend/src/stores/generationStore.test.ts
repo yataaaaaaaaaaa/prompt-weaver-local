@@ -4,7 +4,9 @@ import { api, ApiError } from '../api/client';
 import { LORA_WEIGHT_DEFAULTS } from '../api/defaults.gen';
 import type { GenerateRequest, LoRASpec, ModelSpec, OutputRecord } from '../api/types';
 import type { Category } from '../domain/categories';
+import { ALICE_ID, BOB, character } from '../test/characterData';
 import { useCategoriesStore } from './categoriesStore';
+import { useCharactersStore } from './charactersStore';
 import { useGenerationSettingsStore } from './generationSettingsStore';
 import { GENERATION_FAILED_TITLE, useCanGenerate, useCanToggleContinuous, useGenerationStore } from './generationStore';
 import { useLibraryStore } from './libraryStore';
@@ -40,6 +42,7 @@ function record(request: GenerateRequest, outputId = '0000000004'): OutputRecord
 		image_seed: request.seed ?? null,
 		prompt_seed: request.prompt_seed ?? null,
 		selections: (request.selections ?? []).map((item) => ({ ...item, locked: item.locked, induced_lora_ids: item.induced_lora_ids ?? [] })),
+		character: null,
 	};
 }
 
@@ -166,6 +169,65 @@ describe('generate', () => {
 		expect(generate.mock.calls[0][0].loras).toEqual([{ ...STYLE, weight: 1 }]);
 		expect(generate.mock.calls[0][0].selections?.[0].induced_lora_ids).toEqual(['style']);
 		expect(notifications()).toEqual([{ intent: 'warning', title: 'Missing LoRAs', message: 'LoRAs missing from the library were ignored: deleted, gone.' }]);
+	});
+});
+
+describe('generate with the active character', () => {
+	const ALICE = character({ loras: [{ id: 'detail', weight: 0.5 }], seed: 777, seed_locked: true, negative_tags: ['short hair'] });
+
+	it('the active character of the characters store reaches api.generate; a locked seed keeps the seed field', async () => {
+		setup();
+		useCharactersStore.setState({ characters: [BOB, ALICE], activeId: ALICE_ID });
+		useGenerationSettingsStore.setState({ negativePrompt: 'lowres' });
+		const generate = vi.spyOn(api, 'generate').mockImplementation(async (request) => record(request));
+
+		await store().generate();
+
+		const request = generate.mock.calls[0][0];
+		expect(request).toMatchObject({
+			character_id: ALICE_ID,
+			seed: 777,
+			prompt_seed: 5,
+			negative_prompt: 'lowres, short hair',
+			prompt: '1girl, silver hair, blue eyes, school uniform, 1girl, smile',
+			loras: [
+				{ ...DETAIL, weight: 0.5 },
+				{ ...STYLE, weight: LORA_WEIGHT_DEFAULTS.weight },
+			],
+		});
+		expect(request.selections?.slice(0, 2).map((item) => [item.category_name, item.locked])).toEqual([
+			['Character', true],
+			['Character outfit', true],
+		]);
+		// imageSeedBehavior 'increment' would advance the field to '11' without the lock.
+		expect(useGenerationSettingsStore.getState()).toMatchObject({ seedInput: '10', promptSeedInput: '5' });
+		expect(notifications()).toEqual([]);
+	});
+
+	it('an unlocked character advances the seed field; no active character sends character_id null', async () => {
+		setup();
+		useCharactersStore.setState({ characters: [{ ...ALICE, seed_locked: false }], activeId: ALICE_ID });
+		const generate = vi.spyOn(api, 'generate').mockImplementation(async (request) => record(request));
+
+		await store().generate();
+		expect(generate.mock.calls[0][0]).toMatchObject({ character_id: ALICE_ID, seed: 10 });
+		expect(useGenerationSettingsStore.getState().seedInput).toBe('11');
+
+		useCharactersStore.setState({ activeId: null });
+		await store().generate();
+		expect(generate.mock.calls[1][0]).toMatchObject({ character_id: null, seed: 11, prompt: '1girl, smile' });
+	});
+
+	it('warns about character LoRAs missing from the library', async () => {
+		setup();
+		useCharactersStore.setState({ characters: [character({ loras: [{ id: 'gone-character-lora', weight: 0.8 }] })], activeId: ALICE_ID });
+		vi.spyOn(api, 'generate').mockImplementation(async (request) => record(request));
+
+		await store().generate();
+
+		expect(notifications()).toEqual([
+			{ intent: 'warning', title: 'Missing LoRAs', message: 'LoRAs missing from the library were ignored: gone-character-lora.' },
+		]);
 	});
 });
 

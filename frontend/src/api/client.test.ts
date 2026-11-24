@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { api, ApiError } from './client';
-import { BACKEND_URL, outputImageUrl, TASKS_WS_URL } from './config';
+import { BACKEND_URL, characterImageUrl, outputImageUrl, TASKS_WS_URL } from './config';
 import { remoteImage } from '../test/imageLibraryData';
 
 function stubFetch(status: number, body: unknown) {
@@ -129,5 +129,33 @@ describe('api client', () => {
 
 		await expect(failure).rejects.toBeInstanceOf(ApiError);
 		await expect(failure).rejects.toMatchObject({ status: 409, message: 'Generation cancelled' });
+	});
+
+	it('builds the character endpoints and the character image URL', async () => {
+		expect(characterImageUrl('chr-0123456789ab', 'img-0123456789ab')).toBe(
+			`${BACKEND_URL}/api/characters/chr-0123456789ab/images/img-0123456789ab`,
+		);
+		const fetchMock = stubFetch(200, { items: [], active_id: null });
+
+		await api.setActiveCharacter(null);
+		await api.addCharacterReferenceImage('chr-0123456789ab', { kind: 'output', output_id: '0000000007' });
+
+		const [activate, addImage] = fetchMock.mock.calls.map((call) => call[0]);
+		expect([activate.method, activate.url]).toEqual(['PUT', `${BACKEND_URL}/api/characters/active`]);
+		expect(await activate.json()).toEqual({ id: null });
+		expect([addImage.method, addImage.url]).toEqual(['POST', `${BACKEND_URL}/api/characters/chr-0123456789ab/reference-images`]);
+		expect(await addImage.json()).toEqual({ source: { kind: 'output', output_id: '0000000007' } });
+	});
+
+	it('asks the IP-Adapter status with the model path, or without it', async () => {
+		const fetchMock = stubFetch(200, { variants: [], folders: { adapter: 'a', image_encoder: 'b' }, architecture: null, support: [] });
+
+		await api.ipAdapterStatus('D:\models\model.safetensors');
+		await api.ipAdapterStatus(null);
+
+		const [withModel, withoutModel] = fetchMock.mock.calls.map((call) => new URL(call[0].url));
+		expect(withModel.pathname).toBe('/api/ip-adapters');
+		expect(withModel.searchParams.get('model_path')).toBe('D:\models\model.safetensors');
+		expect(withoutModel.searchParams.has('model_path')).toBe(false);
 	});
 });

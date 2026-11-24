@@ -1,6 +1,8 @@
 import { describe, expect, it } from 'vitest';
+import { character } from '../test/characterData';
 import type { Category, SubPrompt } from './categories';
-import { categoryMatcher, containsMatcher, makeRule, specificMatcher } from './forbiddenRules';
+import { characterCategories } from './characters';
+import { categoryMatcher, containsMatcher, makeRule, specificMatcher, tagMatcher } from './forbiddenRules';
 import { buildReachabilitySnapshot, categoryUiStateOf, subPromptUiStateOf, type ReachabilitySnapshot } from './reachability';
 
 function category(text: string, priority: number, subPrompts: (string | Partial<SubPrompt>)[], extra: Partial<Category> = {}): Category {
@@ -81,5 +83,65 @@ describe('buildReachabilitySnapshot', () => {
 		const snapshot = buildReachabilitySnapshot([]);
 		expect(categoryUiStateOf(snapshot, 'x')).toBeUndefined();
 		expect(subPromptUiStateOf(snapshot, 'x', 'y')).toBeUndefined();
+	});
+});
+
+describe('buildReachabilitySnapshot with pinned categories (active character)', () => {
+	const user = [
+		category('Hair', 0, ['black hair, ponytail', 'short hair', { text: 'bald', state: 'skip' }]),
+		category('Hat', 2, ['cap', 'beret']),
+		category('Accessories', 3, ['hair ribbon'], { activation_text: 'silver hair' }),
+		category('Shoes', 4, ['loafers'], { activation_text: 'uniform' }),
+	];
+	const pinned = characterCategories(character(), user);
+
+	it('user sub-prompts forbidden by the character become indirectly-disabled; pinned categories get no state', () => {
+		const rules = [
+			makeRule(tagMatcher(null, 'silver hair'), tagMatcher('Hair', 'short hair')),
+			makeRule(categoryMatcher('Character'), categoryMatcher('Hat')),
+		];
+		const snapshot = buildReachabilitySnapshot(user, rules, pinned);
+		expect(states(snapshot)).toEqual({
+			hair: 'normal',
+			'hair::black-hair-ponytail': 'normal',
+			'hair::short-hair': 'indirectly-disabled',
+			'hair::bald': 'skip',
+			hat: 'indirectly-disabled',
+			'hat::cap': 'indirectly-disabled',
+			'hat::beret': 'indirectly-disabled',
+			accessories: 'normal',
+			'accessories::hair-ribbon': 'normal',
+			shoes: 'normal',
+			'shoes::loafers': 'normal',
+		});
+		// Without the character, the same rules disable nothing.
+		expect(categoryUiStateOf(buildReachabilitySnapshot(user, rules), 'hat')).toBe('normal');
+		expect(subPromptUiStateOf(buildReachabilitySnapshot(user, rules), 'hair', 'short-hair')).toBe('normal');
+	});
+
+	it('activation texts are reachable through the character tags', () => {
+		const without = buildReachabilitySnapshot(user, []);
+		expect(categoryUiStateOf(without, 'accessories')).toBe('indirectly-disabled');
+		expect(categoryUiStateOf(without, 'shoes')).toBe('indirectly-disabled');
+		const withCharacter = buildReachabilitySnapshot(user, [], pinned);
+		expect(categoryUiStateOf(withCharacter, 'accessories')).toBe('normal');
+		expect(subPromptUiStateOf(withCharacter, 'shoes', 'loafers')).toBe('normal');
+	});
+
+	it('an outfit forbidden with the identity neither activates nor forbids anything', () => {
+		const rules = [
+			makeRule(tagMatcher('Character', '1girl'), categoryMatcher('Character outfit')),
+			makeRule(categoryMatcher('Character outfit'), specificMatcher('Hat', 'cap')),
+		];
+		const snapshot = buildReachabilitySnapshot(user, rules, pinned);
+		expect(categoryUiStateOf(snapshot, 'shoes')).toBe('indirectly-disabled');
+		expect(subPromptUiStateOf(snapshot, 'hat', 'cap')).toBe('normal');
+		expect(categoryUiStateOf(snapshot, 'character-outfit')).toBeUndefined();
+	});
+
+	it('never overwrites the state of a user category with the same key', () => {
+		const userCharacter = category('Character', 1, ['x', 'y']);
+		const snapshot = buildReachabilitySnapshot([userCharacter], [], [category('Character', 1, [{ text: 'x', state: 'lock' }])]);
+		expect(states(snapshot)).toEqual({ character: 'normal', 'character::x': 'normal', 'character::y': 'normal' });
 	});
 });

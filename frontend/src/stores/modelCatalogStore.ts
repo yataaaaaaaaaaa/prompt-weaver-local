@@ -16,13 +16,13 @@ import type {
 	ModelSort,
 	RemoteModel,
 	RemoteModelVersion,
-	TaskEvent,
 } from '../api/types';
 import { findEntryBySource } from '../domain/library';
 import { joinPromptTags } from '../domain/text';
 import {
 	buildSearchQuery,
 	DEFAULT_CATALOG_FILTERS,
+	DOWNLOAD_FAILED,
 	embeddingPromptToken,
 	INSTALL_ALREADY_RUNNING,
 	installFile,
@@ -42,7 +42,7 @@ import { copyTextWithFeedback } from './clipboardActions';
 import { useLibraryStore } from './libraryStore';
 import { describeError, reportError, useNotificationsStore } from './notificationsStore';
 import { createPagedSearch, type LoadStatus, type PagedSearchActions, type SearchStatus } from './pagedSearch';
-import { useDownloadProgress, useTasksStore, type DownloadProgress } from './tasksStore';
+import { downloadTitleOf, useDownloadProgress, useTasksStore, type DownloadProgress } from './tasksStore';
 
 /** Defined in src/domain/modelCatalog.ts (with RUNNING_INSTALL_PHASES / isInstallRunning, installOptions,
  *  installOutcomeEntry). */
@@ -132,19 +132,12 @@ export type ModelCatalogStore = ModelCatalogState & ModelCatalogActions;
  *  install ends; only joined while the store's entry is running (the store state is the truth of what runs). */
 const runningInstalls = new Map<string, Promise<InstallOutcome>>();
 
-const DOWNLOAD_FAILED = 'The download failed.';
-
 /** The InstalledModel of an 'installed' answer (after a completed download the file must be installed). */
 function installedOf(response: InstallResponse): InstalledModel {
 	if (response.state !== 'installed' || !response.installed) {
 		throw new Error('The download completed but the backend did not install the file.');
 	}
 	return response.installed;
-}
-
-/** Display name of a download task (DownloadTaskEvent.title, from the backend). */
-function downloadTitle(event: TaskEvent): string {
-	return event.type === 'download' ? event.title : '';
 }
 
 export const useModelCatalogStore = create<ModelCatalogStore>()((set, get) => {
@@ -219,7 +212,7 @@ export const useModelCatalogStore = create<ModelCatalogStore>()((set, get) => {
 			}
 			if (event.stage === 'error') {
 				const message = event.message || DOWNLOAD_FAILED;
-				const title = downloadTitle(event);
+				const title = downloadTitleOf(event);
 				patchInstall(key, { phase: 'failed', error: message });
 				useNotificationsStore.getState().notify('error', title ? `${title}: ${message}` : message, { title: 'Download failed' });
 				return { status: 'failed', error: message };

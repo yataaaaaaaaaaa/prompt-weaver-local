@@ -18,7 +18,9 @@ export type GenerationDefaults = Schemas['GenerationDefaults'];
 
 // Per-LoRA weights (backend LoraWeight: the one representation used by the library store selection, the
 // generation request, output metadata and the runtime call; range/default in LORA_WEIGHT_DEFAULTS).
-export type LoraWeight = Schemas['LoraWeight'];
+export type LoraWeight = Schemas['LoraWeight-Output'];
+/** LoraWeight as a request accepts it (weight optional: LORA_WEIGHT_DEFAULTS.weight). A LoraWeight is one. */
+export type LoraWeightInput = Schemas['LoraWeight-Input'];
 export type LoraWeightDefaults = Schemas['LoraWeightDefaults'];
 /** A library LoRA requested for a generation: LoRASpec fields + weight. */
 export type GenerationLoRA = Schemas['GenerationLoRA'];
@@ -41,6 +43,9 @@ export type GenerationSelectionInput = Schemas['GenerationSelection-Input'];
 export type OutputRecord = Schemas['OutputRecord'];
 export type OutputIndex = Schemas['OutputIndex'];
 export type GenerateRequest = Schemas['GenerateRequest'];
+/** The character active for an output and how its reference images were used (OutputRecord.character). */
+export type OutputCharacter = Schemas['OutputCharacter'];
+export type OutputReference = Schemas['OutputReference'];
 
 // Background tasks (WebSocket /ws/tasks)
 export type GenerationTaskEvent = Schemas['GenerationTaskEvent'];
@@ -82,6 +87,25 @@ export type ImageResource = Schemas['ImageResource'];
 export type ResolveImageResourcesRequest = Schemas['ResolveImageResourcesRequest'];
 export type ResolvedImageResource = Schemas['ResolvedImageResource'];
 export type FavoriteImage = Schemas['FavoriteImage'];
+
+// Characters (backend-owned collection, /api/characters) and their reference images (IP-Adapter, /api/ip-adapters)
+export type Character = Schemas['Character'];
+/** The editable fields of a character (PUT body; base of CharacterCreateRequest). */
+export type CharacterDraft = Schemas['CharacterDraft'];
+export type CharacterCreateRequest = Schemas['CharacterCreateRequest'];
+export type CharacterCollection = Schemas['CharacterCollection'];
+export type CharacterImage = Schemas['CharacterImage'];
+/** Where a character image is imported from (discriminated by `kind`). */
+export type CharacterImageSource = Schemas['CharacterImageRequest']['source'];
+export type CharacterImageSourceKind = CharacterImageSource['kind'];
+export type ReferenceFocus = Schemas['ReferenceDefaults']['focus'];
+export type ReferenceDefaults = Schemas['ReferenceDefaults'];
+export type IpAdapterStatus = Schemas['IpAdapterStatus'];
+export type IpAdapterVariant = Schemas['IpAdapterVariant'];
+export type IpAdapterFile = Schemas['IpAdapterFile'];
+export type IpAdapterFileRole = IpAdapterFile['role'];
+export type ReferenceSupport = Schemas['ReferenceSupport'];
+export type IpAdapterInstallResponse = Schemas['IpAdapterInstallResponse'];
 
 // Persisted stores / bootstrap
 export type PersistedStoreEnvelope = Schemas['PersistedStoreEnvelope-Output'];

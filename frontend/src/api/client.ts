@@ -7,6 +7,11 @@ import { BACKEND_URL } from './config';
 import type { paths } from './schema.gen';
 import type {
 	BootstrapResponse,
+	Character,
+	CharacterCollection,
+	CharacterCreateRequest,
+	CharacterDraft,
+	CharacterImageSource,
 	FavoriteImage,
 	GenerateRequest,
 	ImageSearchPage,
@@ -14,6 +19,8 @@ import type {
 	InstallJob,
 	InstallRequest,
 	InstallResponse,
+	IpAdapterInstallResponse,
+	IpAdapterStatus,
 	ModelLibraryInfo,
 	ModelProviderInfo,
 	ModelSearchPage,
@@ -66,6 +73,8 @@ async function unwrap<T>(request: Promise<{ data?: T; error?: unknown; response:
 const outputPath = (outputId: string) => ({ params: { path: { output_id: outputId } } });
 const storePath = (name: string) => ({ params: { path: { name } } });
 const providerPath = (provider: string) => ({ params: { path: { provider } } });
+const characterPath = (characterId: string) => ({ params: { path: { character_id: characterId } } });
+const characterImagePath = (characterId: string, imageId: string) => ({ params: { path: { character_id: characterId, image_id: imageId } } });
 
 export const api = {
 	health: () => unwrap(http.GET('/api/health')),
@@ -122,6 +131,35 @@ export const api = {
 	removeFavoriteImage: async (provider: string, imageId: string): Promise<void> => {
 		await unwrap(http.DELETE('/api/images/favorites/{provider}/{image_id}', { params: { path: { provider, image_id: imageId } } }));
 	},
+
+	// Characters (backend app/routers/characters.py). Images are shown with characterImageUrl (src/api/config.ts).
+	listCharacters: (): Promise<CharacterCollection> => unwrap(http.GET('/api/characters')),
+	/** Creates a character and imports its reference images (all or nothing; the first one is the thumbnail). */
+	createCharacter: (request: CharacterCreateRequest): Promise<Character> => unwrap(http.POST('/api/characters', { body: request })),
+	updateCharacter: (characterId: string, draft: CharacterDraft): Promise<Character> =>
+		unwrap(http.PUT('/api/characters/{character_id}', { ...characterPath(characterId), body: draft })),
+	deleteCharacter: async (characterId: string): Promise<void> => {
+		await unwrap(http.DELETE('/api/characters/{character_id}', characterPath(characterId)));
+	},
+	/** null deactivates. Answers the whole collection (active_id updated). */
+	setActiveCharacter: (characterId: string | null): Promise<CharacterCollection> =>
+		unwrap(http.PUT('/api/characters/active', { body: { id: characterId } })),
+	addCharacterReferenceImage: (characterId: string, source: CharacterImageSource): Promise<Character> =>
+		unwrap(http.POST('/api/characters/{character_id}/reference-images', { ...characterPath(characterId), body: { source } })),
+	removeCharacterReferenceImage: (characterId: string, imageId: string): Promise<Character> =>
+		unwrap(http.DELETE('/api/characters/{character_id}/reference-images/{image_id}', characterImagePath(characterId, imageId))),
+	setCharacterThumbnail: (characterId: string, source: CharacterImageSource): Promise<Character> =>
+		unwrap(http.PUT('/api/characters/{character_id}/thumbnail', { ...characterPath(characterId), body: { source } })),
+	clearCharacterThumbnail: (characterId: string): Promise<Character> =>
+		unwrap(http.DELETE('/api/characters/{character_id}/thumbnail', characterPath(characterId))),
+
+	// IP-Adapter files of reference images (backend app/routers/ip_adapters.py). Downloads are cancelled with
+	// cancelDownload and followed through the tasks store.
+	/** Every variant with its files; with a model path, also its family and the reference support per focus. */
+	ipAdapterStatus: (modelPath: string | null, signal?: AbortSignal): Promise<IpAdapterStatus> =>
+		unwrap(http.GET('/api/ip-adapters', { params: { query: { model_path: modelPath ?? undefined } }, signal })),
+	installIpAdapter: (variantId: string): Promise<IpAdapterInstallResponse> =>
+		unwrap(http.POST('/api/ip-adapters/{variant_id}/install', { params: { path: { variant_id: variantId } } })),
 };
 
 export type Api = typeof api;

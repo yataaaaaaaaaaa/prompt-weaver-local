@@ -1,9 +1,10 @@
 import { act, renderHook } from '@testing-library/react';
 import { describe, expect, it, vi } from 'vitest';
 import type { Category, SubPrompt } from '../domain/categories';
-import { categoryMatcher, makeRule, specificMatcher } from '../domain/forbiddenRules';
+import { categoryMatcher, makeRule, specificMatcher, tagMatcher } from '../domain/forbiddenRules';
 import { flushPersistence, hydratePersistedStores } from '../persistence/persist';
 import { createMemoryStoreBackend, setStoreBackend } from '../persistence/storeBackend';
+import { ALICE_ID, BOB, BOB_ID, character } from '../test/characterData';
 import {
 	findCategory,
 	selectReachability,
@@ -14,6 +15,7 @@ import {
 	useSubPromptKeys,
 	useSubPromptUiState,
 } from './categoriesStore';
+import { useCharactersStore } from './charactersStore';
 import { useForbiddenRulesStore } from './forbiddenRulesStore';
 import { useNotificationsStore } from './notificationsStore';
 import { useWorkspaceStore } from './workspaceStore';
@@ -328,6 +330,36 @@ describe('selectors and hooks', () => {
 
 		const rules = useForbiddenRulesStore.getState().rules;
 		expect(selectReachability(categories(), rules)).toBe(selectReachability(categories(), rules));
+	});
+
+	it('ui states include the active character: what it forbids is indirectly-disabled, what it activates is reachable', () => {
+		seed(category('Hair', ['black hair', 'short hair']), category('Accessories', ['hair ribbon'], { priority: 2, activation_text: 'silver hair' }));
+		useForbiddenRulesStore.setState({ rules: [makeRule(tagMatcher('Character', 'silver hair'), specificMatcher('Hair', 'short hair'))] });
+		useCharactersStore.setState({ characters: [character(), BOB], activeId: null });
+		const { result } = renderHook(() => ({
+			hair: useCategoryUiState('hair'),
+			shortHair: useSubPromptUiState('hair', 'short-hair'),
+			blackHair: useSubPromptUiState('hair', 'black-hair'),
+			accessories: useCategoryUiState('accessories'),
+			ribbon: useSubPromptUiState('accessories', 'hair-ribbon'),
+		}));
+		expect(result.current).toEqual({ hair: 'normal', shortHair: 'normal', blackHair: 'normal', accessories: 'indirectly-disabled', ribbon: 'indirectly-disabled' });
+
+		act(() => useCharactersStore.setState({ activeId: ALICE_ID }));
+		expect(result.current).toEqual({ hair: 'normal', shortHair: 'indirectly-disabled', blackHair: 'normal', accessories: 'normal', ribbon: 'normal' });
+
+		act(() => useCharactersStore.setState({ activeId: BOB_ID }));
+		expect(result.current).toEqual({ hair: 'normal', shortHair: 'normal', blackHair: 'normal', accessories: 'indirectly-disabled', ribbon: 'indirectly-disabled' });
+	});
+
+	it('selectReachability is memoized on (categories, rules, character)', () => {
+		seed(category('Alpha', ['a1']));
+		const rules = useForbiddenRulesStore.getState().rules;
+		const alice = character();
+		const withAlice = selectReachability(categories(), rules, alice);
+		expect(selectReachability(categories(), rules, alice)).toBe(withAlice);
+		expect(selectReachability(categories(), rules, BOB)).not.toBe(withAlice);
+		expect(selectReachability(categories(), rules)).toEqual(selectReachability(categories(), rules, BOB));
 	});
 });
 

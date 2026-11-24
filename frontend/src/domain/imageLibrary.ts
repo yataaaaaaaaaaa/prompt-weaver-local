@@ -265,8 +265,3 @@ export function isInstallableRow(row: ImageResourceRow): row is ImageResourceRow
 
 /** Why a resource without a more precise reason cannot be used. */
 export const UNRESOLVED_RESOURCE = 'Its model could not be identified.';
-
-/** Warning text of the resources that cannot be used: 'name: reason' joined with '; ' (one sentence). */
-export function skippedResourcesText(items: readonly { name: string; problem: string }[]): string {
-	return `${items.map(({ name, problem }) => `${name}: ${problem.trim().replace(/\.+$/, '')}`).join('; ')}.`;
-}

@@ -1,9 +1,11 @@
 // Generation request building: categories + forbidden rules + generation settings
-// + library -> the GenerateRequest sent to the backend, and the seed settings after the generation.
-// Pure module; the generation store snapshots the stores and calls it.
+// + library + active character -> the GenerateRequest sent to the backend, and the seed settings after the generation.
+// Pure module; the generation store snapshots the stores and calls it. The character's precedence is documented in
+// src/domain/characters.ts.
 import { GENERATION_DEFAULTS } from '../api/defaults.gen';
 import type { ForbiddenRule, GenerateRequest, GenerationDefaults, GenerationSelection, OutputRecord } from '../api/types';
 import type { Category } from './categories';
+import { characterCategories, characterNegativePrompt, lockedCharacterSeed, type CharacterGenerationInput } from './characters';
 import type { LibraryData } from './library';
 import { filterSelectionLoraIds, makeLoraMap, resolveLoraSelection } from './loraSelection';
 import { selectPrompts, selectPromptsWithCategoryCycle } from './promptEngine';
@@ -65,22 +67,30 @@ export type GenerationInputs = {
 	rules: readonly ForbiddenRule[];
 	settings: GenerationSettings;
 	library: Pick<LibraryData, 'models' | 'loras' | 'selectedModelId' | 'selectedLoras'>;
+	/** The active character (null / absent: none). */
+	character?: CharacterGenerationInput | null;
 };
 
 export type BuiltGenerationRequest = {
 	request: GenerateRequest;
 	/** Per-category counters after this selection ('per_category_cycle'; the unchanged state otherwise). */
 	nextCategorySeedState: CategorySeedState;
-	/** LoRA ids requested by the selection or by the selected sub-prompts but absent from the library (ignored). */
+	/** LoRA ids requested by the character, the selection or the selected sub-prompts but absent from the library
+	 *  (ignored). */
 	missingLoraIds: string[];
+	/** The character's seed lock replaced the image seed (nextSeedSnapshot then leaves the image seed field as is). */
+	imageSeedLocked: boolean;
 };
 
 function isCycle(settings: Pick<GenerationSettings, 'promptSeedBehavior'>): boolean {
 	return settings.promptSeedBehavior === 'per_category_cycle';
 }
 
-/** Throws (Error / PromptSelectionError) when no model is selected or no prompt can be selected. */
-export function buildGenerationRequest({ categories, rules, settings, library }: GenerationInputs): BuiltGenerationRequest {
+/** Throws (Error / PromptSelectionError) when no model is selected or no prompt can be selected. The active character
+ *  takes part as documented in src/domain/characters.ts: its pinned categories (built against the user categories)
+ *  are selected first, its LoRAs come first, its negative tags are appended and its locked seed replaces the image
+ *  seed. */
+export function buildGenerationRequest({ categories, rules, settings, library, character = null }: GenerationInputs): BuiltGenerationRequest {
 	if (!library.selectedModelId) {
 		throw new Error('Select a model before generating.');
 	}
@@ -89,27 +99,30 @@ export function buildGenerationRequest({ categories, rules, settings, library }:
 		throw new Error(`Unknown model '${library.selectedModelId}'.`);
 	}
 
-	const imageSeed = planSeed(settings.imageSeedBehavior, settings.seedInput).requestSeed;
+	const pinned = characterCategories(character, categories);
+	const lockedSeed = lockedCharacterSeed(character);
+	const imageSeed = lockedSeed ?? planSeed(settings.imageSeedBehavior, settings.seedInput).requestSeed;
 	let selections: GenerationSelection[];
 	let promptSeed: number | null;
 	let nextCategorySeedState: CategorySeedState;
 	if (isCycle(settings)) {
-		const result = selectPromptsWithCategoryCycle(categories, rules, settings.promptCategorySeedState);
+		const result = selectPromptsWithCategoryCycle(categories, rules, settings.promptCategorySeedState, pinned);
 		selections = result.selections;
 		promptSeed = result.promptSeed;
 		nextCategorySeedState = result.nextCategorySeedState;
 	} else {
 		promptSeed = planSeed(settings.promptSeedBehavior, settings.promptSeedInput).requestSeed;
-		selections = selectPrompts(categories, rules, promptSeed);
+		selections = selectPrompts(categories, rules, promptSeed, pinned);
 		nextCategorySeedState = settings.promptCategorySeedState;
 	}
 
 	const knownLoraIds = new Set(makeLoraMap(library).keys());
-	const loraResolution = resolveLoraSelection(library, library.selectedLoras, selections);
+	const loraResolution = resolveLoraSelection(library, library.selectedLoras, selections, character?.loras ?? []);
 	const requestSelections = filterSelectionLoraIds(selections, knownLoraIds);
 	const request: GenerateRequest = {
 		model,
-		// Selected LoRAs with their selected weight, then prompt-linked ones at the default weight.
+		// Character LoRAs with their weight, then selected LoRAs with their selected weight, then prompt-linked ones at
+		// the default weight.
 		loras: loraResolution.activeLoras,
 		prompt: requestSelections
 			.map((item) => item.prompt_text)
@@ -122,25 +135,35 @@ export function buildGenerationRequest({ categories, rules, settings, library }:
 		guidance_scale: settings.guidanceScale,
 		prompt_seed: promptSeed,
 		seed: imageSeed,
-		negative_prompt: settings.negativePrompt,
+		negative_prompt: characterNegativePrompt(settings.negativePrompt, character),
+		character_id: character?.id ?? null,
 	};
-	return { request, nextCategorySeedState, missingLoraIds: loraResolution.missingIds };
+	return { request, nextCategorySeedState, missingLoraIds: loraResolution.missingIds, imageSeedLocked: lockedSeed !== null };
 }
+
+export type NextSeedOptions = {
+	/** The image seed came from the character's seed lock (BuiltGenerationRequest.imageSeedLocked): the image seed
+	 *  field is left unchanged (no seedInput in the snapshot). */
+	imageSeedLocked?: boolean;
+};
 
 /** Seed settings after a successful generation: the prompt seed field advances (except in cycle mode, where
  *  the per-category counters are replaced instead) and the image seed field advances from the seed the
- *  backend reports (image_seed, else seed). */
+ *  backend reports (image_seed, else seed), unless the image seed was locked by the character. */
 export function nextSeedSnapshot(
 	settings: GenerationSettings,
 	response: Pick<OutputRecord, 'prompt_seed' | 'image_seed' | 'seed'>,
 	nextCategorySeedState: CategorySeedState,
+	{ imageSeedLocked = false }: NextSeedOptions = {},
 ): Partial<SeedSnapshot> {
-	const seedInput = planSeed(settings.imageSeedBehavior, settings.seedInput, response.image_seed ?? response.seed).nextInput;
+	const imageSeed: Partial<SeedSnapshot> = imageSeedLocked
+		? {}
+		: { seedInput: planSeed(settings.imageSeedBehavior, settings.seedInput, response.image_seed ?? response.seed).nextInput };
 	if (isCycle(settings)) {
-		return { seedInput, promptCategorySeedState: nextCategorySeedState };
+		return { ...imageSeed, promptCategorySeedState: nextCategorySeedState };
 	}
 	return {
-		seedInput,
+		...imageSeed,
 		promptSeedInput: planSeed(settings.promptSeedBehavior, settings.promptSeedInput, response.prompt_seed).nextInput,
 	};
 }

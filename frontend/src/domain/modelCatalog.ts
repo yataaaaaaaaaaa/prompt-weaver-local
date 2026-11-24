@@ -104,6 +104,8 @@ export type InstallOutcome =
 	| { status: 'refused'; reason: string };
 
 export const INSTALL_CANCELLED = 'The download was cancelled.';
+/** Why a download failed when its error event carries no message. */
+export const DOWNLOAD_FAILED = 'The download failed.';
 export const INSTALL_ALREADY_RUNNING = 'This file is already being installed.';
 export const NO_LIBRARY_ENTRY = 'Installed, but it has no library entry.';
 

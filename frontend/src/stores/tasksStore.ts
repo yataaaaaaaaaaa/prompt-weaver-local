@@ -152,6 +152,11 @@ export function downloadProgressOf(event: DownloadTaskEvent | null): DownloadPro
 	};
 }
 
+/** Display name of a download task (DownloadTaskEvent.title, from the backend; '' for another task type). */
+export function downloadTitleOf(event: TaskEvent): string {
+	return event.type === 'download' ? event.title : '';
+}
+
 export const selectDownloadEvent =
 	(taskId: string | null) =>
 	(state: TasksState): DownloadTaskEvent | null => {

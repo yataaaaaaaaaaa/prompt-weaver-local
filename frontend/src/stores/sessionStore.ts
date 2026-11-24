@@ -14,6 +14,7 @@ import {
 import { hydratePersistedStores, setPersistErrorHandler } from '../persistence/persist';
 import { LEGACY_STORE_NAMES, STORE_NAMES } from '../persistence/storeNames';
 import { useCategoriesStore } from './categoriesStore';
+import { useCharactersStore } from './charactersStore';
 import { useForbiddenRulesStore } from './forbiddenRulesStore';
 import { useGenerationSettingsStore } from './generationSettingsStore';
 import { useLibraryStore } from './libraryStore';
@@ -40,7 +41,9 @@ export type SessionActions = {
 	 *     (src/domain/legacyImport.ts), except the workspace when a legacy layout store exists;
 	 *  4. useOutputsStore.initialize(payload.output_ids, persisted currentId ?? payload.current_output_id);
 	 *  5. useTasksStore.connect(), then useModelCatalogStore.resumeInstalls() in the background (fire and forget:
-	 *     never fails or delays boot); setPersistErrorHandler -> notifications; phase 'ready'. */
+	 *     never fails or delays boot); setPersistErrorHandler -> notifications; phase 'ready'.
+	 *  Right after step 2, useCharactersStore.load() starts in the background (fire and forget: it never fails or
+	 *  delays boot; a failure only sets the characters store's loadError, which the Characters pane shows). */
 	start: () => Promise<void>;
 	/** After 'failed': resets and runs start() again. */
 	retry: () => Promise<void>;
@@ -134,6 +137,8 @@ export const useSessionStore = create<SessionStore>()((set, get) => ({
 				});
 				return;
 			}
+			// The backend-owned characters load meanwhile (load never rejects: failures stay in the characters store).
+			void useCharactersStore.getState().load();
 			setPersistErrorHandler(reportPersistError);
 			seedFromLegacy(payload);
 			const outputs = useOutputsStore.getState();

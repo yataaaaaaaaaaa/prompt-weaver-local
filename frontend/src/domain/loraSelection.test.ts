@@ -7,7 +7,6 @@ import {
 	clampLoraWeight,
 	filterKnownLoras,
 	filterSelectionLoraIds,
-	formatLoraWeight,
 	loraAtDefaultWeight,
 	resolveLoraSelection,
 	weightedLorasText,
@@ -77,7 +76,52 @@ describe('resolveLoraSelection weights', () => {
 	});
 });
 
-describe('clampLoraWeight / formatLoraWeight', () => {
+describe('resolveLoraSelection with character LoRAs', () => {
+	const library = { loras: ['face', 'detail', 'style', 'grain'].map(spec) };
+
+	it('character LoRAs come first and their weight wins over the selected one', () => {
+		const resolved = resolveLoraSelection(library, [at('detail', 0.8), at('face', 1.2)], [{ induced_lora_ids: ['style', 'detail'] }], [
+			at('face', 0.4),
+			at('grain', -0.5),
+		]);
+
+		expect(resolved.characterIds).toEqual(['face', 'grain']);
+		expect(resolved.selectedIds).toEqual(['detail', 'face']);
+		expect(resolved.promptLinkedIds).toEqual(['style', 'detail']);
+		expect(resolved.activeIds).toEqual(['face', 'grain', 'detail', 'style']);
+		expect(resolved.activeLoras).toEqual([
+			{ ...spec('face'), weight: 0.4 },
+			{ ...spec('grain'), weight: -0.5 },
+			{ ...spec('detail'), weight: 0.8 },
+			{ ...spec('style'), weight: LORA_WEIGHT_DEFAULTS.weight },
+		]);
+	});
+
+	it('character weights are clamped, the first of a duplicated id wins', () => {
+		const resolved = resolveLoraSelection(library, [], [], [at('face', 99), at('face', 0.3)]);
+		expect(resolved.activeLoras).toEqual([{ ...spec('face'), weight: LORA_WEIGHT_DEFAULTS.max }]);
+	});
+
+	it('missingIds: character first, then selected, then prompt-linked', () => {
+		const resolved = resolveLoraSelection(library, [at('gone-selected'), at('gone-character')], [{ induced_lora_ids: ['gone-prompt', 'style'] }], [
+			at('gone-character'),
+			at('face'),
+		]);
+		expect(resolved.missingIds).toEqual(['gone-character', 'gone-selected', 'gone-prompt']);
+		expect(resolved.activeIds).toEqual(['face', 'style']);
+	});
+
+	it('without character LoRAs, characterIds is empty and nothing else changes', () => {
+		const selection = [at('detail', 0.6)];
+		const prompt = [{ induced_lora_ids: ['style'] }];
+		const resolved = resolveLoraSelection(library, selection, prompt);
+		expect(resolved.characterIds).toEqual([]);
+		expect(resolveLoraSelection(library, selection, prompt, [])).toEqual(resolved);
+		expect(resolved.activeIds).toEqual(['detail', 'style']);
+	});
+});
+
+describe('clampLoraWeight', () => {
 	it('clamps to the accepted range and maps non-finite weights to the default', () => {
 		expect(clampLoraWeight(0.6)).toBe(0.6);
 		expect(clampLoraWeight(LORA_WEIGHT_DEFAULTS.max + 1)).toBe(LORA_WEIGHT_DEFAULTS.max);
@@ -94,13 +138,6 @@ describe('clampLoraWeight / formatLoraWeight', () => {
 		expect(weightedLorasText([])).toBe('');
 	});
 
-	it('formats with at most 2 decimals and no trailing zeros', () => {
-		expect(formatLoraWeight(1)).toBe('1');
-		expect(formatLoraWeight(0.6)).toBe('0.6');
-		expect(formatLoraWeight(-1.25)).toBe('-1.25');
-		expect(formatLoraWeight(0.1 + 0.2)).toBe('0.3');
-		expect(formatLoraWeight(0.333333)).toBe('0.33');
-	});
 });
 
 describe('selection edits', () => {

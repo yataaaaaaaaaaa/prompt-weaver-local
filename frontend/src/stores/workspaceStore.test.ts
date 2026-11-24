@@ -75,6 +75,25 @@ describe('workspaceStore actions', () => {
 		expect(workspace().hiddenPaneIds).toEqual([]);
 	});
 
+	it('reveals a pane: visible, in front, and panes shown', () => {
+		workspace().commitWindowRect('pane:image', rect);
+		workspace().commitWindowRect('pane:characters', rect);
+		workspace().focusWindow('pane:image');
+		workspace().setPaneVisible('characters', false);
+		workspace().cycleVisibilityMode(); // categories-only
+
+		workspace().revealPane('characters');
+
+		expect(workspace().hiddenPaneIds).toEqual([]);
+		expect(workspace().windows['pane:characters']!.z).toBeGreaterThan(workspace().windows['pane:image']!.z);
+		expect(workspace().visibilityMode).toBe('all');
+
+		workspace().cycleVisibilityMode();
+		workspace().cycleVisibilityMode(); // panes-only
+		workspace().revealPane('characters');
+		expect(workspace().visibilityMode).toBe('panes-only');
+	});
+
 	it('cycles visibility all -> categories-only -> panes-only -> all', () => {
 		const seen = [workspace().visibilityMode];
 		for (let index = 0; index < 3; index += 1) {
