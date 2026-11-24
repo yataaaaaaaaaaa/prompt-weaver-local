@@ -42,8 +42,9 @@ def test_reads_the_real_legacy_formats(app_paths: AppPaths, install_legacy_files
     assert day_moment.activation_text == "sunrise"
     assert state.forbidden_rules[0].right.contains_text == "sunrise"
     assert state.image_seed_behavior == "increment"
-    # The "used" pane is absent from the real file: filled with its default layout.
-    assert state.workspace.used.width == 790
+    # The "used" pane is absent from the real file: no layout (the frontend's pane default applies).
+    assert state.workspace.used is None
+    assert state.workspace.image is not None and state.workspace.image.width > 0
     assert [model.id for model in library.models] == ["example-model-safetensors"]
     assert [lora.id for lora in library.loras] == ["kept-lora"]
 
@@ -131,7 +132,11 @@ def test_bootstrap_with_legacy_files_stores_and_outputs(
 
     assert body["legacy_state"]["last_lora_ids"] == ["kept-lora"]
     assert body["legacy_state"]["categories"][0]["prompts"][0]["extra_lora_ids"] == ["kept-lora"]
-    assert body["legacy_library"] == load_fixture("legacy/library.json")
+    # Entries of the legacy file carry no provenance: `source` is null.
+    legacy_library = load_fixture("legacy/library.json")
+    for entry in [*legacy_library["models"], *legacy_library["loras"]]:
+        entry["source"] = None
+    assert body["legacy_library"] == legacy_library
     assert body["persisted_stores"] == ["current-image-store"]
     assert body["output_ids"] == ["0000000001", "0000000002", "0000000003"]
     # app_state.json's last_output_id still exists: preferred over the latest output.

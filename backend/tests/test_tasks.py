@@ -187,7 +187,15 @@ def test_get_tasks_lists_every_task(client: TestClient, app: FastAPI) -> None:
     assert client.get("/api/tasks").json() == {
         "events": [
             IDLE,
-            {"type": "download", "task_id": "download:model-a", "stage": "queued", "message": "", "current": 0, "total": 0},
+            {
+                "type": "download",
+                "task_id": "download:model-a",
+                "stage": "queued",
+                "title": "",
+                "message": "",
+                "current": 0,
+                "total": 0,
+            },
         ]
     }
 

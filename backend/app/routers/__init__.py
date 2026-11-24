@@ -1,6 +1,6 @@
 """Router registry: create_app() includes every router listed in ROUTERS.
 
-To add an API area (e.g. the model library), create app/routers/<area>.py exposing
+To add an API area, create app/routers/<area>.py exposing
 `router = APIRouter(prefix="/api/<area>", tags=["<area>"])` and append it here.
 """
 
@@ -8,7 +8,7 @@ from __future__ import annotations
 
 from fastapi import APIRouter
 
-from . import bootstrap, generation, health, outputs, stores, tasks
+from . import bootstrap, downloads, generation, health, model_installs, models, outputs, stores, tasks
 
 ROUTERS: tuple[APIRouter, ...] = (
     health.router,
@@ -17,4 +17,7 @@ ROUTERS: tuple[APIRouter, ...] = (
     generation.router,
     tasks.router,
     stores.router,
+    models.router,
+    model_installs.router,
+    downloads.router,
 )

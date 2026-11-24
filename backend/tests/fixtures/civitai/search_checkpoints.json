@@ -1,0 +1,364 @@
+{
+  "items": [
+    {
+      "id": 1277670,
+      "name": "✨ JANKU Trained + Chenkin & NoobAI + RouWei Illustrious XL ✨",
+      "coverImageId": null,
+      "sfwCoverImageId": null,
+      "description": "<p><a target=\"_blank\" rel=\"ugc\" href=\"https://ko-fi.com/janxd\"><img src=\"https://image.civitai.com/xG1nkqKTMzGDvpLrqFT7WA/fccf1a42-c35d-44f3-94a6-e02e4c16dd67/w...",
+      "allowNoCredit": true,
+      "allowCommercialUse": [
+        "RentCivit",
+        "Image"
+      ],
+      "allowDerivatives": false,
+      "allowDifferentLicense": false,
+      "type": "Checkpoint",
+      "minor": false,
+      "sfwOnly": false,
+      "poi": false,
+      "nsfw": false,
+      "nsfwLevel": 31,
+      "availability": "Public",
+      "userId": 4682393,
+      "hasActivePaidAccess": false,
+      "hasSfwFace": false,
+      "baseModels": [
+        "Illustrious"
+      ],
+      "cosmetic": null,
+      "eventDecoration": null,
+      "supportsGeneration": true,
+      "stats": {
+        "downloadCount": 247219,
+        "thumbsUpCount": 20579,
+        "thumbsDownCount": 42,
+        "commentCount": 360,
+        "tippedAmountCount": 67642
+      },
+      "creator": {
+        "username": "janxd",
+        "image": "https://image.civitai.com/xG1nkqKTMzGDvpLrqFT7WA/3cfc692f-2247-430b-a6f7-caae779eb838/width=96/janxd.jpeg"
+      },
+      "tags": [
+        "anime",
+        "sexy",
+        "high quality",
+        "base model",
+        "woman",
+        "hentai",
+        "characters",
+        "nsfw",
+        "sfw"
+      ],
+      "modelVersions": [
+        {
+          "id": 2786084,
+          "index": 0,
+          "name": "v7.77",
+          "baseModel": "Illustrious",
+          "baseModelType": "Standard",
+          "publishedAt": "2026-04-03T18:45:15.284Z",
+          "flags": 0,
+          "availability": "Public",
+          "nsfwLevel": 7,
+          "description": "<p>New base model based on JANKU and <a target=\"_blank\" rel=\"ugc\" href=\"https://civitai.com/models/2167995/chenkin-noob-xl\">Chenkin v0.2</a> with training</p><u...",
+          "trainedWords": [],
+          "vaeId": null,
+          "coveredNext": true,
+          "paidAccess": null,
+          "stats": {
+            "downloadCount": 50100,
+            "thumbsUpCount": 2941,
+            "thumbsDownCount": 6
+          },
+          "supportsGeneration": false,
+          "files": [
+            {
+              "id": 2672243,
+              "sizeKB": 6775430.345703125,
+              "name": "JANKU v7.777.safetensors",
+              "overrideName": null,
+              "type": "Model",
+              "pickleScanResult": "Success",
+              "pickleScanMessage": "No Pickle imports",
+              "virusScanResult": "Success",
+              "virusScanMessage": null,
+              "scannedAt": "2026-03-19T18:17:59.095Z",
+              "metadata": {
+                "format": "SafeTensor",
+                "size": "pruned",
+                "fp": "fp16"
+              },
+              "hashes": {
+                "AutoV1": "368A7817",
+                "AutoV2": "88177D224C",
+                "SHA256": "88177D224CE97F60CF3E908F87902F913ED4562BD79D237F84238A4354601EFB",
+                "CRC32": "454D52A0",
+                "BLAKE3": "00F577846D6B7CAF358766CA8ECD939D5DA7464D0578E6086DF52EC816B0375F",
+                "AutoV3": "62EE704F68A7",
+                "SHA256_12": "88177D224CE9"
+              },
+              "downloadUrl": "https://civitai.com/api/download/models/2786084",
+              "primary": true
+            }
+          ],
+          "images": [
+            {
+              "id": 124688598,
+              "url": "https://image.civitai.com/xG1nkqKTMzGDvpLrqFT7WA/c4b713a0-3671-4494-b48e-439f542c3c99/original=true/124688598.mp4",
+              "nsfwLevel": 1,
+              "width": 2160,
+              "height": 3204,
+              "hash": "UAHU2u01_1%2%%I:tnRkEB-.E5I[-;%L0gI;",
+              "type": "video",
+              "minor": false,
+              "poi": false,
+              "hasMeta": false,
+              "hasPositivePrompt": false,
+              "onSite": false,
+              "remixOfId": null
+            },
+            {
+              "id": 124686956,
+              "url": "https://image.civitai.com/xG1nkqKTMzGDvpLrqFT7WA/573cab67-bc20-4bdc-ae8d-d5caa1ba42d4/original=true/124686956.jpeg",
+              "nsfwLevel": 1,
+              "width": 1664,
+              "height": 2432,
+              "hash": "UKIq4j~C9tRl%NSb56V]0Lnz=|aLSgITs9Io",
+              "type": "image",
+              "minor": false,
+              "poi": false,
+              "hasMeta": true,
+              "hasPositivePrompt": true,
+              "onSite": false,
+              "remixOfId": null
+            }
+          ],
+          "downloadUrl": "https://civitai.com/api/download/models/2786084"
+        },
+        {
+          "id": 2578565,
+          "index": 1,
+          "name": "v6.9 🔥",
+          "baseModel": "Illustrious",
+          "baseModelType": "Standard",
+          "publishedAt": "2026-01-23T18:49:09.302Z",
+          "flags": 0,
+          "availability": "Public",
+          "nsfwLevel": 7,
+          "description": "<ul><li><p>Added new characters, some new characters not that strong or details lost due to color fixes applied afterwards. Use model showcase post for characte...",
+          "trainedWords": [],
+          "vaeId": null,
+          "coveredNext": true,
+          "paidAccess": null,
+          "stats": {
+            "downloadCount": 36169,
+            "thumbsUpCount": 2954,
+            "thumbsDownCount": 6
+          },
+          "supportsGeneration": false,
+          "files": [
+            {
+              "id": 2465829,
+              "sizeKB": 6775430.345703125,
+              "name": "JANKU v6.9 Final.safetensors",
+              "overrideName": null,
+              "type": "Model",
+              "pickleScanResult": "Success",
+              "pickleScanMessage": "No Pickle imports",
+              "virusScanResult": "Success",
+              "virusScanMessage": null,
+              "scannedAt": "2026-01-08T17:39:31.230Z",
+              "metadata": {
+                "format": "SafeTensor",
+                "size": "pruned",
+                "fp": "fp16"
+              },
+              "hashes": {
+                "AutoV1": "368A7817",
+                "AutoV2": "5D255F746E",
+                "SHA256": "5D255F746E67A45B9255A3E7CFF5E6CB69F83164ACF77BC42FDB161BE4385926",
+                "CRC32": "97DCF218",
+                "BLAKE3": "B95FE3C3BA9D9EDFCFECFD8DB9BD9B09500A92E5A76BEBF4DD5E67D6268CD83F",
+                "AutoV3": "1FFD9D976BB1",
+                "SHA256_12": "5D255F746E67"
+              },
+              "downloadUrl": "https://civitai.com/api/download/models/2578565",
+              "primary": true
+            }
+          ],
+          "images": [
+            {
+              "id": 116771158,
+              "url": "https://image.civitai.com/xG1nkqKTMzGDvpLrqFT7WA/586ddef3-1eda-45e3-a9f0-94198f069ea2/original=true/116771158.mp4",
+              "nsfwLevel": 1,
+              "width": 2160,
+              "height": 3204,
+              "hash": "U00000fQfQfQfQfQfQfQfQfQfQfQfQfQfQfQ",
+              "type": "video",
+              "minor": false,
+              "poi": false,
+              "hasMeta": false,
+              "hasPositivePrompt": false,
+              "onSite": false,
+              "remixOfId": null
+            },
+            {
+              "id": 116771309,
+              "url": "https://image.civitai.com/xG1nkqKTMzGDvpLrqFT7WA/ffc9bb28-33f2-444b-ab43-87821cdbc421/original=true/116771309.jpeg",
+              "nsfwLevel": 1,
+              "width": 1664,
+              "height": 2432,
+              "hash": "U9JaAwD%00RO00~W9u5k0y4.xtIn00~CS#sp",
+              "type": "image",
+              "minor": false,
+              "poi": false,
+              "hasMeta": true,
+              "hasPositivePrompt": true,
+              "onSite": false,
+              "remixOfId": null
+            }
+          ],
+          "downloadUrl": "https://civitai.com/api/download/models/2578565"
+        }
+      ]
+    },
+    {
+      "id": 795765,
+      "name": "Illustrious-XL",
+      "coverImageId": null,
+      "sfwCoverImageId": null,
+      "description": "<p><strong>Illustrious XL: A Powerful Model for Illustration</strong></p><p>Illustrious XL is an advanced Stable Diffusion XL (SD XL)-based model, developed by ...",
+      "allowNoCredit": false,
+      "allowCommercialUse": [
+        "RentCivit",
+        "Rent"
+      ],
+      "allowDerivatives": true,
+      "allowDifferentLicense": false,
+      "type": "Checkpoint",
+      "minor": false,
+      "sfwOnly": false,
+      "poi": false,
+      "nsfw": false,
+      "nsfwLevel": 1,
+      "availability": "Public",
+      "userId": 1434287,
+      "hasActivePaidAccess": false,
+      "hasSfwFace": false,
+      "baseModels": [
+        "Illustrious"
+      ],
+      "cosmetic": null,
+      "eventDecoration": null,
+      "supportsGeneration": true,
+      "stats": {
+        "downloadCount": 199882,
+        "thumbsUpCount": 19715,
+        "thumbsDownCount": 180,
+        "commentCount": 299,
+        "tippedAmountCount": 48508
+      },
+      "creator": {
+        "username": "aria1th261",
+        "image": null
+      },
+      "tags": [
+        "anime",
+        "base model"
+      ],
+      "modelVersions": [
+        {
+          "id": 889818,
+          "index": 0,
+          "name": "v0.1",
+          "baseModel": "Illustrious",
+          "baseModelType": "Standard",
+          "publishedAt": "2024-09-25T10:19:09.006Z",
+          "flags": 8,
+          "availability": "Public",
+          "nsfwLevel": 1,
+          "description": "<p>until 9/30, users will be asked to log in to download the asset.</p>",
+          "trainedWords": [],
+          "vaeId": null,
+          "coveredNext": true,
+          "paidAccess": null,
+          "stats": {
+            "downloadCount": 199885,
+            "thumbsUpCount": 19715,
+            "thumbsDownCount": 180
+          },
+          "supportsGeneration": true,
+          "files": [
+            {
+              "id": 798303,
+              "sizeKB": 6775430.4296875,
+              "name": "Illustrious-XL-v0.1.safetensors",
+              "overrideName": null,
+              "type": "Model",
+              "pickleScanResult": "Success",
+              "pickleScanMessage": "No Pickle imports",
+              "virusScanResult": "Success",
+              "virusScanMessage": null,
+              "scannedAt": "2024-09-25T10:23:07.266Z",
+              "metadata": {
+                "format": "SafeTensor",
+                "size": "pruned",
+                "fp": "fp16"
+              },
+              "hashes": {
+                "AutoV1": "AD446F67",
+                "AutoV2": "3E15BA0038",
+                "SHA256": "3E15BA00387DB678AB4A099F75771C4F5AC67FDA9E7100A01D263EAF30145AA9",
+                "CRC32": "5EF2797E",
+                "BLAKE3": "EF3A6DD9C8A71E07D77CE8E84780524357E629EE8750EB3018AED648D4C803F1",
+                "AutoV3": "B5A178534B80",
+                "SHA256_12": "3E15BA00387D"
+              },
+              "downloadUrl": "https://civitai.com/api/download/models/889818",
+              "primary": true
+            }
+          ],
+          "images": [
+            {
+              "id": 31462610,
+              "url": "https://image.civitai.com/xG1nkqKTMzGDvpLrqFT7WA/ba3f42b7-a4e8-43a7-8b25-8b50708a85cb/original=true/31462610.jpeg",
+              "nsfwLevel": 1,
+              "width": 832,
+              "height": 1216,
+              "hash": "UBJF?H?l2#v?3u5rBzKs0Q+a}IGH1VwPI,+^",
+              "type": "image",
+              "minor": false,
+              "poi": false,
+              "hasMeta": true,
+              "hasPositivePrompt": true,
+              "onSite": false,
+              "remixOfId": null
+            },
+            {
+              "id": 31255930,
+              "url": "https://image.civitai.com/xG1nkqKTMzGDvpLrqFT7WA/308f206d-19f8-4a94-8fd3-69804539821f/original=true/31255930.jpeg",
+              "nsfwLevel": 1,
+              "width": 832,
+              "height": 1216,
+              "hash": "UTJk1u{3R8$-w6MwIUtQD-RO%Lxuiy-TrWSh",
+              "type": "image",
+              "minor": false,
+              "poi": false,
+              "hasMeta": true,
+              "hasPositivePrompt": true,
+              "onSite": false,
+              "remixOfId": null
+            }
+          ],
+          "downloadUrl": "https://civitai.com/api/download/models/889818"
+        }
+      ]
+    }
+  ],
+  "metadata": {
+    "nextCursor": "17616|457433|376130",
+    "nextPage": "https://civitai.com/api/v1/models?limit=3&types=Checkpoint&sort=Highest%20Rated&baseModels=Illustrious&nsfw=false&cursor=17616%7C457433%7C376130"
+  }
+}

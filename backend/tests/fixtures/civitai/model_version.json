@@ -1,0 +1,158 @@
+{
+  "id": 62833,
+  "modelId": 58390,
+  "name": "v1.0",
+  "nsfwLevel": 3,
+  "createdAt": "2023-05-05T06:46:05.656Z",
+  "updatedAt": "2025-02-14T21:41:54.262Z",
+  "status": "Published",
+  "publishedAt": "2023-05-05T07:28:19.122Z",
+  "trainedWords": [],
+  "trainingStatus": null,
+  "trainingDetails": null,
+  "baseModel": "SD 1.5",
+  "baseModelType": "Standard",
+  "description": null,
+  "uploadType": "Created",
+  "usageControl": "Download",
+  "licensingFee": null,
+  "paidAccess": null,
+  "air": "urn:air:sd1:lora:civitai:58390@62833",
+  "stats": {
+    "downloadCount": 586477,
+    "thumbsUpCount": 33566
+  },
+  "model": {
+    "name": "Detail Tweaker LoRA (细节调整LoRA)",
+    "type": "LORA",
+    "nsfw": false,
+    "poi": false
+  },
+  "files": [
+    {
+      "id": 44319,
+      "sizeKB": 36973.8046875,
+      "name": "add_detail.safetensors",
+      "overrideName": null,
+      "type": "Model",
+      "pickleScanResult": "Success",
+      "pickleScanMessage": "No Pickle imports",
+      "virusScanResult": "Success",
+      "virusScanMessage": null,
+      "scannedAt": "2023-05-05T06:50:46.007",
+      "metadata": {
+        "format": "SafeTensor",
+        "size": null,
+        "fp": null
+      },
+      "hashes": {
+        "AutoV1": "2DAE719F",
+        "AutoV2": "47AAAF0D29",
+        "SHA256": "47AAAF0D2945CA937151D61304946DD229B3F072140B85484BC93E38F2A6E2F7",
+        "CRC32": "F1D60397",
+        "BLAKE3": "5664139789418CE9328FB4E71FF9380FFDBBA2268747A40C428ED9D35501C047",
+        "AutoV3": "7C6BAD76EB54",
+        "SHA256_12": "47AAAF0D2945"
+      },
+      "primary": true,
+      "downloadUrl": "https://civitai.com/api/download/models/62833?fileId=44319"
+    }
+  ],
+  "images": [
+    {
+      "url": "https://image.civitai.com/xG1nkqKTMzGDvpLrqFT7WA/5db97082-a909-4c3e-b6d1-2a46318f29a0/original=true/692487.jpeg",
+      "nsfwLevel": 1,
+      "width": 3840,
+      "height": 2154,
+      "hash": "UlI}YIaej@ae_4WBWVjZ?voffkj?%Nj]a}of",
+      "type": "image",
+      "metadata": {
+        "hash": "UlI}YIaej@ae_4WBWVjZ?voffkj?%Nj]a}of",
+        "width": 3840,
+        "height": 2154
+      },
+      "minor": false,
+      "poi": false,
+      "meta": {
+        "ENSD": "31337",
+        "Size": "512x768",
+        "seed": 3884339508,
+        "steps": 20,
+        "Script": "X/Y/Z plot",
+        "X Type": "Prompt S/R",
+        "prompt": "raw closeup of a stunningly beautiful woman, by the canals of holland, shops selling gouda cheese, RAW, 8K, UHD, natural lighting, perfect day, amateur, candid, extreme close up, <lora:add_detail:1>",
+        "sampler": "DPM++ 2M Karras",
+        "cfgScale": 7,
+        "Clip skip": "2",
+        "resources": [
+          {
+            "name": "add_detail",
+            "type": "lora",
+            "weight": 1
+          }
+        ],
+        "Model hash": "e6415c4892",
+        "add_detail": "-1\"",
+        "\"add_detail": "1",
+        "Hires steps": "10",
+        "Hires upscale": "2.5",
+        "Hires upscaler": "4x-UltraSharp",
+        "negativePrompt": "EasyNegative, badhandv4",
+        "Denoising strength": "0.5"
+      },
+      "availability": "Public",
+      "hasMeta": true,
+      "hasPositivePrompt": true,
+      "onSite": false,
+      "remixOfId": null
+    },
+    {
+      "url": "https://image.civitai.com/xG1nkqKTMzGDvpLrqFT7WA/6e467dc7-45e9-435f-8aee-63fe9a098809/original=true/692332.jpeg",
+      "nsfwLevel": 1,
+      "width": 6400,
+      "height": 2154,
+      "hash": "UXIOFTxFaet6Ipa}azWB~qbHfjof%Mj[ayof",
+      "type": "image",
+      "metadata": {
+        "hash": "UXIOFTxFaet6Ipa}azWB~qbHfjof%Mj[ayof",
+        "width": 6400,
+        "height": 2154
+      },
+      "minor": false,
+      "poi": false,
+      "meta": {
+        "ENSD": "31337",
+        "Size": "512x768",
+        "seed": 3737180303,
+        "steps": 20,
+        "Script": "X/Y/Z plot",
+        "X Type": "Prompt S/R",
+        "prompt": "masterpiece, best quality, 1girl, hatsune miku, cyan hair, cyan eyes, twintails, long hair, jacket, coat, from side, looking at viewer, looking up, looking away, winter, outdoors, snow, night, starry sky, winter clothes, winter coat, scarf, light smile, white thighhighs, standing, reaching out, thigh boots, hand in pocket, snowing, cityscape, skyscraper, cowboy shot, depth of field, from above, foreshortening, footprints, <lora:add_detail:2>",
+        "sampler": "DPM++ 2M Karras",
+        "cfgScale": 7,
+        "Clip skip": "2",
+        "resources": [
+          {
+            "name": "add_detail",
+            "type": "lora",
+            "weight": 2
+          }
+        ],
+        "Model hash": "6e430eb514",
+        "add_detail": "0\"",
+        "\"add_detail": "2",
+        "Hires steps": "10",
+        "Hires upscale": "2.5",
+        "Hires upscaler": "4x-UltraSharp",
+        "negativePrompt": "EasyNegative, badhandv4",
+        "Denoising strength": "0.5"
+      },
+      "availability": "Public",
+      "hasMeta": true,
+      "hasPositivePrompt": true,
+      "onSite": false,
+      "remixOfId": null
+    }
+  ],
+  "downloadUrl": "https://civitai.com/api/download/models/62833"
+}

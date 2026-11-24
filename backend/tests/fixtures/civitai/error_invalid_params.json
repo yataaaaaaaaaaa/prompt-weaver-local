@@ -1,0 +1,6 @@
+{
+  "error": {
+    "name": "ZodError",
+    "message": "[\n  {\n    \"code\": \"invalid_union\",\n    \"errors\": [\n      [\n        {\n          \"code\": \"invalid_value\",\n          \"values\": [\n            \"Checkpoint\",\n            \"TextualInversion\",\n            \"Hypernetwork\",\n            \"AestheticGradient\",\n            \"LORA\",\n            \"LoCon\",\n            \"DoRA\",\n            \"Controlnet\",\n            \"Upscaler\",\n            \"MotionModule\",\n            \"VAE..."
+  }
+}

@@ -188,6 +188,36 @@
         "title": "AppState",
         "type": "object"
       },
+      "BaseModelOption": {
+        "description": "One base-model filter value of a provider (e.g. Civitai \"SD 1.5\", \"Illustrious\").",
+        "properties": {
+          "architecture": {
+            "anyOf": [
+              {
+                "enum": [
+                  "sd15",
+                  "sdxl"
+                ],
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Architecture"
+          },
+          "id": {
+            "title": "Id",
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "architecture"
+        ],
+        "title": "BaseModelOption",
+        "type": "object"
+      },
       "BootstrapResponse": {
         "properties": {
           "current_output_id": {
@@ -245,14 +275,26 @@
       "CategoryPosition": {
         "properties": {
           "x": {
-            "default": 0,
-            "title": "X",
-            "type": "integer"
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "X"
           },
           "y": {
-            "default": 0,
-            "title": "Y",
-            "type": "integer"
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Y"
           }
         },
         "required": [
@@ -265,14 +307,26 @@
       "CategorySize": {
         "properties": {
           "height": {
-            "default": 360,
-            "title": "Height",
-            "type": "integer"
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Height"
           },
           "width": {
-            "default": 320,
-            "title": "Width",
-            "type": "integer"
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Width"
           }
         },
         "required": [
@@ -283,7 +337,7 @@
         "type": "object"
       },
       "DownloadTaskEvent": {
-        "description": "Progress of a file download. Reserved for the model library batch; nothing publishes it yet.",
+        "description": "Progress of a file download (services/downloads.py DownloadManager). current/total are bytes (total 0 =\nunknown size); task_id is returned by the API call that started the download.",
         "properties": {
           "current": {
             "default": 0,
@@ -310,6 +364,12 @@
             "title": "Task Id",
             "type": "string"
           },
+          "title": {
+            "default": "",
+            "description": "What is being downloaded (display name).",
+            "title": "Title",
+            "type": "string"
+          },
           "total": {
             "default": 0,
             "title": "Total",
@@ -326,6 +386,7 @@
           "type",
           "task_id",
           "stage",
+          "title",
           "message",
           "current",
           "total"
@@ -529,7 +590,7 @@
           },
           "loras": {
             "items": {
-              "$ref": "#/components/schemas/LoRASpec"
+              "$ref": "#/components/schemas/LoRASpec-Input"
             },
             "title": "Loras",
             "type": "array"
@@ -593,6 +654,107 @@
         ],
         "title": "GenerateRequest",
         "type": "object"
+      },
+      "GenerationDefaults": {
+        "description": "The single definition of the generation setting defaults (the backend models below and the frontend\ngeneration settings / library stores derive theirs from it).",
+        "properties": {
+          "guidance_scale": {
+            "default": 7.0,
+            "title": "Guidance Scale",
+            "type": "number"
+          },
+          "height": {
+            "default": 1024,
+            "title": "Height",
+            "type": "integer"
+          },
+          "image_seed_behavior": {
+            "default": "fixed",
+            "enum": [
+              "fixed",
+              "increment",
+              "randomize",
+              "per_category_cycle"
+            ],
+            "title": "Image Seed Behavior",
+            "type": "string"
+          },
+          "negative_prompt": {
+            "default": "",
+            "title": "Negative Prompt",
+            "type": "string"
+          },
+          "prompt_seed": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Prompt Seed"
+          },
+          "prompt_seed_behavior": {
+            "default": "fixed",
+            "enum": [
+              "fixed",
+              "increment",
+              "randomize",
+              "per_category_cycle"
+            ],
+            "title": "Prompt Seed Behavior",
+            "type": "string"
+          },
+          "seed": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Seed"
+          },
+          "steps": {
+            "default": 30,
+            "title": "Steps",
+            "type": "integer"
+          },
+          "torch_dtype": {
+            "default": "float16",
+            "enum": [
+              "float16",
+              "bfloat16",
+              "float32"
+            ],
+            "title": "Torch Dtype",
+            "type": "string"
+          },
+          "width": {
+            "default": 1024,
+            "title": "Width",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "width",
+          "height",
+          "steps",
+          "guidance_scale",
+          "negative_prompt",
+          "prompt_seed",
+          "seed",
+          "prompt_seed_behavior",
+          "image_seed_behavior",
+          "torch_dtype"
+        ],
+        "title": "GenerationDefaults",
+        "type": "object",
+        "x-export-defaults": true
       },
       "GenerationSelection-Input": {
         "description": "One category -> sub-prompt choice used for a generation (stored in output metadata).",
@@ -741,12 +903,169 @@
         "title": "HealthResponse",
         "type": "object"
       },
+      "InstallJob": {
+        "description": "An install whose download is still running (lets the frontend resume tracking after a reload).",
+        "properties": {
+          "file_id": {
+            "title": "File Id",
+            "type": "string"
+          },
+          "kind": {
+            "enum": [
+              "checkpoint",
+              "lora",
+              "embedding"
+            ],
+            "title": "Kind",
+            "type": "string"
+          },
+          "model_id": {
+            "title": "Model Id",
+            "type": "string"
+          },
+          "provider": {
+            "title": "Provider",
+            "type": "string"
+          },
+          "task_id": {
+            "title": "Task Id",
+            "type": "string"
+          },
+          "title": {
+            "description": "Same display name as InstalledModel.name and the download task title.",
+            "title": "Title",
+            "type": "string"
+          },
+          "version_id": {
+            "title": "Version Id",
+            "type": "string"
+          }
+        },
+        "required": [
+          "task_id",
+          "provider",
+          "model_id",
+          "version_id",
+          "file_id",
+          "kind",
+          "title"
+        ],
+        "title": "InstallJob",
+        "type": "object"
+      },
+      "InstallRequest": {
+        "description": "Install (download unless already present) one file of a provider model version.",
+        "properties": {
+          "file_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Default: the primary downloadable file of the version.",
+            "title": "File Id"
+          },
+          "provider": {
+            "title": "Provider",
+            "type": "string"
+          },
+          "version_id": {
+            "title": "Version Id",
+            "type": "string"
+          }
+        },
+        "required": [
+          "provider",
+          "version_id"
+        ],
+        "title": "InstallRequest",
+        "type": "object"
+      },
+      "InstallResponse": {
+        "properties": {
+          "installed": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/InstalledModel"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Set when state is 'installed'."
+          },
+          "state": {
+            "enum": [
+              "installed",
+              "downloading"
+            ],
+            "title": "State",
+            "type": "string"
+          },
+          "task_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Download task (state 'downloading'): follow it on /ws/tasks.",
+            "title": "Task Id"
+          }
+        },
+        "required": [
+          "state",
+          "task_id",
+          "installed"
+        ],
+        "title": "InstallResponse",
+        "type": "object"
+      },
+      "InstalledModel": {
+        "description": "A model file present on disk, ready to be registered in the library store.",
+        "properties": {
+          "kind": {
+            "enum": [
+              "checkpoint",
+              "lora",
+              "embedding"
+            ],
+            "title": "Kind",
+            "type": "string"
+          },
+          "name": {
+            "description": "Display name (library entry name, download title): '<model name> - <version name>'.",
+            "title": "Name",
+            "type": "string"
+          },
+          "path": {
+            "title": "Path",
+            "type": "string"
+          },
+          "source": {
+            "$ref": "#/components/schemas/ModelSource"
+          }
+        },
+        "required": [
+          "kind",
+          "name",
+          "path",
+          "source"
+        ],
+        "title": "InstalledModel",
+        "type": "object"
+      },
       "LibraryState": {
         "description": "Legacy library.json format (read at bootstrap to seed the frontend library store).",
         "properties": {
           "loras": {
             "items": {
-              "$ref": "#/components/schemas/LoRASpec"
+              "$ref": "#/components/schemas/LoRASpec-Output"
             },
             "title": "Loras",
             "type": "array"
@@ -766,7 +1085,7 @@
         "title": "LibraryState",
         "type": "object"
       },
-      "LoRASpec": {
+      "LoRASpec-Input": {
         "properties": {
           "id": {
             "title": "Id",
@@ -779,6 +1098,16 @@
           "path": {
             "title": "Path",
             "type": "string"
+          },
+          "source": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/ModelSource"
+              },
+              {
+                "type": "null"
+              }
+            ]
           }
         },
         "required": [
@@ -787,6 +1116,350 @@
           "path"
         ],
         "title": "LoRASpec",
+        "type": "object"
+      },
+      "LoRASpec-Output": {
+        "properties": {
+          "id": {
+            "title": "Id",
+            "type": "string"
+          },
+          "name": {
+            "title": "Name",
+            "type": "string"
+          },
+          "path": {
+            "title": "Path",
+            "type": "string"
+          },
+          "source": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/ModelSource"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        },
+        "required": [
+          "id",
+          "name",
+          "path",
+          "source"
+        ],
+        "title": "LoRASpec",
+        "type": "object"
+      },
+      "ModelDirs": {
+        "description": "Local folder of every model kind (settings.py owns them; downloads land there).",
+        "properties": {
+          "checkpoint": {
+            "title": "Checkpoint",
+            "type": "string"
+          },
+          "embedding": {
+            "title": "Embedding",
+            "type": "string"
+          },
+          "lora": {
+            "title": "Lora",
+            "type": "string"
+          }
+        },
+        "required": [
+          "checkpoint",
+          "lora",
+          "embedding"
+        ],
+        "title": "ModelDirs",
+        "type": "object"
+      },
+      "ModelLibraryInfo": {
+        "properties": {
+          "model_dirs": {
+            "$ref": "#/components/schemas/ModelDirs"
+          },
+          "providers": {
+            "items": {
+              "$ref": "#/components/schemas/ModelProviderInfo"
+            },
+            "title": "Providers",
+            "type": "array"
+          }
+        },
+        "required": [
+          "providers",
+          "model_dirs"
+        ],
+        "title": "ModelLibraryInfo",
+        "type": "object"
+      },
+      "ModelProviderInfo": {
+        "properties": {
+          "base_models": {
+            "items": {
+              "$ref": "#/components/schemas/BaseModelOption"
+            },
+            "title": "Base Models",
+            "type": "array"
+          },
+          "id": {
+            "title": "Id",
+            "type": "string"
+          },
+          "kinds": {
+            "items": {
+              "enum": [
+                "checkpoint",
+                "lora",
+                "embedding"
+              ],
+              "type": "string"
+            },
+            "title": "Kinds",
+            "type": "array"
+          },
+          "label": {
+            "title": "Label",
+            "type": "string"
+          },
+          "sorts": {
+            "items": {
+              "enum": [
+                "most_downloaded",
+                "highest_rated",
+                "newest"
+              ],
+              "type": "string"
+            },
+            "title": "Sorts",
+            "type": "array"
+          },
+          "token_set": {
+            "description": "An API token is stored in the backend settings (its value is never sent).",
+            "title": "Token Set",
+            "type": "boolean"
+          },
+          "token_supported": {
+            "title": "Token Supported",
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "id",
+          "label",
+          "kinds",
+          "base_models",
+          "sorts",
+          "token_supported",
+          "token_set"
+        ],
+        "title": "ModelProviderInfo",
+        "type": "object"
+      },
+      "ModelSearchPage": {
+        "properties": {
+          "items": {
+            "items": {
+              "$ref": "#/components/schemas/RemoteModel"
+            },
+            "title": "Items",
+            "type": "array"
+          },
+          "next_cursor": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Next Cursor"
+          }
+        },
+        "required": [
+          "items",
+          "next_cursor"
+        ],
+        "title": "ModelSearchPage",
+        "type": "object"
+      },
+      "ModelSearchQuery": {
+        "description": "Query parameters of GET /api/models/search.",
+        "properties": {
+          "base_models": {
+            "default": [],
+            "description": "BaseModelOption ids; empty = any.",
+            "items": {
+              "type": "string"
+            },
+            "title": "Base Models",
+            "type": "array"
+          },
+          "cursor": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "description": "ModelSearchPage.next_cursor of the previous page.",
+            "title": "Cursor"
+          },
+          "kinds": {
+            "default": [],
+            "description": "Empty = every kind the provider supports.",
+            "items": {
+              "enum": [
+                "checkpoint",
+                "lora",
+                "embedding"
+              ],
+              "type": "string"
+            },
+            "title": "Kinds",
+            "type": "array"
+          },
+          "limit": {
+            "default": 20,
+            "maximum": 100,
+            "minimum": 1,
+            "title": "Limit",
+            "type": "integer"
+          },
+          "nsfw": {
+            "default": false,
+            "title": "Nsfw",
+            "type": "boolean"
+          },
+          "provider": {
+            "default": "civitai",
+            "title": "Provider",
+            "type": "string"
+          },
+          "query": {
+            "default": "",
+            "title": "Query",
+            "type": "string"
+          },
+          "sort": {
+            "default": "most_downloaded",
+            "enum": [
+              "most_downloaded",
+              "highest_rated",
+              "newest"
+            ],
+            "title": "Sort",
+            "type": "string"
+          }
+        },
+        "required": [
+          "provider",
+          "query",
+          "kinds",
+          "base_models",
+          "sort",
+          "nsfw",
+          "limit",
+          "cursor"
+        ],
+        "title": "ModelSearchQuery",
+        "type": "object",
+        "x-export-defaults": true
+      },
+      "ModelSource": {
+        "description": "Provenance of a library entry installed from an online provider (model library). Stored with the entry\nin the frontend library store; null for entries added from local files.",
+        "properties": {
+          "base_model": {
+            "title": "Base Model",
+            "type": "string"
+          },
+          "file_id": {
+            "title": "File Id",
+            "type": "string"
+          },
+          "model_id": {
+            "title": "Model Id",
+            "type": "string"
+          },
+          "model_name": {
+            "title": "Model Name",
+            "type": "string"
+          },
+          "page_url": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Page Url"
+          },
+          "preview_url": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Preview Url"
+          },
+          "provider": {
+            "title": "Provider",
+            "type": "string"
+          },
+          "sha256": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Lowercase hex SHA-256 of the file, when the provider publishes it.",
+            "title": "Sha256"
+          },
+          "trigger_words": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Trigger Words",
+            "type": "array"
+          },
+          "version_id": {
+            "title": "Version Id",
+            "type": "string"
+          },
+          "version_name": {
+            "title": "Version Name",
+            "type": "string"
+          }
+        },
+        "required": [
+          "provider",
+          "model_id",
+          "version_id",
+          "file_id",
+          "model_name",
+          "version_name",
+          "base_model",
+          "sha256",
+          "preview_url",
+          "trigger_words",
+          "page_url"
+        ],
+        "title": "ModelSource",
         "type": "object"
       },
       "ModelSpec-Input": {
@@ -812,6 +1485,16 @@
           "path": {
             "title": "Path",
             "type": "string"
+          },
+          "source": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/ModelSource"
+              },
+              {
+                "type": "null"
+              }
+            ]
           },
           "torch_dtype": {
             "default": "float16",
@@ -856,6 +1539,16 @@
             "title": "Path",
             "type": "string"
           },
+          "source": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/ModelSource"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
           "torch_dtype": {
             "default": "float16",
             "enum": [
@@ -873,7 +1566,8 @@
           "path",
           "default_width",
           "default_height",
-          "torch_dtype"
+          "torch_dtype",
+          "source"
         ],
         "title": "ModelSpec",
         "type": "object"
@@ -1041,9 +1735,15 @@
             "type": "integer"
           },
           "z_index": {
-            "default": 1,
-            "title": "Z Index",
-            "type": "integer"
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Z Index"
           }
         },
         "required": [
@@ -1121,6 +1821,49 @@
         "title": "PersistedStoreRead",
         "type": "object"
       },
+      "PreviewImage": {
+        "properties": {
+          "height": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Height"
+          },
+          "nsfw": {
+            "title": "Nsfw",
+            "type": "boolean"
+          },
+          "url": {
+            "description": "Thumbnail-sized image URL.",
+            "title": "Url",
+            "type": "string"
+          },
+          "width": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Width"
+          }
+        },
+        "required": [
+          "url",
+          "width",
+          "height",
+          "nsfw"
+        ],
+        "title": "PreviewImage",
+        "type": "object"
+      },
       "PromptCategory": {
         "properties": {
           "activation_text": {
@@ -1164,12 +1907,26 @@
             "type": "string"
           },
           "position": {
-            "$ref": "#/components/schemas/CategoryPosition"
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/CategoryPosition"
+              },
+              {
+                "type": "null"
+              }
+            ]
           },
           "priority": {
-            "default": "1",
-            "title": "Priority",
-            "type": "string"
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "null: the frontend's default priority.",
+            "title": "Priority"
           },
           "prompts": {
             "items": {
@@ -1179,12 +1936,25 @@
             "type": "array"
           },
           "size": {
-            "$ref": "#/components/schemas/CategorySize"
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/CategorySize"
+              },
+              {
+                "type": "null"
+              }
+            ]
           },
           "z_index": {
-            "default": 50,
-            "title": "Z Index",
-            "type": "integer"
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Z Index"
           }
         },
         "required": [
@@ -1240,6 +2010,320 @@
           "extra_lora_ids"
         ],
         "title": "PromptEntry",
+        "type": "object"
+      },
+      "ProviderTokenUpdate": {
+        "description": "PUT body of a provider API token. null or an empty string removes the stored token.",
+        "properties": {
+          "token": {
+            "anyOf": [
+              {
+                "format": "password",
+                "type": "string",
+                "writeOnly": true
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Token"
+          }
+        },
+        "title": "ProviderTokenUpdate",
+        "type": "object"
+      },
+      "RemoteFile": {
+        "properties": {
+          "downloadable": {
+            "description": "False for formats the app refuses to download (pickle-based files).",
+            "title": "Downloadable",
+            "type": "boolean"
+          },
+          "format": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Provider format label, e.g. \"SafeTensor\" or \"PickleTensor\".",
+            "title": "Format"
+          },
+          "id": {
+            "title": "Id",
+            "type": "string"
+          },
+          "local_path": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Known local copy (cheap check: same name and size in the kind's folder, or a cached hash match).",
+            "title": "Local Path"
+          },
+          "name": {
+            "title": "Name",
+            "type": "string"
+          },
+          "precision": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Precision"
+          },
+          "primary": {
+            "title": "Primary",
+            "type": "boolean"
+          },
+          "sha256": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Sha256"
+          },
+          "size_bytes": {
+            "title": "Size Bytes",
+            "type": "integer"
+          },
+          "variant": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "e.g. \"pruned\" or \"full\".",
+            "title": "Variant"
+          }
+        },
+        "required": [
+          "id",
+          "name",
+          "size_bytes",
+          "sha256",
+          "format",
+          "precision",
+          "variant",
+          "primary",
+          "downloadable",
+          "local_path"
+        ],
+        "title": "RemoteFile",
+        "type": "object"
+      },
+      "RemoteModel": {
+        "properties": {
+          "creator": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Creator"
+          },
+          "download_count": {
+            "title": "Download Count",
+            "type": "integer"
+          },
+          "id": {
+            "title": "Id",
+            "type": "string"
+          },
+          "kind": {
+            "enum": [
+              "checkpoint",
+              "lora",
+              "embedding"
+            ],
+            "title": "Kind",
+            "type": "string"
+          },
+          "name": {
+            "title": "Name",
+            "type": "string"
+          },
+          "nsfw": {
+            "title": "Nsfw",
+            "type": "boolean"
+          },
+          "page_url": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Page Url"
+          },
+          "provider": {
+            "title": "Provider",
+            "type": "string"
+          },
+          "tags": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Tags",
+            "type": "array"
+          },
+          "versions": {
+            "items": {
+              "$ref": "#/components/schemas/RemoteModelVersion"
+            },
+            "title": "Versions",
+            "type": "array"
+          }
+        },
+        "required": [
+          "provider",
+          "id",
+          "name",
+          "kind",
+          "creator",
+          "nsfw",
+          "tags",
+          "download_count",
+          "page_url",
+          "versions"
+        ],
+        "title": "RemoteModel",
+        "type": "object"
+      },
+      "RemoteModelVersion": {
+        "properties": {
+          "architecture": {
+            "anyOf": [
+              {
+                "enum": [
+                  "sd15",
+                  "sdxl"
+                ],
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Architecture"
+          },
+          "base_model": {
+            "title": "Base Model",
+            "type": "string"
+          },
+          "default_file_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "File installed when InstallRequest.file_id is null (model_providers/base.py default_file).",
+            "title": "Default File Id"
+          },
+          "files": {
+            "items": {
+              "$ref": "#/components/schemas/RemoteFile"
+            },
+            "title": "Files",
+            "type": "array"
+          },
+          "id": {
+            "title": "Id",
+            "type": "string"
+          },
+          "images": {
+            "items": {
+              "$ref": "#/components/schemas/PreviewImage"
+            },
+            "title": "Images",
+            "type": "array"
+          },
+          "name": {
+            "title": "Name",
+            "type": "string"
+          },
+          "page_url": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Page Url"
+          },
+          "published_at": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Published At"
+          },
+          "trigger_words": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Trigger Words",
+            "type": "array"
+          },
+          "unavailable_reason": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Why this version cannot be installed (model_providers/base.py); null when it can.",
+            "title": "Unavailable Reason"
+          }
+        },
+        "required": [
+          "id",
+          "name",
+          "base_model",
+          "architecture",
+          "trigger_words",
+          "published_at",
+          "images",
+          "files",
+          "page_url",
+          "default_file_id",
+          "unavailable_reason"
+        ],
+        "title": "RemoteModelVersion",
         "type": "object"
       },
       "TaskSnapshot": {
@@ -1316,16 +2400,44 @@
       "WorkspaceLayout": {
         "properties": {
           "controls": {
-            "$ref": "#/components/schemas/PaneLayout"
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/PaneLayout"
+              },
+              {
+                "type": "null"
+              }
+            ]
           },
           "details": {
-            "$ref": "#/components/schemas/PaneLayout"
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/PaneLayout"
+              },
+              {
+                "type": "null"
+              }
+            ]
           },
           "image": {
-            "$ref": "#/components/schemas/PaneLayout"
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/PaneLayout"
+              },
+              {
+                "type": "null"
+              }
+            ]
           },
           "used": {
-            "$ref": "#/components/schemas/PaneLayout"
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/PaneLayout"
+              },
+              {
+                "type": "null"
+              }
+            ]
           }
         },
         "required": [
@@ -1364,6 +2476,52 @@
         "summary": "Bootstrap",
         "tags": [
           "bootstrap"
+        ]
+      }
+    },
+    "/api/downloads/{task_id}/cancel": {
+      "post": {
+        "description": "Cancels a queued or running download (its task then ends with stage 'cancelled').",
+        "operationId": "cancel_download_api_downloads__task_id__cancel_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "task_id",
+            "required": true,
+            "schema": {
+              "title": "Task Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/OkResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "404": {
+            "description": "Unknown or finished download"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Cancel Download",
+        "tags": [
+          "downloads"
         ]
       }
     },
@@ -1451,6 +2609,443 @@
         "summary": "Health",
         "tags": [
           "health"
+        ]
+      }
+    },
+    "/api/models/info": {
+      "get": {
+        "description": "Registered providers (filters, token state) and the local model folders.",
+        "operationId": "model_library_info_api_models_info_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ModelLibraryInfo"
+                }
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "summary": "Model Library Info",
+        "tags": [
+          "models"
+        ]
+      }
+    },
+    "/api/models/install": {
+      "post": {
+        "description": "'installed' (+ InstalledModel) when the file is already on disk, else 'downloading' (+ task_id, progress\nas DownloadTaskEvent on /ws/tasks). Call again after the download completed to get the InstalledModel.\nHashing a large local candidate can take seconds (sync route: runs in the threadpool).",
+        "operationId": "install_model_api_models_install_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/InstallRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/InstallResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "403": {
+            "description": "The provider requires an API token, or rejected the stored one"
+          },
+          "404": {
+            "description": "Unknown provider, model, version or hash"
+          },
+          "409": {
+            "description": "The file cannot be installed (see detail)"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          },
+          "502": {
+            "description": "The provider could not be reached or answered an error"
+          }
+        },
+        "summary": "Install Model",
+        "tags": [
+          "models"
+        ]
+      }
+    },
+    "/api/models/installs": {
+      "get": {
+        "description": "Installs whose download is still running.",
+        "operationId": "list_installs_api_models_installs_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "items": {
+                    "$ref": "#/components/schemas/InstallJob"
+                  },
+                  "title": "Response List Installs Api Models Installs Get",
+                  "type": "array"
+                }
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "summary": "List Installs",
+        "tags": [
+          "models"
+        ]
+      }
+    },
+    "/api/models/providers/{provider}/by-hash/{sha256}": {
+      "get": {
+        "description": "The model version whose file has this SHA-256, same shape as get_model_version.",
+        "operationId": "find_model_by_hash_api_models_providers__provider__by_hash__sha256__get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "provider",
+            "required": true,
+            "schema": {
+              "title": "Provider",
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "sha256",
+            "required": true,
+            "schema": {
+              "pattern": "^[0-9a-fA-F]{64}$",
+              "title": "Sha256",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RemoteModel"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "403": {
+            "description": "The provider requires an API token, or rejected the stored one"
+          },
+          "404": {
+            "description": "Unknown provider, model, version or hash"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          },
+          "502": {
+            "description": "The provider could not be reached or answered an error"
+          }
+        },
+        "summary": "Find Model By Hash",
+        "tags": [
+          "models"
+        ]
+      }
+    },
+    "/api/models/providers/{provider}/token": {
+      "put": {
+        "description": "Stores (or, with null / \"\", removes) the provider's API token. The token is never sent back.",
+        "operationId": "set_provider_token_api_models_providers__provider__token_put",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "provider",
+            "required": true,
+            "schema": {
+              "title": "Provider",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ProviderTokenUpdate"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ModelProviderInfo"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "404": {
+            "description": "Unknown provider, model, version or hash"
+          },
+          "409": {
+            "description": "The provider takes no API token"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Set Provider Token",
+        "tags": [
+          "models"
+        ]
+      }
+    },
+    "/api/models/providers/{provider}/versions/{version_id}": {
+      "get": {
+        "description": "The model owning a version, with `versions` == [that version].",
+        "operationId": "get_model_version_api_models_providers__provider__versions__version_id__get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "provider",
+            "required": true,
+            "schema": {
+              "title": "Provider",
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "version_id",
+            "required": true,
+            "schema": {
+              "title": "Version Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RemoteModel"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "403": {
+            "description": "The provider requires an API token, or rejected the stored one"
+          },
+          "404": {
+            "description": "Unknown provider, model, version or hash"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          },
+          "502": {
+            "description": "The provider could not be reached or answered an error"
+          }
+        },
+        "summary": "Get Model Version",
+        "tags": [
+          "models"
+        ]
+      }
+    },
+    "/api/models/search": {
+      "get": {
+        "description": "One page of online models; files already on disk carry their local_path.",
+        "operationId": "search_models_api_models_search_get",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "provider",
+            "required": false,
+            "schema": {
+              "default": "civitai",
+              "title": "Provider",
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "query",
+            "required": false,
+            "schema": {
+              "default": "",
+              "title": "Query",
+              "type": "string"
+            }
+          },
+          {
+            "description": "Empty = every kind the provider supports.",
+            "in": "query",
+            "name": "kinds",
+            "required": false,
+            "schema": {
+              "default": [],
+              "description": "Empty = every kind the provider supports.",
+              "items": {
+                "enum": [
+                  "checkpoint",
+                  "lora",
+                  "embedding"
+                ],
+                "type": "string"
+              },
+              "title": "Kinds",
+              "type": "array"
+            }
+          },
+          {
+            "description": "BaseModelOption ids; empty = any.",
+            "in": "query",
+            "name": "base_models",
+            "required": false,
+            "schema": {
+              "default": [],
+              "description": "BaseModelOption ids; empty = any.",
+              "items": {
+                "type": "string"
+              },
+              "title": "Base Models",
+              "type": "array"
+            }
+          },
+          {
+            "in": "query",
+            "name": "sort",
+            "required": false,
+            "schema": {
+              "default": "most_downloaded",
+              "enum": [
+                "most_downloaded",
+                "highest_rated",
+                "newest"
+              ],
+              "title": "Sort",
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "nsfw",
+            "required": false,
+            "schema": {
+              "default": false,
+              "title": "Nsfw",
+              "type": "boolean"
+            }
+          },
+          {
+            "in": "query",
+            "name": "limit",
+            "required": false,
+            "schema": {
+              "default": 20,
+              "maximum": 100,
+              "minimum": 1,
+              "title": "Limit",
+              "type": "integer"
+            }
+          },
+          {
+            "description": "ModelSearchPage.next_cursor of the previous page.",
+            "in": "query",
+            "name": "cursor",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "ModelSearchPage.next_cursor of the previous page.",
+              "title": "Cursor"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ModelSearchPage"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "403": {
+            "description": "The provider requires an API token, or rejected the stored one"
+          },
+          "404": {
+            "description": "Unknown provider, model, version or hash"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          },
+          "502": {
+            "description": "The provider could not be reached or answered an error"
+          }
+        },
+        "summary": "Search Models",
+        "tags": [
+          "models"
         ]
       }
     },

@@ -11,6 +11,7 @@ dependencies = [
   "uvicorn>=0.32.0",
   "websockets>=13.1",
   "torch>=2.4.0",
+  "httpx>=0.28",
 ]
 
 [tool.uv]
@@ -29,6 +30,5 @@ explicit = true
 
 [dependency-groups]
 dev = [
-    "httpx>=0.27",
     "pytest>=8.3",
 ]

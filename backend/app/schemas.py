@@ -13,9 +13,9 @@ until the snapshot and the generated types are refreshed).
 from __future__ import annotations
 
 from datetime import datetime
-from typing import Annotated, Any, Literal, Union
+from typing import Annotated, Any, Literal, TypeVar, Union
 
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, ConfigDict, Field, SecretStr
 
 # ---------------------------------------------------------------------------
 # Shared literals
@@ -42,23 +42,84 @@ class ApiModel(BaseModel):
 
 
 # ---------------------------------------------------------------------------
+# Defaults shared with the frontend
+# ---------------------------------------------------------------------------
+
+# Models decorated with @export_defaults are added to the OpenAPI components with this flag (factory.py), even
+# when no route references them, and `npm run gen:api` exports their field defaults as frontend constants in
+# frontend/src/api/defaults.gen.ts (GenerationDefaults -> GENERATION_DEFAULTS, ModelSearchQuery ->
+# MODEL_SEARCH_QUERY_DEFAULTS). Every field of such a model needs a default (no default_factory).
+EXPORT_DEFAULTS_FLAG = "x-export-defaults"
+EXPORTED_DEFAULTS_SCHEMAS: list[type[BaseModel]] = []
+
+_ModelT = TypeVar("_ModelT", bound=type[BaseModel])
+
+
+def export_defaults(model: _ModelT) -> _ModelT:
+    EXPORTED_DEFAULTS_SCHEMAS.append(model)
+    return model
+
+
+@export_defaults
+class GenerationDefaults(ApiModel):
+    """The single definition of the generation setting defaults (the backend models below and the frontend
+    generation settings / library stores derive theirs from it)."""
+
+    width: int = 1024
+    height: int = 1024
+    steps: int = 30
+    guidance_scale: float = 7.0
+    negative_prompt: str = ""
+    prompt_seed: int | None = None
+    seed: int | None = None
+    prompt_seed_behavior: SeedBehavior = "fixed"
+    image_seed_behavior: SeedBehavior = "fixed"
+    torch_dtype: TorchDType = "float16"
+
+
+GENERATION_DEFAULTS = GenerationDefaults()
+
+
+# ---------------------------------------------------------------------------
 # Model / LoRA library
 # ---------------------------------------------------------------------------
+
+
+ModelKind = Literal["checkpoint", "lora", "embedding"]
+
+
+class ModelSource(ApiModel):
+    """Provenance of a library entry installed from an online provider (model library). Stored with the entry
+    in the frontend library store; null for entries added from local files."""
+
+    provider: str
+    model_id: str
+    version_id: str
+    file_id: str
+    model_name: str
+    version_name: str
+    base_model: str
+    sha256: str | None = Field(description="Lowercase hex SHA-256 of the file, when the provider publishes it.")
+    preview_url: str | None
+    trigger_words: list[str]
+    page_url: str | None
 
 
 class LoRASpec(ApiModel):
     id: str
     name: str
     path: str
+    source: ModelSource | None = None
 
 
 class ModelSpec(ApiModel):
     id: str
     name: str
     path: str
-    default_width: int = 1024
-    default_height: int = 1024
-    torch_dtype: TorchDType = "float16"
+    default_width: int = GENERATION_DEFAULTS.width
+    default_height: int = GENERATION_DEFAULTS.height
+    torch_dtype: TorchDType = GENERATION_DEFAULTS.torch_dtype
+    source: ModelSource | None = None
 
 
 class LibraryState(ApiModel):
@@ -80,27 +141,31 @@ class PromptEntry(ApiModel):
     extra_lora_ids: list[str] = Field(default_factory=list)
 
 
+# Legacy window geometry carries no defaults: a missing or incomplete layout imports no window, so the
+# frontend's own defaults apply (workspace/paneRegistry.tsx, categories' default card layout).
+
+
 class CategoryPosition(ApiModel):
-    x: int = 0
-    y: int = 0
+    x: int | None = None
+    y: int | None = None
 
 
 class CategorySize(ApiModel):
-    width: int = 320
-    height: int = 360
+    width: int | None = None
+    height: int | None = None
 
 
 class PromptCategory(ApiModel):
     id: str
     name: str
     muted: bool = False
-    priority: str = "1"
+    priority: str | None = Field(default=None, description="null: the frontend's default priority.")
     activation_text: str = ""
     locked_prompt_id: str | None = None
     locked_prompt_text: str | None = None
-    position: CategoryPosition = Field(default_factory=CategoryPosition)
-    size: CategorySize = Field(default_factory=CategorySize)
-    z_index: int = 50
+    position: CategoryPosition | None = None
+    size: CategorySize | None = None
+    z_index: int | None = None
     prompts: list[PromptEntry] = Field(default_factory=list)
 
 
@@ -149,14 +214,14 @@ class PaneLayout(ApiModel):
     y: int
     width: int
     height: int
-    z_index: int = 1
+    z_index: int | None = None
 
 
 class WorkspaceLayout(ApiModel):
-    image: PaneLayout = Field(default_factory=lambda: PaneLayout(x=420, y=24, width=760, height=760, z_index=3))
-    controls: PaneLayout = Field(default_factory=lambda: PaneLayout(x=24, y=24, width=420, height=720, z_index=4))
-    details: PaneLayout = Field(default_factory=lambda: PaneLayout(x=1210, y=24, width=360, height=780, z_index=5))
-    used: PaneLayout = Field(default_factory=lambda: PaneLayout(x=690, y=320, width=790, height=420, z_index=6))
+    image: PaneLayout | None = None
+    controls: PaneLayout | None = None
+    details: PaneLayout | None = None
+    used: PaneLayout | None = None
 
 
 class AppState(ApiModel):
@@ -166,17 +231,17 @@ class AppState(ApiModel):
     last_lora_ids: list[str] = Field(default_factory=list)
     last_model_dir: str | None = None
     last_lora_dir: str | None = None
-    width: int = 1024
-    height: int = 1024
-    steps: int = 30
-    guidance_scale: float = 7.0
-    prompt_seed: int | None = None
-    seed: int | None = None
+    width: int = GENERATION_DEFAULTS.width
+    height: int = GENERATION_DEFAULTS.height
+    steps: int = GENERATION_DEFAULTS.steps
+    guidance_scale: float = GENERATION_DEFAULTS.guidance_scale
+    prompt_seed: int | None = GENERATION_DEFAULTS.prompt_seed
+    seed: int | None = GENERATION_DEFAULTS.seed
     seed_mode: SeedMode = "manual"
     seed_advance_mode: SeedAdvanceMode = "keep"
-    prompt_seed_behavior: SeedBehavior = "fixed"
-    image_seed_behavior: SeedBehavior = "fixed"
-    negative_prompt: str = ""
+    prompt_seed_behavior: SeedBehavior = GENERATION_DEFAULTS.prompt_seed_behavior
+    image_seed_behavior: SeedBehavior = GENERATION_DEFAULTS.image_seed_behavior
+    negative_prompt: str = GENERATION_DEFAULTS.negative_prompt
     workspace: WorkspaceLayout = Field(default_factory=WorkspaceLayout)
     editor: EditorState = Field(default_factory=EditorState)
     last_output_id: str | None = None
@@ -210,9 +275,9 @@ class OutputRecord(ApiModel):
     seed: int
     width: int
     height: int
-    negative_prompt: str = ""
-    steps: int = 30
-    guidance_scale: float = 7.0
+    negative_prompt: str = GENERATION_DEFAULTS.negative_prompt
+    steps: int = GENERATION_DEFAULTS.steps
+    guidance_scale: float = GENERATION_DEFAULTS.guidance_scale
     model_id: str
     prompt_seed: int | None = None
     image_seed: int | None = None
@@ -238,11 +303,11 @@ class GenerateRequest(ApiModel):
     selections: list[GenerationSelection] = Field(default_factory=list)
     width: int
     height: int
-    steps: int = 30
-    guidance_scale: float = 7.0
+    steps: int = GENERATION_DEFAULTS.steps
+    guidance_scale: float = GENERATION_DEFAULTS.guidance_scale
     prompt_seed: int | None = None
     seed: int | None = None
-    negative_prompt: str = ""
+    negative_prompt: str = GENERATION_DEFAULTS.negative_prompt
 
 
 # ---------------------------------------------------------------------------
@@ -276,11 +341,13 @@ class GenerationTaskEvent(ApiModel):
 
 
 class DownloadTaskEvent(ApiModel):
-    """Progress of a file download. Reserved for the model library batch; nothing publishes it yet."""
+    """Progress of a file download (services/downloads.py DownloadManager). current/total are bytes (total 0 =
+    unknown size); task_id is returned by the API call that started the download."""
 
     type: Literal["download"] = "download"
     task_id: str
     stage: DownloadStage
+    title: str = Field(default="", description="What is being downloaded (display name).")
     message: str = ""
     current: int = 0
     total: int = 0
@@ -293,6 +360,165 @@ class TaskSnapshot(ApiModel):
     """Latest event of every known task. The WebSocket sends these events on connect."""
 
     events: list[TaskEvent] = Field(default_factory=list)
+
+
+# ---------------------------------------------------------------------------
+# Model library: online catalogs (providers), installs and downloads
+# ---------------------------------------------------------------------------
+
+ModelSort = Literal["most_downloaded", "highest_rated", "newest"]
+# Model families diffusion-lora-runtime can load from a single checkpoint file (and whose LoRAs/embeddings it
+# can apply). null on a version = not usable locally (e.g. Flux, SD3, video models): it cannot be installed.
+ModelArchitecture = Literal["sd15", "sdxl"]
+InstallState = Literal["installed", "downloading"]
+
+# Lowercase hex SHA-256 (provider hashes are normalized to lowercase by the backend).
+SHA256_PATTERN = r"^[0-9a-f]{64}$"
+
+
+class ModelDirs(ApiModel):
+    """Local folder of every model kind (settings.py owns them; downloads land there)."""
+
+    checkpoint: str
+    lora: str
+    embedding: str
+
+
+class BaseModelOption(ApiModel):
+    """One base-model filter value of a provider (e.g. Civitai "SD 1.5", "Illustrious")."""
+
+    id: str
+    architecture: ModelArchitecture | None
+
+
+class ModelProviderInfo(ApiModel):
+    id: str
+    label: str
+    kinds: list[ModelKind]
+    base_models: list[BaseModelOption]
+    sorts: list[ModelSort]
+    token_supported: bool
+    token_set: bool = Field(description="An API token is stored in the backend settings (its value is never sent).")
+
+
+class ModelLibraryInfo(ApiModel):
+    providers: list[ModelProviderInfo]
+    model_dirs: ModelDirs
+
+
+class ProviderTokenUpdate(ApiModel):
+    """PUT body of a provider API token. null or an empty string removes the stored token."""
+
+    token: SecretStr | None = None
+
+
+@export_defaults
+class ModelSearchQuery(ApiModel):
+    """Query parameters of GET /api/models/search."""
+
+    provider: str = "civitai"
+    query: str = ""
+    kinds: list[ModelKind] = Field(default=[], description="Empty = every kind the provider supports.")
+    base_models: list[str] = Field(default=[], description="BaseModelOption ids; empty = any.")
+    sort: ModelSort = "most_downloaded"
+    nsfw: bool = False
+    limit: int = Field(default=20, ge=1, le=100)
+    cursor: str | None = Field(default=None, description="ModelSearchPage.next_cursor of the previous page.")
+
+
+class PreviewImage(ApiModel):
+    url: str = Field(description="Thumbnail-sized image URL.")
+    width: int | None
+    height: int | None
+    nsfw: bool
+
+
+class RemoteFile(ApiModel):
+    id: str
+    name: str
+    size_bytes: int
+    sha256: str | None
+    format: str | None = Field(description='Provider format label, e.g. "SafeTensor" or "PickleTensor".')
+    precision: str | None
+    variant: str | None = Field(description='e.g. "pruned" or "full".')
+    primary: bool
+    downloadable: bool = Field(description="False for formats the app refuses to download (pickle-based files).")
+    local_path: str | None = Field(
+        description="Known local copy (cheap check: same name and size in the kind's folder, or a cached hash match)."
+    )
+
+
+class RemoteModelVersion(ApiModel):
+    id: str
+    name: str
+    base_model: str
+    architecture: ModelArchitecture | None
+    trigger_words: list[str]
+    published_at: datetime | None
+    images: list[PreviewImage]
+    files: list[RemoteFile]
+    page_url: str | None
+    default_file_id: str | None = Field(
+        description="File installed when InstallRequest.file_id is null (model_providers/base.py default_file)."
+    )
+    unavailable_reason: str | None = Field(
+        description="Why this version cannot be installed (model_providers/base.py); null when it can."
+    )
+
+
+class RemoteModel(ApiModel):
+    provider: str
+    id: str
+    name: str
+    kind: ModelKind
+    creator: str | None
+    nsfw: bool
+    tags: list[str]
+    download_count: int
+    page_url: str | None
+    versions: list[RemoteModelVersion]
+
+
+class ModelSearchPage(ApiModel):
+    items: list[RemoteModel]
+    next_cursor: str | None
+
+
+class InstallRequest(ApiModel):
+    """Install (download unless already present) one file of a provider model version."""
+
+    provider: str
+    version_id: str
+    file_id: str | None = Field(default=None, description="Default: the primary downloadable file of the version.")
+
+
+class InstalledModel(ApiModel):
+    """A model file present on disk, ready to be registered in the library store."""
+
+    kind: ModelKind
+    name: str = Field(
+        description="Display name (library entry name, download title): '<model name> - <version name>'."
+    )
+    path: str
+    source: ModelSource
+
+
+class InstallResponse(ApiModel):
+    state: InstallState
+    task_id: str | None = Field(description="Download task (state 'downloading'): follow it on /ws/tasks.")
+    installed: InstalledModel | None = Field(description="Set when state is 'installed'.")
+
+
+class InstallJob(ApiModel):
+    """An install whose download is still running (lets the frontend resume tracking after a reload)."""
+
+    task_id: str
+    provider: str
+    model_id: str
+    version_id: str
+    file_id: str
+    kind: ModelKind
+    title: str = Field(description="Same display name as InstalledModel.name and the download task title.")
 
 
 # ---------------------------------------------------------------------------

@@ -1,0 +1,486 @@
+{
+  "items": [
+    {
+      "id": 7808,
+      "name": "EasyNegative",
+      "coverImageId": null,
+      "sfwCoverImageId": null,
+      "description": "<p><a target=\"_blank\" rel=\"ugc\" href=\"https://huggingface.co/datasets/gsdf/EasyNegative\"><strong>Original Hugging Face Repository</strong></a><br /><strong>Coun...",
+      "allowNoCredit": true,
+      "allowCommercialUse": [
+        "Image",
+        "RentCivit",
+        "Rent",
+        "Sell",
+        "SellMerge"
+      ],
+      "allowDerivatives": true,
+      "allowDifferentLicense": false,
+      "type": "TextualInversion",
+      "minor": false,
+      "sfwOnly": false,
+      "poi": false,
+      "nsfw": false,
+      "nsfwLevel": 1,
+      "availability": "Public",
+      "userId": 3193,
+      "hasActivePaidAccess": false,
+      "hasSfwFace": false,
+      "baseModels": [
+        "SD 1.5"
+      ],
+      "cosmetic": null,
+      "eventDecoration": null,
+      "supportsGeneration": true,
+      "stats": {
+        "downloadCount": 763442,
+        "thumbsUpCount": 51473,
+        "thumbsDownCount": 76,
+        "commentCount": 161,
+        "tippedAmountCount": 2032
+      },
+      "creator": {
+        "username": "rqdwdw",
+        "image": "https://image.civitai.com/xG1nkqKTMzGDvpLrqFT7WA/6b458341-b194-4e30-f4ec-907e5f668600/width=96/rqdwdw.jpeg"
+      },
+      "tags": [
+        "anime",
+        "negative",
+        "negative embedding",
+        "textual inversion",
+        "embedding",
+        "tool"
+      ],
+      "modelVersions": [
+        {
+          "id": 9208,
+          "index": 0,
+          "name": "EasyNegative",
+          "baseModel": "SD 1.5",
+          "baseModelType": "Standard",
+          "publishedAt": "2023-02-10T12:56:41.356Z",
+          "flags": 0,
+          "availability": "Public",
+          "nsfwLevel": 1,
+          "description": "<p><strong>This embedding should be used in your NEGATIVE prompt. Adjust the strength as desired (seems to scale well without any distortions), the strength req...",
+          "trainedWords": [
+            "easynegative"
+          ],
+          "vaeId": null,
+          "coveredNext": true,
+          "paidAccess": null,
+          "stats": {
+            "downloadCount": 709287,
+            "thumbsUpCount": 29305,
+            "thumbsDownCount": 75
+          },
+          "supportsGeneration": true,
+          "files": [
+            {
+              "id": 8955,
+              "sizeKB": 24.0771484375,
+              "name": "easynegative.safetensors",
+              "overrideName": null,
+              "type": "Model",
+              "pickleScanResult": "Success",
+              "pickleScanMessage": "No Pickle imports",
+              "virusScanResult": "Success",
+              "virusScanMessage": null,
+              "scannedAt": "2023-02-10T13:01:00.347Z",
+              "metadata": {
+                "format": "SafeTensor",
+                "size": "full",
+                "fp": "fp16"
+              },
+              "hashes": {
+                "AutoV2": "C74B4E810B",
+                "SHA256": "C74B4E810B030F6B75FDE959E2DB678C268D07115B85356D3C0138BA5EB42340",
+                "CRC32": "9B6C6647",
+                "BLAKE3": "EDC4D4CA619F612417FC4B463B3B2864E42E8CC5F291835E1312F2A6C8923507",
+                "SHA256_12": "C74B4E810B03"
+              },
+              "downloadUrl": "https://civitai.com/api/download/models/9208",
+              "primary": true
+            }
+          ],
+          "images": [
+            {
+              "id": 88246,
+              "url": "https://image.civitai.com/xG1nkqKTMzGDvpLrqFT7WA/a2505a48-8eed-4b12-b6a0-6a8ec7e0c600/original=true/88246.jpeg",
+              "nsfwLevel": 1,
+              "width": 3387,
+              "height": 1930,
+              "hash": "UnLNiM~q?v?axtafaybGofWVfkn%%2afj[f+",
+              "type": "image",
+              "minor": false,
+              "poi": false,
+              "hasMeta": false,
+              "hasPositivePrompt": false,
+              "onSite": false,
+              "remixOfId": null
+            }
+          ],
+          "downloadUrl": "https://civitai.com/api/download/models/9208"
+        },
+        {
+          "id": 9536,
+          "index": 1,
+          "name": "EasyNegative_pt",
+          "baseModel": "SD 1.5",
+          "baseModelType": "Standard",
+          "publishedAt": "2023-02-11T20:17:16.421Z",
+          "flags": 0,
+          "availability": "Public",
+          "nsfwLevel": 1,
+          "description": "<p><strong>PickleTensor (pt) version for those who can't use SafeTensors.</strong><br /><br /><strong>This embedding should be used in your NEGATIVE prompt. Adj...",
+          "trainedWords": [
+            "easynegative"
+          ],
+          "vaeId": null,
+          "coveredNext": true,
+          "paidAccess": null,
+          "stats": {
+            "downloadCount": 54155,
+            "thumbsUpCount": 24162,
+            "thumbsDownCount": 1
+          },
+          "supportsGeneration": true,
+          "files": [
+            {
+              "id": 9235,
+              "sizeKB": 24.7294921875,
+              "name": "easynegative.pt",
+              "overrideName": null,
+              "type": "Model",
+              "pickleScanResult": "Success",
+              "pickleScanMessage": "No Pickle imports",
+              "virusScanResult": "Success",
+              "virusScanMessage": null,
+              "scannedAt": "2023-02-11T20:21:02.465Z",
+              "metadata": {
+                "format": "PickleTensor",
+                "size": "full",
+                "fp": "fp16"
+              },
+              "hashes": {
+                "AutoV2": "66A7279A88",
+                "SHA256": "66A7279A88DD0CB17AFBC88560540C638336D5783FD6B191C53C0D654E25B9DB",
+                "CRC32": "B6D1BAE9",
+                "BLAKE3": "AF0C6780949960AFABF44E1339CB515B9BE94FC091382DA8F90EF7F59E8AA6FA",
+                "SHA256_12": "66A7279A88DD"
+              },
+              "downloadUrl": "https://civitai.com/api/download/models/9536",
+              "primary": true
+            }
+          ],
+          "images": [
+            {
+              "id": 91997,
+              "url": "https://image.civitai.com/xG1nkqKTMzGDvpLrqFT7WA/bf650aea-0db1-4b0c-9191-9a48be35d700/original=true/91997.jpeg",
+              "nsfwLevel": 1,
+              "width": 3387,
+              "height": 1930,
+              "hash": "UnLNiM~q?v?axtafaybHofWVfkn%%2afj[f+",
+              "type": "image",
+              "minor": false,
+              "poi": false,
+              "hasMeta": false,
+              "hasPositivePrompt": false,
+              "onSite": false,
+              "remixOfId": null
+            }
+          ],
+          "downloadUrl": "https://civitai.com/api/download/models/9536"
+        }
+      ]
+    },
+    {
+      "id": 4629,
+      "name": "Deep Negative V1.x",
+      "coverImageId": null,
+      "sfwCoverImageId": null,
+      "description": "<p>This embedding will tell you what is <strong>REALLY DISGUSTING</strong>🤢🤮</p><p>So please put it in <strong><u>negative prompt</u></strong>😜</p><p></p><p><u>...",
+      "allowNoCredit": false,
+      "allowCommercialUse": [
+        "Image",
+        "RentCivit",
+        "Rent"
+      ],
+      "allowDerivatives": true,
+      "allowDifferentLicense": false,
+      "type": "TextualInversion",
+      "minor": false,
+      "sfwOnly": false,
+      "poi": false,
+      "nsfw": false,
+      "nsfwLevel": 7,
+      "availability": "Public",
+      "userId": 23676,
+      "hasActivePaidAccess": false,
+      "hasSfwFace": false,
+      "baseModels": [
+        "SD 1.5"
+      ],
+      "cosmetic": null,
+      "eventDecoration": null,
+      "supportsGeneration": true,
+      "stats": {
+        "downloadCount": 523436,
+        "thumbsUpCount": 31797,
+        "thumbsDownCount": 35,
+        "commentCount": 92,
+        "tippedAmountCount": 12223
+      },
+      "creator": {
+        "username": "lenML",
+        "image": "https://image.civitai.com/xG1nkqKTMzGDvpLrqFT7WA/2265f4f4-99d9-4412-96c5-75e55ac61d1b/width=96/lenML.jpeg"
+      },
+      "tags": [
+        "concept",
+        "negative",
+        "negative embedding"
+      ],
+      "modelVersions": [
+        {
+          "id": 5637,
+          "index": 0,
+          "name": "V1 75T",
+          "baseModel": "SD 1.5",
+          "baseModelType": "Standard",
+          "publishedAt": "2023-01-20T14:18:30.815Z",
+          "flags": 0,
+          "availability": "Public",
+          "nsfwLevel": 5,
+          "description": "<p>put it in <strong>negative</strong> prompts</p>",
+          "trainedWords": [
+            "ng_deepnegative_v1_75t"
+          ],
+          "vaeId": null,
+          "coveredNext": true,
+          "paidAccess": null,
+          "stats": {
+            "downloadCount": 495243,
+            "thumbsUpCount": 22106,
+            "thumbsDownCount": 35
+          },
+          "supportsGeneration": true,
+          "files": [
+            {
+              "id": 5845,
+              "sizeKB": 225.9169921875,
+              "name": "ng_deepnegative_v1_75t.pt",
+              "overrideName": null,
+              "type": "Model",
+              "pickleScanResult": "Success",
+              "pickleScanMessage": "No Pickle imports",
+              "virusScanResult": "Success",
+              "virusScanMessage": null,
+              "scannedAt": "2025-09-26T02:22:12.824Z",
+              "metadata": {
+                "format": "PickleTensor"
+              },
+              "hashes": {
+                "AutoV2": "54E7E4826D",
+                "SHA256": "54E7E4826D53949A3D0DDE40AEA023B1E456A618C608A7630E3999FD38F93245",
+                "CRC32": "0C1E6878",
+                "BLAKE3": "CD204591E66D17AFB31359C6EFEE88AAA20B5B257F06F284BB57CF4BB939914E",
+                "AutoV3": "62B8AA280449",
+                "SHA256_12": "54E7E4826D53"
+              },
+              "downloadUrl": "https://civitai.com/api/download/models/5637?type=Model&format=PickleTensor"
+            },
+            {
+              "id": 1186961,
+              "sizeKB": 225.0859375,
+              "name": "ng_deepnegative_v1_75t.safetensors",
+              "overrideName": null,
+              "type": "Model",
+              "pickleScanResult": "Success",
+              "pickleScanMessage": "No Pickle imports",
+              "virusScanResult": "Success",
+              "virusScanMessage": null,
+              "scannedAt": "2025-09-26T02:22:17.502Z",
+              "metadata": {
+                "format": "SafeTensor"
+              },
+              "hashes": {
+                "AutoV2": "4FFF59D544",
+                "SHA256": "4FFF59D544381804F989FA1DB606DCE90E1A31070FB8B74EE7238508DDC88BBB",
+                "CRC32": "ED7C99EF",
+                "BLAKE3": "EE4BA4390320A6EB31CE568913B2BE98242513B4D106A3EACCBBB97EC245961E",
+                "AutoV3": "557D9F1BE31D",
+                "SHA256_12": "4FFF59D54438"
+              },
+              "downloadUrl": "https://civitai.com/api/download/models/5637",
+              "primary": true
+            }
+          ],
+          "images": [
+            {
+              "id": 45554,
+              "url": "https://image.civitai.com/xG1nkqKTMzGDvpLrqFT7WA/117e30bd-c869-4735-3d02-512881a98e00/original=true/45554.jpeg",
+              "nsfwLevel": 1,
+              "width": 2048,
+              "height": 904,
+              "hash": "UbK^]GsoS2rs_NWEn$t7_3WVWqWB?cWBoMNG",
+              "type": "image",
+              "minor": false,
+              "poi": false,
+              "hasMeta": true,
+              "hasPositivePrompt": true,
+              "onSite": false,
+              "remixOfId": null
+            }
+          ],
+          "downloadUrl": "https://civitai.com/api/download/models/5637"
+        },
+        {
+          "id": 5638,
+          "index": 1,
+          "name": "V1 64T",
+          "baseModel": "SD 1.5",
+          "baseModelType": "Standard",
+          "publishedAt": "2023-01-20T14:18:30.815Z",
+          "flags": 0,
+          "availability": "Public",
+          "nsfwLevel": 5,
+          "description": "<p>put it in <strong>negative</strong> prompts</p>",
+          "trainedWords": [
+            "ng_deepnegative_v1_64t"
+          ],
+          "vaeId": null,
+          "coveredNext": true,
+          "paidAccess": null,
+          "stats": {
+            "downloadCount": 8560,
+            "thumbsUpCount": 10192,
+            "thumbsDownCount": 1
+          },
+          "supportsGeneration": true,
+          "files": [
+            {
+              "id": 5846,
+              "sizeKB": 192.9169921875,
+              "name": "ng_deepnegative_v1_64t.pt",
+              "overrideName": null,
+              "type": "Model",
+              "pickleScanResult": "Success",
+              "pickleScanMessage": "No Pickle imports",
+              "virusScanResult": "Success",
+              "virusScanMessage": null,
+              "scannedAt": "2025-09-26T02:22:20.655Z",
+              "metadata": {
+                "format": "PickleTensor",
+                "size": "full",
+                "fp": "fp16"
+              },
+              "hashes": {
+                "AutoV2": "3F2693E926",
+                "SHA256": "3F2693E92692B4CC01E9C3166986DB52C215AB4DF68BE8C8424E41F9BBD4C070",
+                "CRC32": "18BC0D5C",
+                "BLAKE3": "706A60B05ABD23B973269FB51B684E92DBF41B37F623337F958AECF5CF3CEDA0",
+                "AutoV3": "06FA57B529FF",
+                "SHA256_12": "3F2693E92692"
+              },
+              "downloadUrl": "https://civitai.com/api/download/models/5638",
+              "primary": true
+            }
+          ],
+          "images": [
+            {
+              "id": 45557,
+              "url": "https://image.civitai.com/xG1nkqKTMzGDvpLrqFT7WA/aeee4c92-4793-44d2-efe4-1489cdc11000/original=true/45557.jpeg",
+              "nsfwLevel": 1,
+              "width": 1536,
+              "height": 893,
+              "hash": "UbH.7;s:kCWV?bRjj[of?bayjtj[~qWBoLof",
+              "type": "image",
+              "minor": false,
+              "poi": false,
+              "hasMeta": true,
+              "hasPositivePrompt": true,
+              "onSite": false,
+              "remixOfId": null
+            }
+          ],
+          "downloadUrl": "https://civitai.com/api/download/models/5638"
+        },
+        {
+          "id": 5287,
+          "index": 2,
+          "name": "V1 2T",
+          "baseModel": "SD 1.5",
+          "baseModelType": "Standard",
+          "publishedAt": "2023-01-16T12:50:42.292Z",
+          "flags": 0,
+          "availability": "Public",
+          "nsfwLevel": 3,
+          "description": "<p>put it in <strong>negative</strong> prompts</p>",
+          "trainedWords": [
+            "ng_deepnegative_v1_2t"
+          ],
+          "vaeId": null,
+          "coveredNext": true,
+          "paidAccess": null,
+          "stats": {
+            "downloadCount": 5223,
+            "thumbsUpCount": 117,
+            "thumbsDownCount": 0
+          },
+          "supportsGeneration": true,
+          "files": [
+            {
+              "id": 5432,
+              "sizeKB": 6.9169921875,
+              "name": "ng_deepnegative_v1_2t.pt",
+              "overrideName": null,
+              "type": "Model",
+              "pickleScanResult": "Success",
+              "pickleScanMessage": "No Pickle imports",
+              "virusScanResult": "Success",
+              "virusScanMessage": null,
+              "scannedAt": "2025-09-26T02:22:12.671Z",
+              "metadata": {
+                "format": "PickleTensor",
+                "size": "full",
+                "fp": "fp16"
+              },
+              "hashes": {
+                "AutoV2": "43483653FD",
+                "SHA256": "43483653FD2ABC807AFF08F95D31CE62B3A3CF9C2A2FE43D0C6760DEE55ED8E6",
+                "CRC32": "AA3376C6",
+                "BLAKE3": "AE3646135D6D5AB9DDF7C7F4982D4416DC7CE76A04BFC10B67774642BE1D4697",
+                "AutoV3": "0AC3095A0C84",
+                "SHA256_12": "43483653FD2A"
+              },
+              "downloadUrl": "https://civitai.com/api/download/models/5287",
+              "primary": true
+            }
+          ],
+          "images": [
+            {
+              "id": 40960,
+              "url": "https://image.civitai.com/xG1nkqKTMzGDvpLrqFT7WA/b474ecd6-170b-4842-b494-0007423ab800/original=true/40960.jpeg",
+              "nsfwLevel": 1,
+              "width": 2432,
+              "height": 3161,
+              "hash": "UdK^~f~q_3?ut7j[a|jst7ayWBayt7ayjsj[",
+              "type": "image",
+              "minor": false,
+              "poi": false,
+              "hasMeta": false,
+              "hasPositivePrompt": false,
+              "onSite": false,
+              "remixOfId": null
+            }
+          ],
+          "downloadUrl": "https://civitai.com/api/download/models/5287"
+        }
+      ]
+    }
+  ],
+  "metadata": {
+    "nextCursor": "458232|14566|1302719",
+    "nextPage": "https://civitai.com/api/v1/models?limit=2&types=TextualInversion&sort=Most%20Downloaded&nsfw=false&cursor=458232%7C14566%7C1302719"
+  }
+}

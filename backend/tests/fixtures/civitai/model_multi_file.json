@@ -1,0 +1,533 @@
+{
+  "id": 4201,
+  "name": "Realistic Vision V6.0 B1",
+  "coverImageId": null,
+  "sfwCoverImageId": null,
+  "description": "<p><strong><span style=\"color:rgb(21, 170, 191)\">Check my exclusive models on Mage: </span></strong><a target=\"_blank\" rel=\"ugc\" href=\"https://www.mage.space/pl...",
+  "allowNoCredit": false,
+  "allowCommercialUse": [
+    "Image",
+    "RentCivit",
+    "Rent"
+  ],
+  "allowDerivatives": true,
+  "allowDifferentLicense": false,
+  "type": "Checkpoint",
+  "minor": false,
+  "sfwOnly": false,
+  "poi": false,
+  "nsfw": false,
+  "nsfwLevel": 15,
+  "availability": "Public",
+  "userId": 26957,
+  "hasActivePaidAccess": false,
+  "hasSfwFace": false,
+  "baseModels": [
+    "SD 1.5 Hyper",
+    "SD 1.5"
+  ],
+  "cosmetic": null,
+  "eventDecoration": null,
+  "supportsGeneration": true,
+  "stats": {
+    "downloadCount": 2378910,
+    "thumbsUpCount": 53036,
+    "thumbsDownCount": 98,
+    "commentCount": 790,
+    "tippedAmountCount": 115916
+  },
+  "creator": {
+    "username": "SG_161222",
+    "image": "https://image.civitai.com/xG1nkqKTMzGDvpLrqFT7WA/41ce091f-1006-491f-916d-873a9c80dfde/width=96/SG_161222.jpeg"
+  },
+  "tags": [
+    "photorealistic",
+    "anatomical",
+    "base model",
+    "cgi",
+    "realistic",
+    "semi-realistic"
+  ],
+  "modelVersions": [
+    {
+      "id": 501240,
+      "index": 0,
+      "name": "V5.1 Hyper (VAE)",
+      "baseModel": "SD 1.5 Hyper",
+      "baseModelType": "Standard",
+      "createdAt": "2024-05-12T06:04:22.202Z",
+      "publishedAt": "2024-05-12T06:24:13.109Z",
+      "status": "Published",
+      "flags": 0,
+      "availability": "Public",
+      "nsfwLevel": 15,
+      "covered": false,
+      "coveredNext": true,
+      "stats": {
+        "downloadCount": 837281,
+        "thumbsUpCount": 12757,
+        "thumbsDownCount": 46
+      },
+      "files": [
+        {
+          "id": 418901,
+          "sizeKB": 2082642.474609375,
+          "name": "Realistic_Vision_V5.1_Hyper_pruned.safetensors",
+          "overrideName": null,
+          "type": "Model",
+          "pickleScanResult": "Success",
+          "pickleScanMessage": "No Pickle imports",
+          "virusScanResult": "Success",
+          "virusScanMessage": null,
+          "scannedAt": "2024-05-12T06:16:19.321Z",
+          "metadata": {
+            "format": "SafeTensor",
+            "size": "pruned",
+            "fp": "fp16"
+          },
+          "hashes": {
+            "AutoV1": "A0F13C83",
+            "AutoV2": "F47E942AD4",
+            "SHA256": "F47E942AD4C30D863AD7F53CB60145FFCD2118845DFA705CE8BD6B42E90C4A13",
+            "CRC32": "9119C539",
+            "BLAKE3": "97BB91D4C347EFFFDCE381837617DF287C04B1E8586BB35FD45693B097AC4168",
+            "AutoV3": "5E2986E4C989",
+            "SHA256_12": "F47E942AD4C3"
+          },
+          "downloadUrl": "https://civitai.com/api/download/models/501240?fileId=418901",
+          "primary": true
+        },
+        {
+          "id": 418904,
+          "sizeKB": 4165133.80078125,
+          "name": "Realistic_Vision_V5.1_Hyper.safetensors",
+          "overrideName": null,
+          "type": "Model",
+          "pickleScanResult": "Success",
+          "pickleScanMessage": "No Pickle imports",
+          "virusScanResult": "Success",
+          "virusScanMessage": null,
+          "scannedAt": "2024-05-12T06:22:29.988Z",
+          "metadata": {
+            "format": "SafeTensor",
+            "size": "full",
+            "fp": "fp16"
+          },
+          "hashes": {
+            "AutoV1": "CC0BF18A",
+            "AutoV2": "0928B30687",
+            "SHA256": "0928B30687250B4CA459ADF9735BDEABBC0933B1E4E6FD352DF0A7D15596053F",
+            "CRC32": "96FDA26D",
+            "BLAKE3": "481FF4D5ECB6E727658E56B8FC55389B6728A95DFCA082BED1E8B7073488E275",
+            "AutoV3": "37F6D9E4FD62",
+            "SHA256_12": "0928B3068725"
+          },
+          "downloadUrl": "https://civitai.com/api/download/models/501240?fileId=418904"
+        }
+      ],
+      "images": [
+        {
+          "url": "https://image.civitai.com/xG1nkqKTMzGDvpLrqFT7WA/5403901a-3e55-4aa2-b1a5-958aba35223b/original=true/12221833.jpeg",
+          "nsfwLevel": 2,
+          "width": 1024,
+          "height": 1536,
+          "hash": "UCH24bRkUG4.~p_3_2tSENadIUnhM{D%RQjF",
+          "type": "image",
+          "minor": false,
+          "poi": false,
+          "hasMeta": true,
+          "hasPositivePrompt": true,
+          "onSite": false,
+          "remixOfId": null
+        }
+      ],
+      "downloadUrl": "https://civitai.com/api/download/models/501240",
+      "description": null
+    },
+    {
+      "id": 501286,
+      "index": 1,
+      "name": "V5.1 Hyper-Inpaint (VAE)",
+      "baseModel": "SD 1.5 Hyper",
+      "baseModelType": "Inpainting",
+      "createdAt": "2024-05-12T06:48:50.525Z",
+      "publishedAt": "2024-05-12T07:02:08.427Z",
+      "status": "Published",
+      "flags": 0,
+      "availability": "Public",
+      "nsfwLevel": 1,
+      "covered": false,
+      "coveredNext": false,
+      "stats": {
+        "downloadCount": 59436,
+        "thumbsUpCount": 408,
+        "thumbsDownCount": 2
+      },
+      "files": [
+        {
+          "id": 418955,
+          "sizeKB": 2082695.26171875,
+          "name": "Realistic_Vision_V5.1_Hyper_Inpainting_pruned.safetensors",
+          "overrideName": null,
+          "type": "Model",
+          "pickleScanResult": "Success",
+          "pickleScanMessage": "No Pickle imports",
+          "virusScanResult": "Success",
+          "virusScanMessage": null,
+          "scannedAt": "2024-05-12T07:01:17.460Z",
+          "metadata": {
+            "format": "SafeTensor",
+            "size": "pruned",
+            "fp": "fp16"
+          },
+          "hashes": {
+            "AutoV1": "422CC347",
+            "AutoV2": "CB372C8795",
+            "SHA256": "CB372C879506C865B000BAA3944CC8A4C7E8E3248D2150634989E9F9B6448AA4",
+            "CRC32": "A26894C8",
+            "BLAKE3": "D7B7E9E7B5DE7CD8544E424B97BCFB0D24C4FDD9A35437CA946C29DABEEC3AAA",
+            "AutoV3": "CADE261CB3C1",
+            "SHA256_12": "CB372C879506"
+          },
+          "downloadUrl": "https://civitai.com/api/download/models/501286?fileId=418955",
+          "primary": true
+        },
+        {
+          "id": 418958,
+          "sizeKB": 4165238.15234375,
+          "name": "Realistic_Vision_V5.1_Hyper_Inpainting.safetensors",
+          "overrideName": null,
+          "type": "Model",
+          "pickleScanResult": "Success",
+          "pickleScanMessage": "No Pickle imports",
+          "virusScanResult": "Success",
+          "virusScanMessage": null,
+          "scannedAt": "2024-05-12T07:07:01.840Z",
+          "metadata": {
+            "format": "SafeTensor",
+            "size": "full",
+            "fp": "fp16"
+          },
+          "hashes": {
+            "AutoV1": "9766EE48",
+            "AutoV2": "7417B4EC2D",
+            "SHA256": "7417B4EC2D9888AED340D2ABAAE8D4AC36037FECEAE1838121D506FF547374B7",
+            "CRC32": "BF21DC63",
+            "BLAKE3": "F1F94F966F37667124DFC50B664E4F8DEB7E82B4F047967AE2EF0D7FFF73B206",
+            "AutoV3": "4211930B2BFB",
+            "SHA256_12": "7417B4EC2D98"
+          },
+          "downloadUrl": "https://civitai.com/api/download/models/501286?fileId=418958"
+        }
+      ],
+      "images": [
+        {
+          "url": "https://image.civitai.com/xG1nkqKTMzGDvpLrqFT7WA/14f129fe-ed7b-402e-be55-8a7988116a6f/original=true/12224341.jpeg",
+          "nsfwLevel": 1,
+          "width": 1024,
+          "height": 1536,
+          "hash": "UCFYV|Ipl-9G~p.8_2-;x]s,MxRPM_MyaLM{",
+          "type": "image",
+          "minor": false,
+          "poi": false,
+          "hasMeta": true,
+          "hasPositivePrompt": true,
+          "onSite": false,
+          "remixOfId": null
+        }
+      ],
+      "downloadUrl": "https://civitai.com/api/download/models/501286",
+      "description": null
+    },
+    {
+      "id": 130072,
+      "index": 2,
+      "name": "V5.1 (VAE)",
+      "baseModel": "SD 1.5",
+      "baseModelType": "Standard",
+      "createdAt": "2023-07-31T08:00:27.426Z",
+      "publishedAt": "2023-07-31T08:27:16.052Z",
+      "status": "Published",
+      "flags": 0,
+      "availability": "Public",
+      "nsfwLevel": 7,
+      "description": "<p>The required VAE is already baked into the model.<br /><br />This version (Code_1284) is a fix for many issues of 5.0 (<u>artifacts, ugly faces, masculine fe...",
+      "covered": false,
+      "coveredNext": true,
+      "stats": {
+        "downloadCount": 499985,
+        "thumbsUpCount": 4631,
+        "thumbsDownCount": 32
+      },
+      "files": [
+        {
+          "id": 94300,
+          "sizeKB": 4165379.6484375,
+          "name": "Realistic_Vision_V5.1.ckpt",
+          "overrideName": null,
+          "type": "Model",
+          "pickleScanResult": "Success",
+          "pickleScanMessage": "No Pickle imports",
+          "virusScanResult": "Success",
+          "virusScanMessage": null,
+          "scannedAt": "2023-07-31T08:27:30.586Z",
+          "metadata": {
+            "format": "PickleTensor",
+            "size": "full",
+            "fp": "fp16"
+          },
+          "hashes": {
+            "AutoV1": "F95D2E44",
+            "AutoV2": "139AC005D4",
+            "SHA256": "139AC005D4D1E33C6335F5651ABB3D2E4654DC0520AEDFEA07909BDD20435518",
+            "CRC32": "38FEBCD3",
+            "BLAKE3": "205A6ADCDEA77D98089653AA3372FB30EC38E93C46B79B0A9B00B2A07A704B7C",
+            "SHA256_12": "139AC005D4D1"
+          },
+          "downloadUrl": "https://civitai.com/api/download/models/130072?fileId=94300"
+        },
+        {
+          "id": 94298,
+          "sizeKB": 2082642.474609375,
+          "name": "Realistic_Vision_V5.1_fp16-no-ema.safetensors",
+          "overrideName": null,
+          "type": "Model",
+          "pickleScanResult": "Success",
+          "pickleScanMessage": "No Pickle imports",
+          "virusScanResult": "Success",
+          "virusScanMessage": null,
+          "scannedAt": "2023-07-31T08:16:29.099Z",
+          "metadata": {
+            "format": "SafeTensor",
+            "size": "pruned",
+            "fp": "fp16"
+          },
+          "hashes": {
+            "AutoV1": "A0F13C83",
+            "AutoV2": "15012C538F",
+            "SHA256": "15012C538F503CE2EBFC2C8547B268C75CCDAFF7A281DB55399940FF1D70E21D",
+            "CRC32": "FFE8B9E1",
+            "BLAKE3": "013543ADE69517662AC86E97A113B994679F33CD69B573D68C4D51F5457C9528",
+            "SHA256_12": "15012C538F50"
+          },
+          "downloadUrl": "https://civitai.com/api/download/models/130072?fileId=94298",
+          "primary": true
+        },
+        {
+          "id": 94297,
+          "sizeKB": 2082928.98046875,
+          "name": "Realistic_Vision_V5.1_fp16-no-ema.ckpt",
+          "overrideName": null,
+          "type": "Model",
+          "pickleScanResult": "Success",
+          "pickleScanMessage": "No Pickle imports",
+          "virusScanResult": "Success",
+          "virusScanMessage": null,
+          "scannedAt": "2023-07-31T08:16:32.785Z",
+          "metadata": {
+            "format": "PickleTensor",
+            "size": "pruned",
+            "fp": "fp16"
+          },
+          "hashes": {
+            "AutoV1": "8D37CF83",
+            "AutoV2": "392DEF60E4",
+            "SHA256": "392DEF60E49AE3E5C3A5EE64407DBAF7609C8A4E88ECB771340077BB14538097",
+            "CRC32": "FB65ACCE",
+            "BLAKE3": "E23DFFA7C790F2FD1131414DE595C22A43E53061D88024FBA093024E3B0C22BA",
+            "SHA256_12": "392DEF60E49A"
+          },
+          "downloadUrl": "https://civitai.com/api/download/models/130072?fileId=94297"
+        },
+        {
+          "id": 94301,
+          "sizeKB": 4165133.78515625,
+          "name": "Realistic_Vision_V5.1.safetensors",
+          "overrideName": null,
+          "type": "Model",
+          "pickleScanResult": "Success",
+          "pickleScanMessage": "No Pickle imports",
+          "virusScanResult": "Success",
+          "virusScanMessage": null,
+          "scannedAt": "2023-07-31T08:29:01.776Z",
+          "metadata": {
+            "format": "SafeTensor",
+            "size": "full",
+            "fp": "fp32"
+          },
+          "hashes": {
+            "AutoV1": "F4744654",
+            "AutoV2": "EF76AA2332",
+            "SHA256": "EF76AA2332635F4352463343BEEC9C5AAE3BD107A73C0FD7221ABBBCF8BD5470",
+            "CRC32": "7CD88778",
+            "BLAKE3": "E6B27DA73992D0594560BB7F7FCF5781405211A4ABDACEBE127A8BE4D1C11B3A",
+            "SHA256_12": "EF76AA233263"
+          },
+          "downloadUrl": "https://civitai.com/api/download/models/130072?fileId=94301"
+        }
+      ],
+      "images": [
+        {
+          "url": "https://image.civitai.com/xG1nkqKTMzGDvpLrqFT7WA/0dcee20e-415c-42c3-92bc-d596f9b45289/original=true/2375288.jpeg",
+          "nsfwLevel": 1,
+          "width": 640,
+          "height": 960,
+          "hash": "UMD+l7~qAcpJI;tR?a%M9aM{w]xFWBt6xuof",
+          "type": "image",
+          "minor": false,
+          "poi": false,
+          "hasMeta": true,
+          "hasPositivePrompt": true,
+          "onSite": false,
+          "remixOfId": null
+        }
+      ],
+      "downloadUrl": "https://civitai.com/api/download/models/130072"
+    },
+    {
+      "id": 130090,
+      "index": 3,
+      "name": "V5.1-inpainting (VAE)",
+      "baseModel": "SD 1.5",
+      "baseModelType": "Inpainting",
+      "createdAt": "2023-07-31T08:41:24.282Z",
+      "publishedAt": "2023-07-31T09:03:08.591Z",
+      "status": "Published",
+      "flags": 0,
+      "availability": "Public",
+      "nsfwLevel": 1,
+      "description": "<p><strong><u>NOT FOR TRAINING!</u></strong></p><p>Model for <strong>inpainting</strong> and <strong>outpainting</strong>.<br />Make sure that the model name ha...",
+      "covered": false,
+      "coveredNext": false,
+      "stats": {
+        "downloadCount": 80151,
+        "thumbsUpCount": 7746,
+        "thumbsDownCount": 1
+      },
+      "files": [
+        {
+          "id": 94320,
+          "sizeKB": 2082695.099609375,
+          "name": "Realistic_Vision_V5.1_fp16-no-ema-inpainting.safetensors",
+          "overrideName": null,
+          "type": "Model",
+          "pickleScanResult": "Success",
+          "pickleScanMessage": "No Pickle imports",
+          "virusScanResult": "Success",
+          "virusScanMessage": null,
+          "scannedAt": "2023-07-31T08:56:53.925Z",
+          "metadata": {
+            "format": "SafeTensor",
+            "size": "pruned",
+            "fp": "fp16"
+          },
+          "hashes": {
+            "AutoV1": "B7AA5C67",
+            "AutoV2": "F0D4872D24",
+            "SHA256": "F0D4872D24835C04E6C20840A17D043A3A4FA52AEA0D327AA32850A3FABAF191",
+            "CRC32": "5E23FC44",
+            "BLAKE3": "7C3BB6BF07086EA6AEBDF8F9DBD8EFD334CB3A457E04CC27EE65E416D0669775",
+            "SHA256_12": "F0D4872D2483"
+          },
+          "downloadUrl": "https://civitai.com/api/download/models/130090?fileId=94320",
+          "primary": true
+        },
+        {
+          "id": 94328,
+          "sizeKB": 2083067.963867188,
+          "name": "Realistic_Vision_V5.1_fp16-no-ema-inpainting.ckpt",
+          "overrideName": null,
+          "type": "Model",
+          "pickleScanResult": "Success",
+          "pickleScanMessage": "No Pickle imports",
+          "virusScanResult": "Success",
+          "virusScanMessage": null,
+          "scannedAt": "2023-07-31T09:07:29.961Z",
+          "metadata": {
+            "format": "PickleTensor",
+            "size": "pruned",
+            "fp": "fp16"
+          },
+          "hashes": {
+            "AutoV1": "7F32F810",
+            "AutoV2": "9069A162AE",
+            "SHA256": "9069A162AE7D49C8D21BFC7F1363C05BF22DA2CBCB9312FC3B12CF3F7CB28C02",
+            "CRC32": "B93CFC2E",
+            "BLAKE3": "E3D106CB5B904291662B90D743BA8A78D87545187ECAFBEDD9B3CD3EC68F74E8",
+            "SHA256_12": "9069A162AE7D"
+          },
+          "downloadUrl": "https://civitai.com/api/download/models/130090?fileId=94328"
+        },
+        {
+          "id": 94324,
+          "sizeKB": 4165238.15234375,
+          "name": "Realistic_Vision_V5.1-inpainting.safetensors",
+          "overrideName": null,
+          "type": "Model",
+          "pickleScanResult": "Success",
+          "pickleScanMessage": "No Pickle imports",
+          "virusScanResult": "Success",
+          "virusScanMessage": null,
+          "scannedAt": "2023-07-31T09:03:37.073Z",
+          "metadata": {
+            "format": "SafeTensor",
+            "size": "full",
+            "fp": "fp16"
+          },
+          "hashes": {
+            "AutoV1": "9766EE48",
+            "AutoV2": "4DAFABA867",
+            "SHA256": "4DAFABA867B2BD894BF3E1F075A5F68CCB9209DFF9ACA75E01F8826F7F9EDD1F",
+            "CRC32": "885C731A",
+            "BLAKE3": "2C88B772D424A41E23474E2F37250CBDAC93651273E6E83E307DAC9030E1F252",
+            "SHA256_12": "4DAFABA867B2"
+          },
+          "downloadUrl": "https://civitai.com/api/download/models/130090?fileId=94324"
+        },
+        {
+          "id": 94323,
+          "sizeKB": 4165507.79296875,
+          "name": "Realistic_Vision_V5.1-inpainting.ckpt",
+          "overrideName": null,
+          "type": "Model",
+          "pickleScanResult": "Success",
+          "pickleScanMessage": "No Pickle imports",
+          "virusScanResult": "Success",
+          "virusScanMessage": null,
+          "scannedAt": "2023-07-31T09:04:00.490Z",
+          "metadata": {
+            "format": "PickleTensor",
+            "size": "full",
+            "fp": "fp16"
+          },
+          "hashes": {
+            "AutoV1": "92CB1FDE",
+            "AutoV2": "9AE8E9632C",
+            "SHA256": "9AE8E9632C05FC45B6DA168AC4C25CDF6CA59BA3CD487B08974B5B2A54839629",
+            "CRC32": "1E660039",
+            "BLAKE3": "3676676ED03E221D2DEC29FF16B46F8C1C3BC6A0E16FE819C3763CC789EBA900",
+            "SHA256_12": "9AE8E9632C05"
+          },
+          "downloadUrl": "https://civitai.com/api/download/models/130090?fileId=94323"
+        }
+      ],
+      "images": [
+        {
+          "url": "https://image.civitai.com/xG1nkqKTMzGDvpLrqFT7WA/11f42321-1c67-493b-873f-25563a3b6821/original=true/1804915.jpeg",
+          "nsfwLevel": 1,
+          "width": 640,
+          "height": 960,
+          "hash": "UMDv4g~qAbpII;tR?a%M9aM{w]xFaet7tRof",
+          "type": "image",
+          "minor": false,
+          "poi": false,
+          "hasMeta": true,
+          "hasPositivePrompt": true,
+          "onSite": false,
+          "remixOfId": null
+        }
+      ],
+      "downloadUrl": "https://civitai.com/api/download/models/130090"
+    }
+  ]
+}
