@@ -99,6 +99,89 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/images/favorites": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List Favorite Images
+         * @description The local favorites collection, newest first.
+         */
+        get: operations["list_favorite_images_api_images_favorites_get"];
+        /**
+         * Add Favorite Image
+         * @description Saves (or refreshes and moves to the front) an image in the favorites.
+         */
+        put: operations["add_favorite_image_api_images_favorites_put"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/images/favorites/{provider}/{image_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        /** Remove Favorite Image */
+        delete: operations["remove_favorite_image_api_images_favorites__provider___image_id__delete"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/images/resolve": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Resolve Image Resources
+         * @description The provider model version of each resource (files carry local_path), in order; a resource that cannot
+         *     be resolved carries an error instead of failing the request.
+         */
+        post: operations["resolve_image_resources_api_images_resolve_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/images/search": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Search Images
+         * @description One page of online images with their generation data and resources (keyword search: see
+         *     services/image_library.py).
+         */
+        get: operations["search_images_api_images_search_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/models/info": {
         parameters: {
             query?: never;
@@ -571,6 +654,18 @@ export interface components {
             prompt_id: string | null;
         };
         /**
+         * FavoriteImage
+         * @description An image saved to the local favorites collection (<data dir>/image_favorites.json, backend-owned).
+         */
+        FavoriteImage: {
+            image: components["schemas"]["RemoteImage"];
+            /**
+             * Saved At
+             * Format: date-time
+             */
+            saved_at: string;
+        };
+        /**
          * ForbiddenMatcher
          * @description One side of a forbidden rule. Also the persisted format of the frontend forbidden-rules store.
          */
@@ -604,8 +699,11 @@ export interface components {
             guidance_scale: number;
             /** Height */
             height: number;
-            /** Loras */
-            loras?: components["schemas"]["LoRASpec-Input"][];
+            /**
+             * Loras
+             * @description Active LoRAs (selected + prompt-linked, unique) with their weights.
+             */
+            loras?: components["schemas"]["GenerationLoRA"][];
             model: components["schemas"]["ModelSpec-Input"];
             /**
              * Negative Prompt
@@ -692,6 +790,24 @@ export interface components {
             width: number;
         };
         /**
+         * GenerationLoRA
+         * @description A library LoRA requested for a generation with its weight (LoRASpec fields + LoraWeight.weight).
+         */
+        GenerationLoRA: {
+            /** Id */
+            id: string;
+            /** Name */
+            name: string;
+            /** Path */
+            path: string;
+            source?: components["schemas"]["ModelSource"] | null;
+            /**
+             * Weight
+             * @default 1
+             */
+            weight: number;
+        };
+        /**
          * GenerationSelection
          * @description One category -> sub-prompt choice used for a generation (stored in output metadata).
          */
@@ -776,6 +892,133 @@ export interface components {
             status: "ok";
         };
         /**
+         * ImageGenerationParams
+         * @description Generation data published with an image (every field null when absent).
+         */
+        ImageGenerationParams: {
+            /** Cfg Scale */
+            cfg_scale: number | null;
+            /**
+             * Clean Prompt
+             * @description prompt without its inline LoRA tags (diffusion_lora_runtime.prompt_lora.strip_prompt_lora_tags): the text the frontend splits into tags.
+             */
+            clean_prompt: string | null;
+            /** Clip Skip */
+            clip_skip: number | null;
+            /** Height */
+            height: number | null;
+            /** Negative Prompt */
+            negative_prompt: string | null;
+            /**
+             * Prompt
+             * @description Prompt as published (inline <lora:...> tags included).
+             */
+            prompt: string | null;
+            /** Sampler */
+            sampler: string | null;
+            /** Seed */
+            seed: number | null;
+            /** Steps */
+            steps: number | null;
+            /** Width */
+            width: number | null;
+        };
+        /**
+         * ImageResource
+         * @description A model an image was generated with, as its metadata publishes it (the provider merges its resource lists
+         *     and the inline <lora:name:weight> tags of the prompt into one entry per model).
+         */
+        ImageResource: {
+            /**
+             * Hash
+             * @description Published file hash, lowercase hex: a SHA-256 (64) or a short provider hash (Civitai AutoV2 10 / AutoV3 12); resolvable with the provider's find_by_hash.
+             */
+            hash: string | null;
+            /**
+             * Kind
+             * @enum {string}
+             */
+            kind: "checkpoint" | "lora" | "embedding";
+            /**
+             * Name
+             * @description Name written in the image metadata (often the file name without extension).
+             */
+            name: string | null;
+            /**
+             * Version Id
+             * @description Provider model version id, when published.
+             */
+            version_id: string | null;
+            /**
+             * Weight
+             * @description Published weight (LoRAs); null when the image publishes none.
+             */
+            weight: number | null;
+        };
+        /** ImageSearchPage */
+        ImageSearchPage: {
+            /** Items */
+            items: components["schemas"]["RemoteImage"][];
+            /** Next Cursor */
+            next_cursor: string | null;
+        };
+        /**
+         * ImageSearchQuery
+         * @description Query parameters of GET /api/images/search.
+         *
+         *     Civitai's image API has no free-text filter (it ignores a `query` parameter), so a non-empty `query` is a
+         *     keyword search through the model catalog: services/image_library.py searches the LoRAs and checkpoints
+         *     matching the keyword and pages through their image galleries. `period` only applies to the unfiltered feed
+         *     (an empty `query`): Civitai answers empty or partial pages for a gallery + period.
+         */
+        ImageSearchQuery: {
+            /**
+             * Cursor
+             * @description ImageSearchPage.next_cursor of the previous page (opaque).
+             * @default null
+             */
+            cursor: string | null;
+            /**
+             * Limit
+             * @default 20
+             */
+            limit: number;
+            /**
+             * Nsfw
+             * @description False: only images rated safe (Civitai nsfwLevel <= 2).
+             * @default false
+             */
+            nsfw: boolean;
+            /**
+             * Period
+             * @default week
+             * @enum {string}
+             */
+            period: "day" | "week" | "month" | "year" | "all_time";
+            /**
+             * Provider
+             * @default civitai
+             */
+            provider: string;
+            /**
+             * Query
+             * @default
+             */
+            query: string;
+            /**
+             * Sort
+             * @default most_reactions
+             * @enum {string}
+             */
+            sort: "most_reactions" | "most_comments" | "most_collected" | "newest";
+            /**
+             * Usable Only
+             * @description Only images made with a base model the local runtime can load (BaseModelOption.architecture).
+             * @default true
+             */
+            usable_only: boolean;
+        };
+        /**
          * InstallJob
          * @description An install whose download is still running (lets the frontend resume tracking after a reload).
          */
@@ -856,22 +1099,15 @@ export interface components {
          */
         LibraryState: {
             /** Loras */
-            loras: components["schemas"]["LoRASpec-Output"][];
+            loras: components["schemas"]["LoRASpec"][];
             /** Models */
             models: components["schemas"]["ModelSpec-Output"][];
         };
-        /** LoRASpec */
-        "LoRASpec-Input": {
-            /** Id */
-            id: string;
-            /** Name */
-            name: string;
-            /** Path */
-            path: string;
-            source?: components["schemas"]["ModelSource"] | null;
-        };
-        /** LoRASpec */
-        "LoRASpec-Output": {
+        /**
+         * LoRASpec
+         * @description A LoRA library entry (the frontend library store owns the library).
+         */
+        LoRASpec: {
             /** Id */
             id: string;
             /** Name */
@@ -879,6 +1115,53 @@ export interface components {
             /** Path */
             path: string;
             source: components["schemas"]["ModelSource"] | null;
+        };
+        /**
+         * LoraWeight
+         * @description A LoRA applied with a weight: THE representation of per-LoRA weights, end to end. The frontend library
+         *     store's selection ('library-store' selectedLoras) holds these, GenerateRequest.loras carries them with the
+         *     library entry (GenerationLoRA), OutputRecord.active_loras records them, and services/runtime_adapter.py passes
+         *     the weight to the runtime LoRASpec.
+         */
+        LoraWeight: {
+            /**
+             * Id
+             * @description LoRA library entry id (LoRASpec.id).
+             */
+            id: string;
+            /**
+             * Weight
+             * @default 1
+             */
+            weight: number;
+        };
+        /**
+         * LoraWeightDefaults
+         * @description The single definition of per-LoRA weights: the default weight (also used for LoRAs requested without one:
+         *     selections persisted before weights existed, prompt-linked LoRAs, images that publish no weight), the
+         *     accepted range and the UI step. Exported to the frontend as LORA_WEIGHT_DEFAULTS.
+         */
+        LoraWeightDefaults: {
+            /**
+             * Max
+             * @default 10
+             */
+            max: number;
+            /**
+             * Min
+             * @default -10
+             */
+            min: number;
+            /**
+             * Step
+             * @default 0.05
+             */
+            step: number;
+            /**
+             * Weight
+             * @default 1
+             */
+            weight: number;
         };
         /**
          * ModelDirs
@@ -1082,8 +1365,11 @@ export interface components {
          *     The image itself is served by GET /api/outputs/{output_id}/image.
          */
         OutputRecord: {
-            /** Active Lora Ids */
-            active_lora_ids: string[];
+            /**
+             * Active Loras
+             * @description LoRAs applied (selected + prompt-linked) with their weights. Files written before per-LoRA weights hold `active_lora_ids` instead: they load as weight LORA_WEIGHT_DEFAULTS.weight.
+             */
+            active_loras: components["schemas"]["LoraWeight"][];
             /**
              * Generated At
              * Format: date-time
@@ -1279,6 +1565,51 @@ export interface components {
              */
             variant: string | null;
         };
+        /** RemoteImage */
+        RemoteImage: {
+            /**
+             * Architecture
+             * @description Local runtime family of base_model; null when it cannot be loaded locally or is unknown.
+             */
+            architecture: ("sd15" | "sdxl") | null;
+            /** Base Model */
+            base_model: string | null;
+            /** Created At */
+            created_at: string | null;
+            /** Height */
+            height: number | null;
+            /** Id */
+            id: string;
+            /**
+             * Nsfw
+             * @description Rated above the safe level (Civitai nsfwLevel > 2).
+             */
+            nsfw: boolean;
+            /** Page Url */
+            page_url: string;
+            /** @description null when the image publishes no generation data. */
+            params: components["schemas"]["ImageGenerationParams"] | null;
+            /** Provider */
+            provider: string;
+            /** Reaction Count */
+            reaction_count: number;
+            /** Resources */
+            resources: components["schemas"]["ImageResource"][];
+            /**
+             * Thumbnail Url
+             * @description Grid-sized image URL.
+             */
+            thumbnail_url: string;
+            /**
+             * Url
+             * @description Full-size image URL.
+             */
+            url: string;
+            /** Username */
+            username: string | null;
+            /** Width */
+            width: number | null;
+        };
         /** RemoteModel */
         RemoteModel: {
             /** Creator */
@@ -1335,6 +1666,35 @@ export interface components {
              * @description Why this version cannot be installed (model_providers/base.py); null when it can.
              */
             unavailable_reason: string | null;
+        };
+        /**
+         * ResolveImageResourcesRequest
+         * @description Look up the models of an image (RemoteImage.resources) at their provider.
+         */
+        ResolveImageResourcesRequest: {
+            /** Provider */
+            provider: string;
+            /** Resources */
+            resources: components["schemas"]["ImageResource"][];
+        };
+        /**
+         * ResolvedImageResource
+         * @description One ImageResource looked up at its provider (by version id, else by hash), in request order.
+         */
+        ResolvedImageResource: {
+            /**
+             * Error
+             * @description Why it is unresolved: no version id or hash published, unknown at the provider, provider error.
+             */
+            error: string | null;
+            /** @description The model with versions == [the resolved version] (files carry local_path); null when unresolved. */
+            model: components["schemas"]["RemoteModel"] | null;
+            resource: components["schemas"]["ImageResource"];
+            /**
+             * Sha256
+             * @description SHA-256 of the file the image used when known: the published SHA-256, else the resolved version's default file hash.
+             */
+            sha256: string | null;
         };
         /**
          * TaskSnapshot
@@ -1508,6 +1868,198 @@ export interface operations {
                 content: {
                     "application/json": components["schemas"]["HealthResponse"];
                 };
+            };
+        };
+    };
+    list_favorite_images_api_images_favorites_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["FavoriteImage"][];
+                };
+            };
+        };
+    };
+    add_favorite_image_api_images_favorites_put: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["RemoteImage"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["FavoriteImage"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    remove_favorite_image_api_images_favorites__provider___image_id__delete: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                provider: string;
+                image_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["OkResponse"];
+                };
+            };
+            /** @description No such favorite */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    resolve_image_resources_api_images_resolve_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ResolveImageResourcesRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ResolvedImageResource"][];
+                };
+            };
+            /** @description Unknown provider, model, version or hash */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    search_images_api_images_search_get: {
+        parameters: {
+            query?: {
+                provider?: string;
+                query?: string;
+                sort?: "most_reactions" | "most_comments" | "most_collected" | "newest";
+                period?: "day" | "week" | "month" | "year" | "all_time";
+                /** @description False: only images rated safe (Civitai nsfwLevel <= 2). */
+                nsfw?: boolean;
+                /** @description Only images made with a base model the local runtime can load (BaseModelOption.architecture). */
+                usable_only?: boolean;
+                limit?: number;
+                /** @description ImageSearchPage.next_cursor of the previous page (opaque). */
+                cursor?: string | null;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ImageSearchPage"];
+                };
+            };
+            /** @description The provider requires an API token, or rejected the stored one */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Unknown provider, model, version or hash */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Invalid parameters or cursor */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description The provider could not be reached or answered an error */
+            502: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
             };
         };
     };

@@ -64,7 +64,7 @@ export type GenerationInputs = {
 	categories: readonly Category[];
 	rules: readonly ForbiddenRule[];
 	settings: GenerationSettings;
-	library: Pick<LibraryData, 'models' | 'loras' | 'selectedModelId' | 'selectedLoraIds'>;
+	library: Pick<LibraryData, 'models' | 'loras' | 'selectedModelId' | 'selectedLoras'>;
 };
 
 export type BuiltGenerationRequest = {
@@ -105,10 +105,11 @@ export function buildGenerationRequest({ categories, rules, settings, library }:
 	}
 
 	const knownLoraIds = new Set(makeLoraMap(library).keys());
-	const loraResolution = resolveLoraSelection(library, library.selectedLoraIds, selections);
+	const loraResolution = resolveLoraSelection(library, library.selectedLoras, selections);
 	const requestSelections = filterSelectionLoraIds(selections, knownLoraIds);
 	const request: GenerateRequest = {
 		model,
+		// Selected LoRAs with their selected weight, then prompt-linked ones at the default weight.
 		loras: loraResolution.activeLoras,
 		prompt: requestSelections
 			.map((item) => item.prompt_text)

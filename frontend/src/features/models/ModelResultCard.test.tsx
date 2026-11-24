@@ -2,7 +2,7 @@ import { screen, within } from '@testing-library/react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import type { RemoteModel, RemoteModelVersion } from '../../api/types';
 import { useLibraryStore } from '../../stores/libraryStore';
-import { useModelCatalogStore, useVersionStatus, type VersionStatus } from '../../stores/modelCatalogStore';
+import { useModelCatalogStore, useVersionStatus, type InstallOutcome, type VersionStatus } from '../../stores/modelCatalogStore';
 import { renderWithProviders } from '../../test/render';
 import { ModelResultCard } from './ModelResultCard';
 import { downloadProgress, GB, installEntry, remoteFile, remoteModel, remoteVersion, versionStatus } from '../../test/modelLibraryData';
@@ -15,7 +15,7 @@ vi.mock('../../stores/modelCatalogStore', async (importOriginal) => {
 
 function seedActions() {
 	const actions = {
-		install: vi.fn(async () => undefined),
+		install: vi.fn(async (): Promise<InstallOutcome> => ({ status: 'cancelled' })),
 		cancelInstall: vi.fn(async () => undefined),
 		dismissInstallError: vi.fn(),
 		pickVersion: vi.fn(),
@@ -105,12 +105,12 @@ describe('ModelResultCard', () => {
 		seedActions();
 		const lora = remoteModel({ kind: 'lora', name: 'Lora One' });
 		withStatus(() => ({ kind: 'in_library', libraryEntryId: 'lora-one' }));
-		useLibraryStore.setState({ selectedModelId: 'lora-one', selectedLoraIds: [] });
+		useLibraryStore.setState({ selectedModelId: 'lora-one', selectedLoras: [] });
 		const { unmount } = renderWithProviders(<ModelResultCard model={lora} />);
 		expect(screen.getByText('In library')).toBeInTheDocument();
 		unmount();
 
-		useLibraryStore.setState({ selectedLoraIds: ['lora-one'] });
+		useLibraryStore.setState({ selectedLoras: [{ id: 'lora-one', weight: 0.6 }] });
 		renderWithProviders(<ModelResultCard model={lora} />);
 		expect(screen.getByText('Selected')).toBeInTheDocument();
 		expect(screen.getByText('LoRA')).toBeInTheDocument();

@@ -19,32 +19,34 @@ import type {
 	TaskEvent,
 } from '../api/types';
 import { findEntryBySource } from '../domain/library';
+import { joinPromptTags } from '../domain/text';
 import {
-	appendResults,
 	buildSearchQuery,
 	DEFAULT_CATALOG_FILTERS,
 	embeddingPromptToken,
+	INSTALL_ALREADY_RUNNING,
 	installFile,
 	installKey,
+	installOptions,
 	isInstallRunning,
 	modelKey,
 	pickedVersion,
-	triggerWordsText,
 	versionStatusKind,
 	type CatalogFilters,
+	type InstallOptions,
+	type InstallOutcome,
 	type InstallPhase,
 	type VersionStatusKind,
 } from '../domain/modelCatalog';
 import { copyTextWithFeedback } from './clipboardActions';
 import { useLibraryStore } from './libraryStore';
 import { describeError, reportError, useNotificationsStore } from './notificationsStore';
+import { createPagedSearch, type LoadStatus, type PagedSearchActions, type SearchStatus } from './pagedSearch';
 import { useDownloadProgress, useTasksStore, type DownloadProgress } from './tasksStore';
 
-export type LoadStatus = 'idle' | 'loading' | 'ready' | 'failed';
-export type SearchStatus = 'idle' | 'loading' | 'loadingMore' | 'ready' | 'failed';
-
-/** Defined in src/domain/modelCatalog.ts (with RUNNING_INSTALL_PHASES / isInstallRunning). */
-export type { InstallPhase } from '../domain/modelCatalog';
+/** Defined in src/domain/modelCatalog.ts (with RUNNING_INSTALL_PHASES / isInstallRunning, installOptions,
+ *  installOutcomeEntry). */
+export type { InstallOptions, InstallOutcome, InstallPhase } from '../domain/modelCatalog';
 
 export type InstallEntry = {
 	key: string;
@@ -83,8 +85,8 @@ export type ModelCatalogActions = {
 	activate: () => Promise<void>;
 	/** Reloads the provider info (token state). */
 	loadInfo: () => Promise<void>;
-	/** Updates the query text and searches again after SEARCH_DEBOUNCE_MS of inactivity (timer owned here). */
-	setQuery: (query: string) => void;
+	/** Updates the query text and searches again after SEARCH_DEBOUNCE_MS of inactivity (src/stores/pagedSearch.ts). */
+	setQuery: PagedSearchActions['setQuery'];
 	/** The other filters search again immediately. */
 	setKinds: (kinds: ModelKind[]) => void;
 	setBaseModels: (baseModels: string[]) => void;
@@ -92,30 +94,32 @@ export type ModelCatalogActions = {
 	setNsfw: (nsfw: boolean) => void;
 	/** Searches from the first page (aborting the request in flight; stale answers are ignored). The current
 	 *  results stay visible while it loads; a failure clears them (searchError set, no notification). */
-	search: () => Promise<void>;
+	search: PagedSearchActions['search'];
 	/** Appends the next page (no-op without nextCursor or while a search runs). A failure keeps the results. */
-	loadMore: () => Promise<void>;
+	loadMore: PagedSearchActions['loadMore'];
 	pickVersion: (modelKey: string, versionId: string) => void;
 	/** Select -> use: api.installModel({provider, version_id, file_id}); 'installed' -> useLibraryStore.registerInstalled
-	 *  (selects it; embeddings: info notification with embeddingPromptToken) + success notification naming
-	 *  InstalledModel.name (display names come from the backend: InstalledModel.name, DownloadTaskEvent.title);
-	 *  'downloading' -> phase 'downloading' + taskId, useTasksStore.waitForTask(taskId): complete -> phase
-	 *  'registering', api.installModel again, register; error -> phase 'failed' with the event message (+ an error
-	 *  notification: the pane may be closed); cancelled -> entry removed. API errors -> phase 'failed' + reportError.
-	 *  No-op while the same installKey runs. Refused upfront (failed entry + warning) when version.unavailable_reason
-	 *  is set. Resolves when the install ended; never rejects. */
-	install: (model: RemoteModel, version: RemoteModelVersion, fileId?: string | null) => Promise<void>;
+	 *  (selects it unless options.select is false) + when options.announce (default true): success notification
+	 *  naming InstalledModel.name (embeddings: info notification with embeddingPromptToken; display names come from
+	 *  the backend: InstalledModel.name, DownloadTaskEvent.title); 'downloading' -> phase 'downloading' + taskId,
+	 *  useTasksStore.waitForTask(taskId): complete -> phase 'registering', api.installModel again, register; error ->
+	 *  phase 'failed' with the event message (+ an error notification: the pane may be closed); cancelled -> entry
+	 *  removed. API errors -> phase 'failed' + reportError. Refused upfront (failed entry + warning) when
+	 *  version.unavailable_reason is set. A second install of a running installKey joins it: it returns the running
+	 *  install's promise (whose options apply). Resolves to the InstallOutcome when the install ended; never rejects. */
+	install: (model: RemoteModel, version: RemoteModelVersion, fileId?: string | null, options?: InstallOptions) => Promise<InstallOutcome>;
 	/** api.cancelDownload(taskId) of a downloading install (the task then ends 'cancelled'). A 404 (the backend runs
 	 *  no such download any more, e.g. after a backend restart) removes the install; other errors are reported. */
 	cancelInstall: (key: string) => Promise<void>;
 	dismissInstallError: (key: string) => void;
-	/** Boot (session store): api.listInstalls() and follow each running install as install() would (kind and ids
-	 *  come from the InstallJob). Failures are ignored (the backend may not know any install); never rejects. */
+	/** Boot (session store): api.listInstalls() and follow each running install with install()'s engine and default
+	 *  options (kind and ids come from the InstallJob; an install() of the same key then joins it). Failures are
+	 *  ignored (the backend may not know any install); never rejects. */
 	resumeInstalls: () => Promise<void>;
 	/** api.setProviderToken(provider, token) (null/'' removes it), then the info's provider entry is replaced
 	 *  by the answer. Success/failure notifications; the token itself is never kept in any store. */
 	setProviderToken: (provider: string, token: string | null) => Promise<void>;
-	/** Copies trigger words (joined by triggerWordsText of src/domain/modelCatalog.ts) through
+	/** Copies trigger words (joined by joinPromptTags of src/domain/text.ts) through
 	 *  copyTextWithFeedback (src/stores/clipboardActions.ts). Used by result cards and local library entries. */
 	copyTriggerWords: (words: readonly string[]) => Promise<void>;
 	/** Copies the prompt text using an installed embedding (embeddingPromptToken(path)). */
@@ -124,21 +128,9 @@ export type ModelCatalogActions = {
 
 export type ModelCatalogStore = ModelCatalogState & ModelCatalogActions;
 
-export const SEARCH_DEBOUNCE_MS = 350;
-
-/** The search request in flight (aborted by the next one) and the sequence number of the latest request:
- *  an answer is applied only while its request is still the latest (stale answers are ignored). */
-let searchController: AbortController | null = null;
-let searchSequence = 0;
-/** Pending debounced search of setQuery (cleared by every search). */
-let queryTimer: ReturnType<typeof setTimeout> | null = null;
-
-function clearQueryTimer(): void {
-	if (queryTimer !== null) {
-		clearTimeout(queryTimer);
-		queryTimer = null;
-	}
-}
+/** The promise of each running install by installKey (install() of a running key joins it). Removed when the
+ *  install ends; only joined while the store's entry is running (the store state is the truth of what runs). */
+const runningInstalls = new Map<string, Promise<InstallOutcome>>();
 
 const DOWNLOAD_FAILED = 'The download failed.';
 
@@ -156,32 +148,11 @@ function downloadTitle(event: TaskEvent): string {
 }
 
 export const useModelCatalogStore = create<ModelCatalogStore>()((set, get) => {
-	/** Searches one page: cursor null = the first page (replaces the results), else the next one (appended). */
-	const fetchPage = async (cursor: string | null): Promise<void> => {
-		searchController?.abort();
-		const controller = new AbortController();
-		searchController = controller;
-		const sequence = ++searchSequence;
-		set(cursor === null ? { searchStatus: 'loading', searchError: null, nextCursor: null } : { searchStatus: 'loadingMore', searchError: null });
-		try {
-			const page = await api.searchModels(buildSearchQuery(get().filters, cursor), controller.signal);
-			if (sequence === searchSequence) {
-				set((state) => ({
-					results: appendResults(cursor === null ? [] : state.results, page.items),
-					nextCursor: page.next_cursor,
-					searchStatus: 'ready',
-				}));
-			}
-		} catch (error) {
-			if (sequence === searchSequence) {
-				set({ searchStatus: 'failed', searchError: describeError(error), ...(cursor === null ? { results: [] } : {}) });
-			}
-		} finally {
-			if (searchController === controller) {
-				searchController = null;
-			}
-		}
-	};
+	const pagedSearch = createPagedSearch<RemoteModel, CatalogFilters>(set, get, {
+		fetchPage: (filters, cursor, signal) => api.searchModels(buildSearchQuery(filters, cursor), signal),
+		keyOf: modelKey,
+		describeError,
+	});
 
 	const updateFilters = (patch: Partial<CatalogFilters>) => {
 		set((state) => ({ filters: { ...state.filters, ...patch } }));
@@ -206,22 +177,26 @@ export const useModelCatalogStore = create<ModelCatalogStore>()((set, get) => {
 			return { installs };
 		});
 
-	/** The file is local: registered (and selected) in the library, announced, and its install entry removed. */
-	const completeInstall = (key: string, installed: InstalledModel) => {
-		useLibraryStore.getState().registerInstalled(installed);
+	/** The file is local: registered (and selected unless options.select is false) in the library, announced (unless
+	 *  options.announce is false), and its install entry removed. */
+	const completeInstall = (key: string, installed: InstalledModel, options: Required<InstallOptions>): InstallOutcome => {
+		const entryId = useLibraryStore.getState().registerInstalled(installed, { select: options.select });
 		removeInstall(key);
-		const { notify } = useNotificationsStore.getState();
-		if (installed.kind === 'embedding') {
-			notify('info', `${installed.name} is ready: write ${embeddingPromptToken(installed.path)} in a prompt to use it.`);
-		} else {
-			notify('success', `${installed.name} is ready and selected for generation.`);
+		if (options.announce) {
+			const { notify } = useNotificationsStore.getState();
+			if (installed.kind === 'embedding') {
+				notify('info', `${installed.name} is ready: write ${embeddingPromptToken(installed.path)} in a prompt to use it.`);
+			} else {
+				notify('success', options.select ? `${installed.name} is ready and selected for generation.` : `${installed.name} is ready.`);
+			}
 		}
+		return { status: 'installed', installed, entryId };
 	};
 
-	/** Drives an install entry to its end (shared by install and resumeInstalls): phase 'checking' asks the backend
-	 *  (api.installModel), phase 'downloading' follows the download task (useTasksStore.waitForTask), then the
-	 *  install is requested again to get the InstalledModel. Never throws. */
-	const runInstall = async (entry: InstallEntry): Promise<void> => {
+	/** Drives an install entry to its end: phase 'checking' asks the backend (api.installModel), phase 'downloading'
+	 *  follows the download task (useTasksStore.waitForTask), then the install is requested again to get the
+	 *  InstalledModel. Never throws. */
+	const runInstall = async (entry: InstallEntry, options: Required<InstallOptions>): Promise<InstallOutcome> => {
 		const { key } = entry;
 		const request: InstallRequest = { provider: entry.provider, version_id: entry.versionId, file_id: entry.fileId };
 		try {
@@ -229,8 +204,7 @@ export const useModelCatalogStore = create<ModelCatalogStore>()((set, get) => {
 			if (entry.phase === 'checking') {
 				const response = await api.installModel(request);
 				if (response.state === 'installed') {
-					completeInstall(key, installedOf(response));
-					return;
+					return completeInstall(key, installedOf(response), options);
 				}
 				taskId = response.task_id;
 				patchInstall(key, { phase: 'downloading', taskId });
@@ -241,21 +215,45 @@ export const useModelCatalogStore = create<ModelCatalogStore>()((set, get) => {
 			const event = await useTasksStore.getState().waitForTask(taskId);
 			if (event.stage === 'cancelled') {
 				removeInstall(key);
-				return;
+				return { status: 'cancelled' };
 			}
 			if (event.stage === 'error') {
 				const message = event.message || DOWNLOAD_FAILED;
 				const title = downloadTitle(event);
 				patchInstall(key, { phase: 'failed', error: message });
 				useNotificationsStore.getState().notify('error', title ? `${title}: ${message}` : message, { title: 'Download failed' });
-				return;
+				return { status: 'failed', error: message };
 			}
 			patchInstall(key, { phase: 'registering' });
-			completeInstall(key, installedOf(await api.installModel(request)));
+			return completeInstall(key, installedOf(await api.installModel(request)), options);
 		} catch (error) {
-			patchInstall(key, { phase: 'failed', error: describeError(error) });
+			const message = describeError(error);
+			patchInstall(key, { phase: 'failed', error: message });
 			reportError(error, 'Install failed');
+			return { status: 'failed', error: message };
 		}
+	};
+
+	/** The one install engine (install and resumeInstalls): stores the entry and runs it, its promise registered in
+	 *  runningInstalls until it ends. */
+	const startInstall = (entry: InstallEntry, options: Required<InstallOptions>): Promise<InstallOutcome> => {
+		putInstall(entry);
+		const running = runInstall(entry, options).finally(() => {
+			if (runningInstalls.get(entry.key) === running) {
+				runningInstalls.delete(entry.key);
+			}
+		});
+		runningInstalls.set(entry.key, running);
+		return running;
+	};
+
+	/** The promise of the install running under `key` (joined by install), null when none runs. A running entry
+	 *  without known promise (cannot happen through the actions) is reported as refused. */
+	const joinRunningInstall = (key: string): Promise<InstallOutcome> | null => {
+		if (!isInstallRunning(get().installs[key]?.phase)) {
+			return null;
+		}
+		return runningInstalls.get(key) ?? Promise.resolve({ status: 'refused', reason: INSTALL_ALREADY_RUNNING });
 	};
 
 	return {
@@ -288,34 +286,11 @@ export const useModelCatalogStore = create<ModelCatalogStore>()((set, get) => {
 			}
 		},
 
-		setQuery: (query) => {
-			if (query === get().filters.query) {
-				return;
-			}
-			set((state) => ({ filters: { ...state.filters, query } }));
-			clearQueryTimer();
-			queryTimer = setTimeout(() => {
-				queryTimer = null;
-				void get().search();
-			}, SEARCH_DEBOUNCE_MS);
-		},
+		...pagedSearch,
 		setKinds: (kinds) => updateFilters({ kinds: [...kinds] }),
 		setBaseModels: (baseModels) => updateFilters({ base_models: [...baseModels] }),
 		setSort: (sort) => updateFilters({ sort }),
 		setNsfw: (nsfw) => updateFilters({ nsfw }),
-
-		search: () => {
-			clearQueryTimer();
-			return fetchPage(null);
-		},
-
-		loadMore: async () => {
-			const { nextCursor, searchStatus } = get();
-			if (nextCursor === null || searchStatus === 'loading' || searchStatus === 'loadingMore') {
-				return;
-			}
-			await fetchPage(nextCursor);
-		},
 
 		pickVersion: (key, versionId) => {
 			if (get().pickedVersionIds[key] !== versionId) {
@@ -323,10 +298,11 @@ export const useModelCatalogStore = create<ModelCatalogStore>()((set, get) => {
 			}
 		},
 
-		install: async (model, version, fileId = null) => {
+		install: (model, version, fileId = null, options) => {
 			const key = installKey(model.provider, version, fileId);
-			if (isInstallRunning(get().installs[key]?.phase)) {
-				return;
+			const running = joinRunningInstall(key);
+			if (running) {
+				return running;
 			}
 			const entry: InstallEntry = {
 				key,
@@ -339,13 +315,13 @@ export const useModelCatalogStore = create<ModelCatalogStore>()((set, get) => {
 				taskId: null,
 				error: null,
 			};
-			if (version.unavailable_reason) {
-				putInstall({ ...entry, phase: 'failed', error: version.unavailable_reason });
-				useNotificationsStore.getState().notify('warning', version.unavailable_reason, { title: `${model.name} cannot be installed` });
-				return;
+			const reason = version.unavailable_reason;
+			if (reason) {
+				putInstall({ ...entry, phase: 'failed', error: reason });
+				useNotificationsStore.getState().notify('warning', reason, { title: `${model.name} cannot be installed` });
+				return Promise.resolve({ status: 'refused', reason });
 			}
-			putInstall(entry);
-			await runInstall(entry);
+			return startInstall(entry, installOptions(options));
 		},
 
 		cancelInstall: async (key) => {
@@ -396,8 +372,7 @@ export const useModelCatalogStore = create<ModelCatalogStore>()((set, get) => {
 						taskId: job.task_id,
 						error: null,
 					};
-					putInstall(entry);
-					return runInstall(entry);
+					return startInstall(entry, installOptions());
 				}),
 			);
 		},
@@ -418,7 +393,7 @@ export const useModelCatalogStore = create<ModelCatalogStore>()((set, get) => {
 			}
 		},
 
-		copyTriggerWords: (words) => copyTextWithFeedback(triggerWordsText(words), 'Trigger words'),
+		copyTriggerWords: (words) => copyTextWithFeedback(joinPromptTags(words), 'Trigger words'),
 		copyEmbeddingToken: (path) => copyTextWithFeedback(embeddingPromptToken(path), 'Embedding token'),
 	};
 });

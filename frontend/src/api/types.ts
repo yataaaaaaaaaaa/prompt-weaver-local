@@ -8,13 +8,20 @@ type Schemas = components['schemas'];
 // Library
 export type ModelSpec = Schemas['ModelSpec-Output'];
 export type ModelSpecInput = Schemas['ModelSpec-Input'];
-export type LoRASpec = Schemas['LoRASpec-Output'];
-export type LoRASpecInput = Schemas['LoRASpec-Input'];
+/** A LoRA library entry. */
+export type LoRASpec = Schemas['LoRASpec'];
 export type LibraryState = Schemas['LibraryState'];
 export type TorchDType = ModelSpec['torch_dtype'];
 /** Provenance of a library entry installed from an online provider (null for local files). */
 export type ModelSource = Schemas['ModelSource'];
 export type GenerationDefaults = Schemas['GenerationDefaults'];
+
+// Per-LoRA weights (backend LoraWeight: the one representation used by the library store selection, the
+// generation request, output metadata and the runtime call; range/default in LORA_WEIGHT_DEFAULTS).
+export type LoraWeight = Schemas['LoraWeight'];
+export type LoraWeightDefaults = Schemas['LoraWeightDefaults'];
+/** A library LoRA requested for a generation: LoRASpec fields + weight. */
+export type GenerationLoRA = Schemas['GenerationLoRA'];
 
 // Forbidden rules (also the persisted format of the forbidden-rules store)
 export type ForbiddenMatcher = Schemas['ForbiddenMatcher'];
@@ -63,6 +70,18 @@ export type InstallResponse = Schemas['InstallResponse'];
 export type InstallState = InstallResponse['state'];
 export type InstalledModel = Schemas['InstalledModel'];
 export type InstallJob = Schemas['InstallJob'];
+
+// Image library (online images, their models, favorites)
+export type ImageSearchQuery = Schemas['ImageSearchQuery'];
+export type ImageSort = ImageSearchQuery['sort'];
+export type ImagePeriod = ImageSearchQuery['period'];
+export type ImageSearchPage = Schemas['ImageSearchPage'];
+export type RemoteImage = Schemas['RemoteImage'];
+export type ImageGenerationParams = Schemas['ImageGenerationParams'];
+export type ImageResource = Schemas['ImageResource'];
+export type ResolveImageResourcesRequest = Schemas['ResolveImageResourcesRequest'];
+export type ResolvedImageResource = Schemas['ResolvedImageResource'];
+export type FavoriteImage = Schemas['FavoriteImage'];
 
 // Persisted stores / bootstrap
 export type PersistedStoreEnvelope = Schemas['PersistedStoreEnvelope-Output'];

@@ -16,6 +16,26 @@ export const GENERATION_DEFAULTS: Readonly<components['schemas']['GenerationDefa
 	"width": 1024
 });
 
+/** Defaults of the backend schema ImageSearchQuery. */
+export const IMAGE_SEARCH_QUERY_DEFAULTS: Readonly<components['schemas']['ImageSearchQuery']> = Object.freeze({
+	"cursor": null,
+	"limit": 20,
+	"nsfw": false,
+	"period": "week",
+	"provider": "civitai",
+	"query": "",
+	"sort": "most_reactions",
+	"usable_only": true
+});
+
+/** Defaults of the backend schema LoraWeightDefaults. */
+export const LORA_WEIGHT_DEFAULTS: Readonly<components['schemas']['LoraWeightDefaults']> = Object.freeze({
+	"max": 10,
+	"min": -10,
+	"step": 0.05,
+	"weight": 1
+});
+
 /** Defaults of the backend schema ModelSearchQuery. */
 export const MODEL_SEARCH_QUERY_DEFAULTS: Readonly<components['schemas']['ModelSearchQuery']> = Object.freeze({
 	"base_models": [],

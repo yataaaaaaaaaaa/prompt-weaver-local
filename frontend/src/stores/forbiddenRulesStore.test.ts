@@ -34,7 +34,7 @@ function record(selections: GenerationSelection[]): OutputRecord {
 		image_path: 'D:/out/0000000001.png',
 		metadata_path: 'D:/out/0000000001.json',
 		model_id: 'model',
-		active_lora_ids: [],
+		active_loras: [],
 		prompt: selections.map((item) => item.prompt_text).join(', '),
 		negative_prompt: '',
 		width: 1024,

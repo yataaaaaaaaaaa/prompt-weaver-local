@@ -34,7 +34,7 @@ function makeRecord(outputId: string, overrides: Partial<OutputRecord> = {}): Ou
 		steps: 30,
 		guidance_scale: 5,
 		model_id: 'model-a',
-		active_lora_ids: [],
+		active_loras: [],
 		selections: [],
 		image_path: `D:\\data\\output\\${outputId}.png`,
 		metadata_path: `D:\\data\\output\\${outputId}.json`,
@@ -355,10 +355,18 @@ describe('outputsStore hooks', () => {
 		const { result, rerender } = renderHook(() => useCurrentOutputDetails());
 		expect(result.current).toBeNull();
 
-		useOutputsStore.setState({ currentId: id(1), record: makeRecord(id(1), { active_lora_ids: ['alya', 'gone'] }) });
+		useOutputsStore.setState({ currentId: id(1), record: makeRecord(id(1), {
+				active_loras: [
+					{ id: 'alya', weight: 0.6 },
+					{ id: 'gone', weight: 1 },
+				],
+			}) });
 		rerender();
 		const details = result.current;
-		expect(details).toMatchObject({ outputId: id(1), imageName: '0000000001.png', modelName: 'Model A', loraNames: ['Alya', 'gone'] });
+		expect(details).toMatchObject({ outputId: id(1), imageName: '0000000001.png', modelName: 'Model A', loras: [
+			{ name: 'Alya', weight: 0.6 },
+			{ name: 'gone', weight: 1 },
+		] });
 
 		useOutputsStore.setState({ loadingRecord: false });
 		rerender();

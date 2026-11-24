@@ -183,6 +183,37 @@ describe('sub-prompts', () => {
 		expect(notifications()).toEqual([{ intent: 'warning', message: "Category 'Alpha' cannot contain multiple sub-prompts with the same id." }]);
 	});
 
+	it('appends a sub-prompt with a text', () => {
+		const rules = mockRules();
+		seed(category('Alpha', ['a1', '']), category('Beta', ['b']));
+		const beta = categories()[1];
+
+		expect(store().addSubPromptWithText('alpha', 'castle, sky, snowing')).toBe(true);
+
+		expect(categories()[0].subPrompts).toEqual([
+			{ text: 'a1', state: 'normal', extraLoraIds: [] },
+			{ text: '', state: 'normal', extraLoraIds: [] },
+			{ text: 'castle, sky, snowing', state: 'normal', extraLoraIds: [] },
+		]);
+		expect(categories()[1]).toBe(beta);
+		expect(rules.renameSubPromptInRules).not.toHaveBeenCalled();
+		expect(notifications()).toEqual([]);
+	});
+
+	it('rejects blank texts, unknown categories and duplicates (the duplicate warning of setSubPromptText)', () => {
+		seed(category('Alpha', ['castle, sky']));
+		const before = categories();
+
+		expect(store().addSubPromptWithText('alpha', '')).toBe(false);
+		expect(store().addSubPromptWithText('alpha', '  ')).toBe(false);
+		expect(store().addSubPromptWithText('unknown', 'x')).toBe(false);
+		expect(notifications()).toEqual([]);
+
+		expect(store().addSubPromptWithText('alpha', 'Castle,  Sky')).toBe(false);
+		expect(categories()).toBe(before);
+		expect(notifications()).toEqual([{ intent: 'warning', message: "Category 'Alpha' cannot contain multiple sub-prompts with the same id." }]);
+	});
+
 	it('edits a sub-prompt text and rewrites its exact rules', () => {
 		const rules = mockRules();
 		seed(category('Alpha', ['a1', 'a2']));

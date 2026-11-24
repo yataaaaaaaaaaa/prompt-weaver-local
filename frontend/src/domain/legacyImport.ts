@@ -6,7 +6,7 @@ import { categoryKeyOf, priorityOr, type Category, type SubPromptState } from '.
 import type { ForbiddenRule } from './forbiddenRules';
 import { generationSettingsFromBackend, type GenerationSettings } from './generationRequest';
 import { categoryWindowKey, isCompleteRect, paneWindowKey, sanitizeWindowLayout, type WindowLayouts } from './layout';
-import type { LibraryData } from './library';
+import { lorasFromLegacyIds, type LibraryData } from './library';
 
 function subPromptState(category: LegacyPromptCategory, prompt: LegacyPromptEntry): SubPromptState {
 	const lockedById = category.locked_prompt_id != null && category.locked_prompt_id !== '' && prompt.id === category.locked_prompt_id;
@@ -38,7 +38,8 @@ export function legacyForbiddenRules(state: Pick<AppState, 'forbidden_rules'>): 
 	return state.forbidden_rules;
 }
 
-/** Library models/LoRAs plus the last model/LoRA selection and dialog directories of app_state.json. */
+/** Library models/LoRAs plus the last model/LoRA selection (LoRAs at the default weight: app_state.json has no
+ *  weights) and dialog directories of app_state.json. */
 export function legacyLibrary(
 	state: Pick<AppState, 'last_model_id' | 'last_lora_ids' | 'last_model_dir' | 'last_lora_dir'>,
 	library: LegacyLibrary,
@@ -47,7 +48,7 @@ export function legacyLibrary(
 		models: library.models,
 		loras: library.loras,
 		selectedModelId: state.last_model_id ?? library.models[0]?.id ?? '',
-		selectedLoraIds: [...state.last_lora_ids],
+		selectedLoras: lorasFromLegacyIds(state.last_lora_ids),
 		lastModelDir: state.last_model_dir,
 		lastLoraDir: state.last_lora_dir,
 	};

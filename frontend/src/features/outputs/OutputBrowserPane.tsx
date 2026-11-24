@@ -15,6 +15,7 @@ import { ArrowNextRegular, ArrowPreviousRegular, ChevronLeftRegular, ChevronRigh
 import type { ReactElement } from 'react';
 import { useShallow } from 'zustand/react/shallow';
 import type { AppCommand } from '../../app/commands';
+import { weightedLorasText } from '../../domain/loraSelection';
 import { selectNavigation, useCurrentOutputDetails, useOutputsStore, type CurrentOutputDetails } from '../../stores/outputsStore';
 import { ariaKeyShortcuts, withShortcut } from '../../ui/keyboard';
 import { PaneContent } from '../../ui/PaneLayout';
@@ -114,7 +115,7 @@ function DetailsList({ details, position }: { details: CurrentOutputDetails; pos
 		['Seed', String(details.seed)],
 		['Prompt seed', details.promptSeed === null ? '—' : String(details.promptSeed)],
 		['Model', details.modelName || '—'],
-		['LoRAs', details.loraNames.length > 0 ? details.loraNames.join(', ') : 'None'],
+		['LoRAs', details.loras.length > 0 ? weightedLorasText(details.loras) : 'None'],
 	];
 	return (
 		<dl className={styles.details} aria-label="Output details">

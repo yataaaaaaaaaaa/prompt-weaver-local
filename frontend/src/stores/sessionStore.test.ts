@@ -1,5 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { api } from '../api/client';
+import { LORA_WEIGHT_DEFAULTS } from '../api/defaults.gen';
 import type { AppState, BootstrapResponse, OutputRecord } from '../api/types';
 import { flushPersistence } from '../persistence/persist';
 import { createMemoryStoreBackend, setStoreBackend, type StoreBackend } from '../persistence/storeBackend';
@@ -96,7 +97,7 @@ function spyOnSeeding() {
 	return spies;
 }
 
-const record = (outputId: string) => ({ output_id: outputId, selections: [], active_lora_ids: [] }) as unknown as OutputRecord;
+const record = (outputId: string) => ({ output_id: outputId, selections: [], active_loras: [] }) as unknown as OutputRecord;
 
 beforeEach(() => {
 	vi.spyOn(api, 'getOutput').mockImplementation(async (outputId) => record(outputId));
@@ -119,7 +120,7 @@ describe('sessionStore.start', () => {
 
 		expect(session()).toMatchObject({ phase: 'ready', dataDir: 'C:\\temp\\prompt-weaver', bootError: null });
 		expect(spies.library).toHaveBeenCalledWith(
-			expect.objectContaining({ selectedModelId: 'model-a', selectedLoraIds: ['alya'], lastModelDir: 'D:\\models' }),
+			expect.objectContaining({ selectedModelId: 'model-a', selectedLoras: [{ id: 'alya', weight: LORA_WEIGHT_DEFAULTS.weight }], lastModelDir: 'D:\\models' }),
 		);
 		// Categories are seeded after the library: unknown LoRA links are dropped.
 		expect(spies.categories).toHaveBeenCalledWith([

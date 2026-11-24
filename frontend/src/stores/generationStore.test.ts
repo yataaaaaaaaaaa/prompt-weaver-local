@@ -1,6 +1,7 @@
 import { act, renderHook } from '@testing-library/react';
 import { describe, expect, it, vi } from 'vitest';
 import { api, ApiError } from '../api/client';
+import { LORA_WEIGHT_DEFAULTS } from '../api/defaults.gen';
 import type { GenerateRequest, LoRASpec, ModelSpec, OutputRecord } from '../api/types';
 import type { Category } from '../domain/categories';
 import { useCategoriesStore } from './categoriesStore';
@@ -13,6 +14,7 @@ import { useUndoStore } from './undoStore';
 
 const MODEL: ModelSpec = { id: 'model', name: 'model.safetensors', path: 'D:/m/model.safetensors', default_width: 1024, default_height: 1024, torch_dtype: 'float16', source: null };
 const STYLE: LoRASpec = { id: 'style', name: 'style.safetensors', path: 'D:/l/style.safetensors', source: null };
+const DETAIL: LoRASpec = { id: 'detail', name: 'detail.safetensors', path: 'D:/l/detail.safetensors', source: null };
 
 const CATEGORIES: Category[] = [
 	{ text: 'Main', activation_text: '', priority: 1, state: 'normal', subPrompts: [{ text: '1girl, smile', state: 'lock', extraLoraIds: ['style'] }] },
@@ -27,7 +29,7 @@ function record(request: GenerateRequest, outputId = '0000000004'): OutputRecord
 		image_path: `D:/out/${outputId}.png`,
 		metadata_path: `D:/out/${outputId}.json`,
 		model_id: request.model.id,
-		active_lora_ids: (request.loras ?? []).map((lora) => lora.id),
+		active_loras: (request.loras ?? []).map((lora) => ({ id: lora.id, weight: lora.weight ?? 1 })),
 		prompt: request.prompt,
 		negative_prompt: request.negative_prompt,
 		width: request.width,
@@ -42,7 +44,7 @@ function record(request: GenerateRequest, outputId = '0000000004'): OutputRecord
 }
 
 function setup() {
-	useLibraryStore.setState({ models: [MODEL], loras: [STYLE], selectedModelId: MODEL.id, selectedLoraIds: [] });
+	useLibraryStore.setState({ models: [MODEL], loras: [STYLE, DETAIL], selectedModelId: MODEL.id, selectedLoras: [] });
 	useCategoriesStore.setState({ categories: CATEGORIES });
 	useGenerationSettingsStore.setState({ promptSeedInput: '5', promptSeedBehavior: 'fixed', seedInput: '10', imageSeedBehavior: 'increment' });
 	const showGenerated = vi.fn();
@@ -75,7 +77,7 @@ describe('generate', () => {
 		await store().generate();
 
 		const [request, signal] = generate.mock.calls[0];
-		expect(request).toMatchObject({ model: MODEL, loras: [STYLE], prompt: '1girl, smile', seed: 10, prompt_seed: 5, width: 1024, steps: 30 });
+		expect(request).toMatchObject({ model: MODEL, loras: [{ ...STYLE, weight: 1 }], prompt: '1girl, smile', seed: 10, prompt_seed: 5, width: 1024, steps: 30 });
 		expect(signal).toBeInstanceOf(AbortSignal);
 		expect(generatingDuringRequest).toBe(true);
 		expect(store().generating).toBe(false);
@@ -87,6 +89,30 @@ describe('generate', () => {
 			seeds: { promptSeedInput: '5', seedInput: '10', promptSeedBehavior: 'fixed', imageSeedBehavior: 'increment', promptCategorySeedState: {} },
 		});
 		expect(notifications()).toEqual([]);
+	});
+
+	it('sends the selected LoRA weights; prompt-linked LoRAs get the default weight', async () => {
+		setup();
+		useLibraryStore.getState().setLoraSelection([{ id: 'detail', weight: 0.6 }]);
+		useLibraryStore.getState().setLoraWeight('detail', 0.65);
+		const generate = vi.spyOn(api, 'generate').mockImplementation(async (request) => record(request));
+
+		await store().generate();
+
+		expect(generate.mock.calls[0][0].loras).toEqual([
+			{ ...DETAIL, weight: 0.65 },
+			{ ...STYLE, weight: LORA_WEIGHT_DEFAULTS.weight },
+		]);
+	});
+
+	it('a selected LoRA that a sub-prompt also links keeps its selected weight', async () => {
+		setup();
+		useLibraryStore.getState().setLoraSelection([{ id: 'style', weight: -1.5 }]);
+		const generate = vi.spyOn(api, 'generate').mockImplementation(async (request) => record(request));
+
+		await store().generate();
+
+		expect(generate.mock.calls[0][0].loras).toEqual([{ ...STYLE, weight: -1.5 }]);
 	});
 
 	it('replaces the per-category counters in cycle mode', async () => {
@@ -131,13 +157,13 @@ describe('generate', () => {
 
 	it('warns about LoRAs missing from the library', async () => {
 		setup();
-		useLibraryStore.setState({ selectedLoraIds: ['deleted'] });
+		useLibraryStore.setState({ selectedLoras: [{ id: 'deleted', weight: 1 }] });
 		useCategoriesStore.setState({ categories: [{ ...CATEGORIES[0], subPrompts: [{ ...CATEGORIES[0].subPrompts[0], extraLoraIds: ['style', 'gone'] }] }] });
 		const generate = vi.spyOn(api, 'generate').mockImplementation(async (request) => record(request));
 
 		await store().generate();
 
-		expect(generate.mock.calls[0][0].loras).toEqual([STYLE]);
+		expect(generate.mock.calls[0][0].loras).toEqual([{ ...STYLE, weight: 1 }]);
 		expect(generate.mock.calls[0][0].selections?.[0].induced_lora_ids).toEqual(['style']);
 		expect(notifications()).toEqual([{ intent: 'warning', title: 'Missing LoRAs', message: 'LoRAs missing from the library were ignored: deleted, gone.' }]);
 	});
@@ -146,7 +172,7 @@ describe('generate', () => {
 describe('continuous generation and cancel', () => {
 	it('loops until stopped; stopping aborts the request and asks the backend to cancel', async () => {
 		const { showGenerated, cancelGeneration } = setup();
-		useLibraryStore.setState({ selectedLoraIds: ['deleted'] });
+		useLibraryStore.setState({ selectedLoras: [{ id: 'deleted', weight: 1 }] });
 		const generate = vi.spyOn(api, 'generate').mockImplementation(async (request, signal) =>
 			generate.mock.calls.length < 3 ? record(request, `000000000${generate.mock.calls.length + 3}`) : untilAborted(signal),
 		);

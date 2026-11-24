@@ -1,17 +1,20 @@
 import { describe, expect, it } from 'vitest';
+import { LORA_WEIGHT_DEFAULTS } from '../api/defaults.gen';
 import type { InstalledModel, LoRASpec, ModelSource, ModelSpec } from '../api/types';
 import { DETAIL_TWEAKER_FILE, DETAIL_TWEAKER_SOURCE } from '../test/modelLibraryData';
 import {
 	addLoraPaths,
 	addModelPath,
 	findEntryBySource,
+	lorasFromLegacyIds,
 	registerInstalledEntry,
 	sanitizeLibrary,
 	sanitizeModelSource,
 	type LibraryData,
 } from './library';
 
-const EMPTY_LIBRARY: LibraryData = { models: [], loras: [], selectedModelId: '', selectedLoraIds: [], lastModelDir: null, lastLoraDir: null };
+const EMPTY_LIBRARY: LibraryData = { models: [], loras: [], selectedModelId: '', selectedLoras: [], lastModelDir: null, lastLoraDir: null };
+const DEFAULT_WEIGHT = LORA_WEIGHT_DEFAULTS.weight;
 
 describe('library entries from picked paths', () => {
 	const size = { width: 768, height: 1344 };
@@ -103,9 +106,15 @@ describe('sanitizeLibrary', () => {
 				source: null,
 			},
 		],
-		loras: [{ id: 'shion', name: 'Shion.safetensors', path: 'D:\\loras\\Shion.safetensors', source: null }],
+		loras: [
+			{ id: 'shion', name: 'Shion.safetensors', path: 'D:\\loras\\Shion.safetensors', source: null },
+			{ id: 'style', name: 'style.safetensors', path: 'D:\\loras\\style.safetensors', source: null },
+		],
 		selectedModelId: 'catponyreal-ilv41-safetensors',
-		selectedLoraIds: ['shion'],
+		selectedLoras: [
+			{ id: 'shion', weight: 0.6 },
+			{ id: 'style', weight: -1.25 },
+		],
 		lastModelDir: 'D:\\models',
 		lastLoraDir: 'D:\\loras',
 	};
@@ -121,23 +130,79 @@ describe('sanitizeLibrary', () => {
 				models: [...persisted.models, { id: 'x', path: 'D:\\x.ckpt', torch_dtype: 'int8' }, { name: 'no id' }, persisted.models[0]],
 				loras: [...persisted.loras, { id: 'broken' }],
 				selectedModelId: 'deleted-model',
-				selectedLoraIds: ['shion', 'deleted', 'shion', 4],
+				selectedLoras: [
+					{ id: 'shion', weight: 0.6 },
+					{ id: 'deleted', weight: 1 },
+					{ id: 'shion', weight: 2 },
+					4,
+					'style',
+					{ weight: 1 },
+					{ id: '', weight: 1 },
+					{ id: 7, weight: 1 },
+				],
 				lastLoraDir: 12,
 			},
 			EMPTY_LIBRARY,
 		);
 		expect(result.models.map((model) => model.id)).toEqual(['catponyreal-ilv41-safetensors', 'x']);
 		expect(result.models[1]).toEqual({ id: 'x', name: 'x.ckpt', path: 'D:\\x.ckpt', default_width: 1024, default_height: 1024, torch_dtype: 'float16', source: null });
-		expect(result.loras.map((lora) => lora.id)).toEqual(['shion']);
+		expect(result.loras.map((lora) => lora.id)).toEqual(['shion', 'style']);
 		expect(result.selectedModelId).toBe('catponyreal-ilv41-safetensors');
-		expect(result.selectedLoraIds).toEqual(['shion']);
+		// Unknown and malformed items dropped, the first of duplicate ids kept.
+		expect(result.selectedLoras).toEqual([{ id: 'shion', weight: 0.6 }]);
 		expect(result.lastLoraDir).toBeNull();
+	});
+
+	it('clamps weights; a missing, non-numeric or non-finite weight -> the default weight', () => {
+		const sanitizeSelection = (selectedLoras: unknown) => sanitizeLibrary({ ...persisted, selectedLoras }, EMPTY_LIBRARY).selectedLoras;
+
+		expect(sanitizeSelection([{ id: 'shion', weight: 99 }, { id: 'style', weight: -10.5 }])).toEqual([
+			{ id: 'shion', weight: LORA_WEIGHT_DEFAULTS.max },
+			{ id: 'style', weight: LORA_WEIGHT_DEFAULTS.min },
+		]);
+		expect(sanitizeSelection([{ id: 'shion' }, { id: 'style', weight: '0.5' }])).toEqual([
+			{ id: 'shion', weight: DEFAULT_WEIGHT },
+			{ id: 'style', weight: DEFAULT_WEIGHT },
+		]);
+		expect(sanitizeSelection([{ id: 'shion', weight: Number.NaN }])).toEqual([{ id: 'shion', weight: DEFAULT_WEIGHT }]);
+		expect(sanitizeSelection('shion')).toEqual([]);
+	});
+
+	it('reads the legacy selectedLoraIds (stored before per-LoRA weights) at the default weight', () => {
+		const { selectedLoras: _selection, ...withoutSelection } = persisted;
+
+		const result = sanitizeLibrary({ ...withoutSelection, selectedLoraIds: ['style', 'deleted', 'style', 4, 'shion'] }, EMPTY_LIBRARY);
+
+		expect(result.selectedLoras).toEqual([
+			{ id: 'style', weight: DEFAULT_WEIGHT },
+			{ id: 'shion', weight: DEFAULT_WEIGHT },
+		]);
+		expect(result).not.toHaveProperty('selectedLoraIds');
+		expect(sanitizeLibrary({ ...withoutSelection, selectedLoraIds: 'shion' }, EMPTY_LIBRARY).selectedLoras).toEqual([]);
+	});
+
+	it('prefers selectedLoras when both shapes are present', () => {
+		expect(sanitizeLibrary({ ...persisted, selectedLoraIds: ['style'] }, EMPTY_LIBRARY).selectedLoras).toEqual(persisted.selectedLoras);
 	});
 
 	it('fills missing fields from the fallback', () => {
 		const fallback = sanitizeLibrary(persisted, EMPTY_LIBRARY);
-		expect(sanitizeLibrary({ selectedLoraIds: [] }, fallback)).toEqual({ ...persisted, selectedLoraIds: [] });
+		expect(sanitizeLibrary({ selectedLoras: [] }, fallback)).toEqual({ ...persisted, selectedLoras: [] });
+		expect(sanitizeLibrary({ lastLoraDir: 'D:\\other' }, fallback)).toEqual({ ...persisted, lastLoraDir: 'D:\\other' });
+		// The fallback selection is restricted to the new LoRAs (weights kept).
+		expect(sanitizeLibrary({ loras: [persisted.loras[1]] }, fallback).selectedLoras).toEqual([{ id: 'style', weight: -1.25 }]);
 		expect(sanitizeLibrary(undefined, EMPTY_LIBRARY)).toEqual(EMPTY_LIBRARY);
+	});
+});
+
+describe('lorasFromLegacyIds', () => {
+	it('maps string ids to the default weight and drops anything else', () => {
+		expect(lorasFromLegacyIds(['a', 3, null, '', 'b'])).toEqual([
+			{ id: 'a', weight: DEFAULT_WEIGHT },
+			{ id: 'b', weight: DEFAULT_WEIGHT },
+		]);
+		expect(lorasFromLegacyIds(undefined)).toEqual([]);
+		expect(lorasFromLegacyIds({ 0: 'a' })).toEqual([]);
 	});
 });
 

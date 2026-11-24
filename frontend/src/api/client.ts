@@ -7,7 +7,10 @@ import { BACKEND_URL } from './config';
 import type { paths } from './schema.gen';
 import type {
 	BootstrapResponse,
+	FavoriteImage,
 	GenerateRequest,
+	ImageSearchPage,
+	ImageSearchQuery,
 	InstallJob,
 	InstallRequest,
 	InstallResponse,
@@ -18,7 +21,10 @@ import type {
 	OutputRecord,
 	PersistedStoreEnvelope,
 	PersistedStoreEnvelopeInput,
+	RemoteImage,
 	RemoteModel,
+	ResolvedImageResource,
+	ResolveImageResourcesRequest,
 	TaskSnapshot,
 } from './types';
 
@@ -102,6 +108,19 @@ export const api = {
 	listInstalls: (): Promise<InstallJob[]> => unwrap(http.GET('/api/models/installs')),
 	cancelDownload: async (taskId: string): Promise<void> => {
 		await unwrap(http.POST('/api/downloads/{task_id}/cancel', { params: { path: { task_id: taskId } } }));
+	},
+
+	// Image library (backend app/routers/images.py)
+	searchImages: (query: ImageSearchQuery, signal?: AbortSignal): Promise<ImageSearchPage> =>
+		unwrap(http.GET('/api/images/search', { params: { query: { ...query, cursor: query.cursor ?? undefined } }, signal })),
+	/** The provider model version of each resource, in order (unresolvable ones carry an error). */
+	resolveImageResources: (request: ResolveImageResourcesRequest, signal?: AbortSignal): Promise<ResolvedImageResource[]> =>
+		unwrap(http.POST('/api/images/resolve', { body: request, signal })),
+	listFavoriteImages: (): Promise<FavoriteImage[]> => unwrap(http.GET('/api/images/favorites')),
+	/** Saves (or refreshes and moves to the front) an image in the backend favorites collection. */
+	addFavoriteImage: (image: RemoteImage): Promise<FavoriteImage> => unwrap(http.PUT('/api/images/favorites', { body: image })),
+	removeFavoriteImage: async (provider: string, imageId: string): Promise<void> => {
+		await unwrap(http.DELETE('/api/images/favorites/{provider}/{image_id}', { params: { path: { provider, image_id: imageId } } }));
 	},
 };
 

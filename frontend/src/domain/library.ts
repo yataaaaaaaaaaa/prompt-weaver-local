@@ -1,20 +1,22 @@
 // Model/LoRA library domain: the persisted library data, library entries created from picked paths and
 // sanitizing of stored/imported library data. Pure module; state lives in src/stores/libraryStore.ts.
-import { GENERATION_DEFAULTS } from '../api/defaults.gen';
-import type { InstalledModel, LoRASpec, ModelKind, ModelSource, ModelSpec, TorchDType } from '../api/types';
+import { GENERATION_DEFAULTS, LORA_WEIGHT_DEFAULTS } from '../api/defaults.gen';
+import type { InstalledModel, LoraWeight, LoRASpec, ModelKind, ModelSource, ModelSpec, TorchDType } from '../api/types';
 import { isRecord, positiveNumberOr, stringOr } from './guards';
 import type { Size } from './layout';
-import { filterKnownLoraIds } from './loraSelection';
+import { filterKnownLoras, loraAtDefaultWeight } from './loraSelection';
 import { basename, stripExtension } from './paths';
 import { uniqueKey, uniqueStrings } from './text';
 
-/** Persisted format of the 'library-store' (version 1; version 0 = the same without `source` on entries). */
+/** Persisted format of the 'library-store' (version 2). Version 1 held the LoRA selection as `selectedLoraIds:
+ *  string[]` (every LoRA at the default weight); version 0 = version 1 without `source` on entries. */
 export type LibraryData = {
 	models: ModelSpec[];
 	loras: LoRASpec[];
 	/** '' when no model is selected. */
 	selectedModelId: string;
-	selectedLoraIds: string[];
+	/** The LoRAs selected for generation with their weights, in selection order (known ids, unique). */
+	selectedLoras: LoraWeight[];
 	lastModelDir: string | null;
 	lastLoraDir: string | null;
 };
@@ -248,6 +250,37 @@ function sanitizeModel(value: unknown): ModelSpec | null {
 	};
 }
 
+/** Legacy LoRA selections (library-store v0/v1 `selectedLoraIds`, app_state.json `last_lora_ids`): every id at
+ *  LORA_WEIGHT_DEFAULTS.weight; anything but a list of strings is dropped. */
+export function lorasFromLegacyIds(ids: unknown): LoraWeight[] {
+	return Array.isArray(ids) ? ids.filter((id): id is string => typeof id === 'string' && id !== '').map(loraAtDefaultWeight) : [];
+}
+
+/** Stored LoraWeight items: entries without a usable id dropped, a missing or non-numeric weight ->
+ *  LORA_WEIGHT_DEFAULTS.weight (ranges are clamped by filterKnownLoras). */
+function parseLoraWeights(value: unknown): LoraWeight[] {
+	if (!Array.isArray(value)) {
+		return [];
+	}
+	return value.flatMap((item): LoraWeight[] =>
+		isRecord(item) && typeof item.id === 'string' && item.id
+			? [{ id: item.id, weight: typeof item.weight === 'number' ? item.weight : LORA_WEIGHT_DEFAULTS.weight }]
+			: [],
+	);
+}
+
+/** The selection of untrusted library data: `selectedLoras`, else the legacy `selectedLoraIds` (default weight),
+ *  else the fallback's selection. */
+function pickSelectedLoras(raw: Record<string, unknown>, fallback: LibraryData): LoraWeight[] {
+	if ('selectedLoras' in raw) {
+		return parseLoraWeights(raw.selectedLoras);
+	}
+	if ('selectedLoraIds' in raw) {
+		return lorasFromLegacyIds(raw.selectedLoraIds);
+	}
+	return fallback.selectedLoras;
+}
+
 function uniqueById<T extends { id: string }>(items: readonly (T | null)[]): T[] {
 	const seen = new Set<string>();
 	return items.filter((item): item is T => {
@@ -261,7 +294,9 @@ function uniqueById<T extends { id: string }>(items: readonly (T | null)[]): T[]
 
 /**
  * Library data from untrusted input (fields missing from `value` come from `fallback`): malformed entries
- * dropped, ids unique, unknown selected LoRA ids dropped, an unknown/missing selected model -> first model ('' if none).
+ * dropped, ids unique, an unknown/missing selected model -> first model ('' if none). The LoRA selection is read
+ * from `selectedLoras` or, in data written before per-LoRA weights, from `selectedLoraIds` (default weight); unknown
+ * and malformed ids are dropped, the first of duplicate ids wins and weights go through clampLoraWeight.
  */
 export function sanitizeLibrary(value: unknown, fallback: LibraryData): LibraryData {
 	const raw = isRecord(value) ? value : {};
@@ -271,22 +306,15 @@ export function sanitizeLibrary(value: unknown, fallback: LibraryData): LibraryD
 	const models = uniqueById(Array.isArray(modelsValue) ? modelsValue.map(sanitizeModel) : []);
 	const loras = uniqueById(Array.isArray(lorasValue) ? lorasValue.map(sanitizeLora) : []);
 	const selectedModelValue = pick('selectedModelId');
-	const selectedLoraValue = pick('selectedLoraIds');
 	const selectedModelId =
 		typeof selectedModelValue === 'string' && models.some((model) => model.id === selectedModelValue)
 			? selectedModelValue
 			: (models[0]?.id ?? '');
-	const selectedLoraIds = Array.isArray(selectedLoraValue)
-		? filterKnownLoraIds(
-				selectedLoraValue.filter((id): id is string => typeof id === 'string'),
-				{ loras },
-			)
-		: [];
 	return {
 		models,
 		loras,
 		selectedModelId,
-		selectedLoraIds,
+		selectedLoras: filterKnownLoras(pickSelectedLoras(raw, fallback), { loras }),
 		lastModelDir: stringOr(pick('lastModelDir'), null) || null,
 		lastLoraDir: stringOr(pick('lastLoraDir'), null) || null,
 	};

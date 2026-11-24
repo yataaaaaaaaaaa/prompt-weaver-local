@@ -94,13 +94,16 @@ describe('outputDetails', () => {
 		steps: 30,
 		guidance_scale: 5,
 		model_id: 'model-a',
-		active_lora_ids: ['alya', 'gone'],
+		active_loras: [
+			{ id: 'alya', weight: 0.6 },
+			{ id: 'gone', weight: 1 },
+		],
 		selections: [],
 		image_path: 'D:\\data\\output\\0000000112.png',
 		metadata_path: 'D:\\data\\output\\0000000112.json',
 	};
 
-	it('resolves names and the image file name', () => {
+	it('resolves names, keeps the LoRA weights and the image file name', () => {
 		expect(outputDetails(record, 'Model A', [{ id: 'alya', name: 'Alya', path: 'x', source: null }])).toEqual({
 			outputId: '0000000112',
 			imageName: '0000000112.png',
@@ -112,7 +115,10 @@ describe('outputDetails', () => {
 			seed: 689303569,
 			promptSeed: 94,
 			modelName: 'Model A',
-			loraNames: ['Alya', 'gone'],
+			loras: [
+				{ name: 'Alya', weight: 0.6 },
+				{ name: 'gone', weight: 1 },
+			],
 			prompt: 'masterpiece, clothed',
 			negativePrompt: 'ugly',
 		});

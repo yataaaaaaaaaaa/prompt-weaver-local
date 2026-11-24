@@ -113,6 +113,8 @@ export function indexSelections(selections: readonly Pick<GenerationSelection, '
 // Details view model
 // ---------------------------------------------------------------------------
 
+export type OutputLoraDetails = { name: string; weight: number };
+
 export type CurrentOutputDetails = {
 	outputId: string;
 	imageName: string;
@@ -124,12 +126,13 @@ export type CurrentOutputDetails = {
 	seed: number;
 	promptSeed: number | null;
 	modelName: string;
-	loraNames: string[];
+	/** The LoRAs the output was generated with (OutputRecord.active_loras), names resolved from the library. */
+	loras: OutputLoraDetails[];
 	prompt: string;
 	negativePrompt: string;
 };
 
-/** Details shown by the output browser; LoRA ids missing from the library are shown as is. */
+/** Details shown by the output browser; LoRA ids missing from the library are shown as is (with their weight). */
 export function outputDetails(record: OutputRecord, modelName: string, loras: readonly LoRASpec[]): CurrentOutputDetails {
 	const loraNames = new Map(loras.map((lora) => [lora.id, lora.name]));
 	return {
@@ -143,7 +146,7 @@ export function outputDetails(record: OutputRecord, modelName: string, loras: re
 		seed: record.seed,
 		promptSeed: record.prompt_seed,
 		modelName,
-		loraNames: record.active_lora_ids.map((id) => loraNames.get(id) ?? id),
+		loras: record.active_loras.map(({ id, weight }) => ({ name: loraNames.get(id) ?? id, weight })),
 		prompt: record.prompt,
 		negativePrompt: record.negative_prompt,
 	};

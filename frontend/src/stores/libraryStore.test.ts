@@ -1,6 +1,7 @@
 import { act, renderHook } from '@testing-library/react';
 import { describe, expect, it, vi } from 'vitest';
-import type { InstalledModel, LoRASpec, ModelSource, ModelSpec } from '../api/types';
+import { LORA_WEIGHT_DEFAULTS } from '../api/defaults.gen';
+import type { InstalledModel, LoraWeight, LoRASpec, ModelSpec } from '../api/types';
 import type { Category } from '../domain/categories';
 import { flushPersistence, hydratePersistedStores } from '../persistence/persist';
 import { createMemoryStoreBackend, setStoreBackend } from '../persistence/storeBackend';
@@ -14,6 +15,7 @@ import {
 	migrateLibraryState,
 	selectIsEntrySelected,
 	selectModelName,
+	selectSelectedLoras,
 	selectSelectedModel,
 	useLibraryStore,
 	useLoraRows,
@@ -22,6 +24,9 @@ import {
 import { useNotificationsStore } from './notificationsStore';
 
 const store = () => useLibraryStore.getState();
+const DEFAULT_WEIGHT = LORA_WEIGHT_DEFAULTS.weight;
+/** A LoRA selection item (default weight unless given). */
+const at = (id: string, weight = DEFAULT_WEIGHT): LoraWeight => ({ id, weight });
 
 const MODEL: ModelSpec = {
 	id: 'jankuv5nsfwtrainednoobai-v50-safetensors',
@@ -48,9 +53,22 @@ function linkedCategory(loraIds: string[]): Category {
 }
 
 describe('selection actions', () => {
-	it('replaceAll sanitizes (unknown selections dropped, missing model -> first model)', () => {
-		store().replaceAll({ models: [MODEL], loras: [SHION], selectedModelId: 'gone', selectedLoraIds: ['shion', 'gone'], lastModelDir: 'D:\\models' });
-		expect(store()).toMatchObject({ models: [MODEL], loras: [SHION], selectedModelId: MODEL.id, selectedLoraIds: ['shion'], lastModelDir: 'D:\\models', lastLoraDir: null });
+	it('replaceAll sanitizes (unknown selections dropped, weights clamped, missing model -> first model)', () => {
+		store().replaceAll({
+			models: [MODEL],
+			loras: [SHION],
+			selectedModelId: 'gone',
+			selectedLoras: [at('shion', 12), at('gone')],
+			lastModelDir: 'D:\\models',
+		});
+		expect(store()).toMatchObject({
+			models: [MODEL],
+			loras: [SHION],
+			selectedModelId: MODEL.id,
+			selectedLoras: [at('shion', LORA_WEIGHT_DEFAULTS.max)],
+			lastModelDir: 'D:\\models',
+			lastLoraDir: null,
+		});
 	});
 
 	it('selects known models only', () => {
@@ -63,21 +81,81 @@ describe('selection actions', () => {
 		expect(selectModelName(MODEL.id)(store())).toBe(MODEL.name);
 	});
 
-	it('toggles and clears selected LoRAs', () => {
+	it('toggles LoRAs at the default weight and clears the selection', () => {
 		store().replaceAll({ loras: [SHION, STYLE] });
 		store().setLoraSelected('style', true);
 		store().setLoraSelected('shion', true);
-		store().setLoraSelected('shion', true);
 		store().setLoraSelected('unknown', true);
-		expect(store().selectedLoraIds).toEqual(['style', 'shion']);
+		expect(store().selectedLoras).toEqual([at('style'), at('shion')]);
 		store().setLoraSelected('style', false);
-		expect(store().selectedLoraIds).toEqual(['shion']);
+		expect(store().selectedLoras).toEqual([at('shion')]);
 		store().clearSelectedLoras();
-		expect(store().selectedLoraIds).toEqual([]);
+		expect(store().selectedLoras).toEqual([]);
+	});
+
+	it('setLoraSelected keeps the weight of a LoRA that is already selected and is a no-op when nothing changes', () => {
+		store().replaceAll({ loras: [SHION, STYLE], selectedLoras: [at('shion', 0.4)] });
+		const before = store().selectedLoras;
+
+		store().setLoraSelected('shion', true);
+		store().setLoraSelected('style', false);
+		store().setLoraSelected('unknown', false);
+
+		expect(store().selectedLoras).toBe(before);
+		expect(before).toEqual([at('shion', 0.4)]);
+	});
+
+	it('setLoraSelection replaces the selection with exactly the given LoRAs, in order', () => {
+		store().replaceAll({ loras: [SHION, STYLE], selectedLoras: [at('shion', 0.4)] });
+
+		store().setLoraSelection([at('style', 0.6), at('gone', 0.5), at('shion', -1.25), at('style', 2)]);
+		expect(store().selectedLoras).toEqual([at('style', 0.6), at('shion', -1.25)]);
+
+		store().setLoraSelection([at('shion', 25)]);
+		expect(store().selectedLoras).toEqual([at('shion', LORA_WEIGHT_DEFAULTS.max)]);
+
+		store().setLoraSelection([]);
+		expect(store().selectedLoras).toEqual([]);
+	});
+
+	it('setLoraWeight clamps; no-op when the LoRA is not selected or the weight is unchanged', () => {
+		store().replaceAll({ loras: [SHION, STYLE], selectedLoras: [at('shion'), at('style', 0.5)] });
+
+		store().setLoraWeight('style', 0.75);
+		expect(store().selectedLoras).toEqual([at('shion'), at('style', 0.75)]);
+
+		store().setLoraWeight('shion', -50);
+		expect(store().selectedLoras).toEqual([at('shion', LORA_WEIGHT_DEFAULTS.min), at('style', 0.75)]);
+
+		store().setLoraWeight('shion', Number.NaN);
+		expect(store().selectedLoras[0]).toEqual(at('shion', DEFAULT_WEIGHT));
+
+		const before = store().selectedLoras;
+		store().setLoraWeight('style', 0.75);
+		store().setLoraSelected('style', false);
+		const afterUnselect = store().selectedLoras;
+		store().setLoraWeight('style', 0.3);
+		store().setLoraWeight('unknown', 0.3);
+		expect(before).toEqual([at('shion'), at('style', 0.75)]);
+		expect(store().selectedLoras).toBe(afterUnselect);
+		expect(afterUnselect).toEqual([at('shion')]);
+	});
+
+	it('selectSelectedLoras returns the stored array: a stable reference until the selection changes', () => {
+		store().replaceAll({ loras: [SHION, STYLE], selectedLoras: [at('shion', 0.6)] });
+		const first = selectSelectedLoras(store());
+
+		expect(first).toBe(store().selectedLoras);
+		useLibraryStore.setState({ lastLoraDir: 'D:\\loras' });
+		expect(selectSelectedLoras(store())).toBe(first);
+
+		store().setLoraWeight('shion', 0.7);
+		expect(selectSelectedLoras(store())).not.toBe(first);
+		expect(selectSelectedLoras(store())).toEqual([at('shion', 0.7)]);
 	});
 
 	it('selectIsEntrySelected tells whether a checkpoint or LoRA entry is selected for generation', () => {
-		store().replaceAll({ models: [MODEL], loras: [SHION, STYLE], selectedModelId: MODEL.id, selectedLoraIds: ['style'] });
+		store().replaceAll({ models: [MODEL], loras: [SHION, STYLE], selectedModelId: MODEL.id, selectedLoras: [at('style', 0.3)] });
 		expect(selectIsEntrySelected('checkpoint', MODEL.id)(store())).toBe(true);
 		expect(selectIsEntrySelected('checkpoint', 'other')(store())).toBe(false);
 		expect(selectIsEntrySelected('lora', 'style')(store())).toBe(true);
@@ -92,12 +170,12 @@ describe('selection actions', () => {
 	it('removeLora drops it from the library and the selection and unlinks it from the sub-prompts', () => {
 		const unlinkLora = vi.fn();
 		useCategoriesStore.setState({ unlinkLora });
-		store().replaceAll({ loras: [SHION, STYLE], selectedLoraIds: ['shion', 'style'] });
+		store().replaceAll({ loras: [SHION, STYLE], selectedLoras: [at('shion', 0.2), at('style', 0.8)] });
 
 		store().removeLora('shion');
 
 		expect(store().loras).toEqual([STYLE]);
-		expect(store().selectedLoraIds).toEqual(['style']);
+		expect(store().selectedLoras).toEqual([at('style', 0.8)]);
 		expect(unlinkLora).toHaveBeenCalledWith('shion');
 	});
 
@@ -155,9 +233,9 @@ describe('desktop dialogs', () => {
 		expect(store().selectedModelId).toBe('sdxl-base');
 	});
 
-	it('adds and selects LoRA files, reusing known paths', async () => {
+	it('adds and selects LoRA files at the default weight, reusing known paths (selected weights kept)', async () => {
 		enableDesktop();
-		store().replaceAll({ loras: [SHION], selectedLoraIds: [] });
+		store().replaceAll({ loras: [SHION], selectedLoras: [at('shion', 0.5)] });
 		useLibraryStore.setState({ lastLoraDir: 'D:\\loras' });
 		const pickFiles = vi.spyOn(desktop, 'pickFiles').mockResolvedValue(['D:\\loras\\shion.safetensors', 'D:\\new\\Style.pt']);
 
@@ -169,7 +247,7 @@ describe('desktop dialogs', () => {
 			filters: [{ name: 'LoRA files', extensions: ['safetensors', 'bin', 'pt'] }],
 		});
 		expect(store().loras).toEqual([SHION, { id: 'style', name: 'Style.pt', path: 'D:\\new\\Style.pt', source: null }]);
-		expect(store().selectedLoraIds).toEqual(['shion', 'style']);
+		expect(store().selectedLoras).toEqual([at('shion', 0.5), at('style')]);
 		expect(store().lastLoraDir).toBe('D:\\loras');
 	});
 
@@ -178,7 +256,7 @@ describe('desktop dialogs', () => {
 		vi.spyOn(desktop, 'pickDirectory').mockResolvedValue('D:\\loras\\character.v2');
 		await store().addLoraDirectory();
 		expect(store().loras).toEqual([{ id: 'character-v2', name: 'character.v2', path: 'D:\\loras\\character.v2', source: null }]);
-		expect(store().selectedLoraIds).toEqual(['character-v2']);
+		expect(store().selectedLoras).toEqual([at('character-v2')]);
 	});
 
 	it('does nothing when a dialog is cancelled and reports dialog failures', async () => {
@@ -193,15 +271,15 @@ describe('desktop dialogs', () => {
 });
 
 describe('hooks', () => {
-	it('builds prompt-link-aware rows and a summary', () => {
-		store().replaceAll({ loras: [SHION, STYLE], selectedLoraIds: ['shion'] });
+	it('builds prompt-link-aware rows with weights and a summary', () => {
+		store().replaceAll({ loras: [SHION, STYLE], selectedLoras: [at('shion', 0.6)] });
 		useCategoriesStore.setState({ categories: [linkedCategory(['style', 'shion', 'deleted'])] });
 
 		const { result } = renderHook(() => ({ rows: useLoraRows(), summary: useLoraSummary() }));
 
 		expect(result.current.rows).toEqual([
-			{ lora: SHION, selected: true, promptLinked: true },
-			{ lora: STYLE, selected: false, promptLinked: true },
+			{ lora: SHION, selected: true, weight: 0.6, promptLinked: true },
+			{ lora: STYLE, selected: false, weight: null, promptLinked: true },
 		]);
 		expect(result.current.summary).toEqual({ selected: 1, promptLinked: 2, possibleActive: 2 });
 
@@ -213,6 +291,9 @@ describe('hooks', () => {
 		act(() => useCategoriesStore.getState().unlinkLora('style'));
 		expect(result.current.rows[1].promptLinked).toBe(false);
 		expect(result.current.summary).toEqual({ selected: 1, promptLinked: 1, possibleActive: 1 });
+
+		act(() => store().setLoraWeight('shion', 1.5));
+		expect(result.current.rows[0]).toMatchObject({ selected: true, weight: 1.5 });
 	});
 });
 
@@ -228,7 +309,7 @@ describe('registerInstalled', () => {
 	};
 
 	it('adds a checkpoint with the current generation size and selects it', () => {
-		store().replaceAll({ models: [MODEL], loras: [SHION], selectedLoraIds: ['shion'] });
+		store().replaceAll({ models: [MODEL], loras: [SHION], selectedLoras: [at('shion', 0.4)] });
 		useGenerationSettingsStore.setState({ width: 832, height: 1216 });
 
 		const id = store().registerInstalled(CHECKPOINT_INSTALL);
@@ -243,17 +324,40 @@ describe('registerInstalled', () => {
 			torch_dtype: 'float16',
 			source: CHECKPOINT_INSTALL.source,
 		});
-		expect(store()).toMatchObject({ selectedModelId: id, selectedLoraIds: ['shion'], lastModelDir: null });
+		expect(store()).toMatchObject({ selectedModelId: id, selectedLoras: [at('shion', 0.4)], lastModelDir: null });
 	});
 
-	it('adds a LoRA to the selection once', () => {
-		store().replaceAll({ loras: [SHION], selectedLoraIds: ['shion'] });
+	it('adds a LoRA to the selection once, at the default weight', () => {
+		store().replaceAll({ loras: [SHION], selectedLoras: [at('shion', 0.4)] });
 
 		const id = store().registerInstalled(LORA_INSTALL);
 		expect(store().registerInstalled(LORA_INSTALL)).toBe(id);
 
 		expect(store().loras).toEqual([SHION, { id: 'add-detail', name: LORA_INSTALL.name, path: LORA_PATH, source: DETAIL_TWEAKER_SOURCE }]);
-		expect(store().selectedLoraIds).toEqual(['shion', 'add-detail']);
+		expect(store().selectedLoras).toEqual([at('shion', 0.4), at('add-detail')]);
+	});
+
+	it('select true keeps the weight of a LoRA that is already selected', () => {
+		store().replaceAll({ loras: [SHION], selectedLoras: [at('shion', 0.4)] });
+		const id = store().registerInstalled(LORA_INSTALL)!;
+		store().setLoraWeight(id, 0.65);
+
+		expect(store().registerInstalled(LORA_INSTALL, { select: true })).toBe(id);
+
+		expect(store().selectedLoras).toEqual([at('shion', 0.4), at(id, 0.65)]);
+	});
+
+	it('select false registers without touching the selection', () => {
+		store().replaceAll({ models: [MODEL], loras: [SHION], selectedModelId: MODEL.id, selectedLoras: [at('shion', 0.4)] });
+		const selection = store().selectedLoras;
+
+		const loraId = store().registerInstalled(LORA_INSTALL, { select: false });
+		const checkpointId = store().registerInstalled(CHECKPOINT_INSTALL, { select: false });
+
+		expect(store().loras.map((lora) => lora.id)).toEqual(['shion', loraId]);
+		expect(store().models.map((model) => model.id)).toEqual([MODEL.id, checkpointId]);
+		expect(store().selectedLoras).toBe(selection);
+		expect(store().selectedModelId).toBe(MODEL.id);
 	});
 
 	it('reuses a manual entry with the same path and attaches the source', () => {
@@ -263,7 +367,7 @@ describe('registerInstalled', () => {
 		expect(store().registerInstalled(LORA_INSTALL)).toBe('detail');
 
 		expect(store().loras).toEqual([{ ...manual, source: DETAIL_TWEAKER_SOURCE }]);
-		expect(store().selectedLoraIds).toEqual(['detail']);
+		expect(store().selectedLoras).toEqual([at('detail')]);
 	});
 
 	it('reuses the entry with the same provenance', () => {
@@ -287,7 +391,7 @@ describe('registerInstalled', () => {
 });
 
 describe('persistence', () => {
-	/** A real v0 'library-store' envelope (trimmed): entries have no `source`. */
+	/** A real v0 'library-store' envelope (trimmed): entries have no `source`, the selection is `selectedLoraIds`. */
 	const REAL_V0_STATE = {
 		models: [
 			{
@@ -320,50 +424,105 @@ describe('persistence', () => {
 		lastModelDir: 'D:\\Anything\\ComfyUI\\ComfyUI\\models\\checkpoints',
 		lastLoraDir: 'D:\\Anything\\ComfyUI\\ComfyUI\\models\\loras\\illustrous\\charachter',
 	};
-	const withNullSources = {
-		...REAL_V0_STATE,
+	const { selectedLoraIds: _legacySelection, ...REAL_V0_WITHOUT_SELECTION } = REAL_V0_STATE;
+	/** REAL_V0_STATE as version 2 writes it back. */
+	const MIGRATED_STATE = {
+		...REAL_V0_WITHOUT_SELECTION,
 		models: REAL_V0_STATE.models.map((model) => ({ ...model, source: null })),
 		loras: REAL_V0_STATE.loras.map((lora) => ({ ...lora, source: null })),
+		selectedLoras: [at('shion')],
+	};
+	/** A v1 envelope: entries carry `source`, the selection is still `selectedLoraIds`. */
+	const V1_STATE = {
+		...REAL_V0_WITHOUT_SELECTION,
+		models: MIGRATED_STATE.models,
+		loras: [{ ...MIGRATED_STATE.loras[0], source: DETAIL_TWEAKER_SOURCE }, MIGRATED_STATE.loras[1]],
+		selectedLoraIds: ['zy-illustrious-realism-enhancer-v1', 'deleted', 'shion'],
 	};
 
-	it('migrates a real v0 envelope: entries get source null and the store is written back as version 1', async () => {
+	it('migrates a real v0 envelope: source null, selection at the default weight, written back as version 2', async () => {
 		const backend = createMemoryStoreBackend({ 'library-store': { state: REAL_V0_STATE, version: 0 } });
 		setStoreBackend(backend);
 
 		expect(await hydratePersistedStores([useLibraryStore])).toEqual([]);
-		expect(store()).toMatchObject(withNullSources);
+		expect(store()).toMatchObject(MIGRATED_STATE);
 		await flushPersistence();
 
-		expect(backend.snapshot()['library-store']).toEqual({ state: withNullSources, version: LIBRARY_STORE_VERSION });
-		expect(LIBRARY_STORE_VERSION).toBe(1);
-		expect(migrateLibraryState(REAL_V0_STATE)).toBe(REAL_V0_STATE);
+		expect(backend.snapshot()['library-store']).toEqual({ state: MIGRATED_STATE, version: LIBRARY_STORE_VERSION });
+		expect(LIBRARY_STORE_VERSION).toBe(2);
 	});
 
-	it('round-trips v1 sources', async () => {
-		const state = { ...withNullSources, loras: [{ ...withNullSources.loras[0], source: DETAIL_TWEAKER_SOURCE }, withNullSources.loras[1]] };
-		const backend = createMemoryStoreBackend({ 'library-store': { state, version: 1 } });
+	it('migrates a v1 envelope: sources kept, selectedLoraIds -> selectedLoras at the default weight', async () => {
+		const backend = createMemoryStoreBackend({ 'library-store': { state: V1_STATE, version: 1 } });
 		setStoreBackend(backend);
 
 		await hydratePersistedStores([useLibraryStore]);
 		expect(store().loras[0].source).toEqual(DETAIL_TWEAKER_SOURCE);
+		expect(store().selectedLoras).toEqual([at('zy-illustrious-realism-enhancer-v1'), at('shion')]);
+		await flushPersistence();
 
-		store().setLoraSelected('zy-illustrious-realism-enhancer-v1', true);
+		const written = backend.snapshot()['library-store'];
+		expect(written?.version).toBe(2);
+		expect(written?.state).not.toHaveProperty('selectedLoraIds');
+		expect(written?.state).toMatchObject({ selectedLoras: [at('zy-illustrious-realism-enhancer-v1'), at('shion')] });
+	});
+
+	it('round-trips v2 weights', async () => {
+		const state = { ...MIGRATED_STATE, selectedLoras: [at('shion', 0.6), at('zy-illustrious-realism-enhancer-v1', -1.25)] };
+		const backend = createMemoryStoreBackend({ 'library-store': { state, version: 2 } });
+		setStoreBackend(backend);
+
+		await hydratePersistedStores([useLibraryStore]);
+		expect(store().selectedLoras).toEqual(state.selectedLoras);
+
+		store().setLoraWeight('shion', 0.65);
 		await flushPersistence();
 
 		expect(backend.snapshot()['library-store']).toEqual({
-			state: { ...state, selectedLoraIds: ['shion', 'zy-illustrious-realism-enhancer-v1'] },
-			version: 1,
+			state: { ...state, selectedLoras: [at('shion', 0.65), at('zy-illustrious-realism-enhancer-v1', -1.25)] },
+			version: 2,
 		});
+	});
+
+	it('migrateLibraryState maps v0/v1 selections and leaves v2 states unchanged', () => {
+		const { selectedLoraIds: _v1Selection, ...v1WithoutSelection } = V1_STATE;
+		expect(migrateLibraryState(REAL_V0_STATE, 0)).toEqual({ ...REAL_V0_WITHOUT_SELECTION, selectedLoras: [at('shion')] });
+		// Unknown ids are dropped later, by the merge (sanitizeLibrary).
+		const migratedV1 = migrateLibraryState(V1_STATE, 1);
+		expect(migratedV1).toEqual({ ...v1WithoutSelection, selectedLoras: [at('zy-illustrious-realism-enhancer-v1'), at('deleted'), at('shion')] });
+		expect(migratedV1).not.toHaveProperty('selectedLoraIds');
+		// Without a selection: an empty one. A v2 state (or one that already has selectedLoras) is returned as is.
+		expect(migrateLibraryState({ models: [] }, 1)).toEqual({ models: [], selectedLoras: [] });
+		expect(migrateLibraryState(MIGRATED_STATE, 2)).toBe(MIGRATED_STATE);
+		expect(migrateLibraryState(MIGRATED_STATE, 1)).toBe(MIGRATED_STATE);
+		expect(migrateLibraryState(null, 0)).toBeNull();
 	});
 
 	it('repairs a stale selection on hydration', async () => {
 		setStoreBackend(
 			createMemoryStoreBackend({
-				'library-store': { state: { models: [MODEL], loras: [SHION], selectedModelId: 'deleted', selectedLoraIds: ['deleted', 'shion'], lastModelDir: null, lastLoraDir: null }, version: 0 },
+				'library-store': {
+					state: { models: [MODEL], loras: [SHION], selectedModelId: 'deleted', selectedLoras: [at('deleted'), at('shion', 40)], lastModelDir: null, lastLoraDir: null },
+					version: 2,
+				},
 			}),
 		);
 		await hydratePersistedStores([useLibraryStore]);
 		expect(store().selectedModelId).toBe(MODEL.id);
-		expect(store().selectedLoraIds).toEqual(['shion']);
+		expect(store().selectedLoras).toEqual([at('shion', LORA_WEIGHT_DEFAULTS.max)]);
+	});
+
+	it('repairs a stale legacy selection on hydration', async () => {
+		setStoreBackend(
+			createMemoryStoreBackend({
+				'library-store': {
+					state: { models: [MODEL], loras: [SHION], selectedModelId: 'deleted', selectedLoraIds: ['deleted', 'shion'], lastModelDir: null, lastLoraDir: null },
+					version: 0,
+				},
+			}),
+		);
+		await hydratePersistedStores([useLibraryStore]);
+		expect(store().selectedModelId).toBe(MODEL.id);
+		expect(store().selectedLoras).toEqual([at('shion')]);
 	});
 });

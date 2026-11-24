@@ -1,21 +1,24 @@
 import { describe, expect, it } from 'vitest';
 import { MODEL_SEARCH_QUERY_DEFAULTS } from '../api/defaults.gen';
 import type { RemoteModel, RemoteModelVersion } from '../api/types';
-import { DETAIL_TWEAKER_FILE as SAFETENSORS, DETAIL_TWEAKER_VERSION, remoteFile, remoteModel, remoteVersion } from '../test/modelLibraryData';
+import { DETAIL_TWEAKER, DETAIL_TWEAKER_FILE as SAFETENSORS, DETAIL_TWEAKER_VERSION, installedModel, remoteFile, remoteModel, remoteVersion } from '../test/modelLibraryData';
 import {
-	appendResults,
 	buildSearchQuery,
 	DEFAULT_CATALOG_FILTERS,
 	embeddingPromptToken,
+	INSTALL_ALREADY_RUNNING,
+	INSTALL_CANCELLED,
 	installFile,
 	installKey,
+	installOptions,
+	installOutcomeEntry,
 	isInstallRunning,
 	MODEL_KIND_LABELS,
 	MODEL_SORT_LABELS,
 	modelKey,
+	NO_LIBRARY_ENTRY,
 	pickedVersion,
 	RUNNING_INSTALL_PHASES,
-	triggerWordsText,
 	versionStatusKind,
 	type CatalogFilters,
 } from './modelCatalog';
@@ -92,22 +95,7 @@ describe('versions and files', () => {
 	});
 });
 
-describe('appendResults', () => {
-	it('appends a page in order and drops models already listed', () => {
-		const first = [model('1'), model('2')];
-		const merged = appendResults(first, [model('2'), model('3'), model('3'), { ...model('1'), provider: 'huggingface' }]);
-		expect(merged.map(modelKey)).toEqual(['civitai:1', 'civitai:2', 'civitai:3', 'huggingface:1']);
-		expect(merged[0]).toBe(first[0]);
-		expect(appendResults([], first)).toEqual(first);
-	});
-});
-
 describe('prompt helpers', () => {
-	it('joins trigger words for a prompt', () => {
-		expect(triggerWordsText([' easynegative ', '', 'detailed', '   '])).toBe('easynegative, detailed');
-		expect(triggerWordsText([])).toBe('');
-	});
-
 	it('builds the embedding token from the file name (Windows and POSIX paths)', () => {
 		expect(embeddingPromptToken('D:\\Anything\\ComfyUI\\ComfyUI\\models\\embeddings\\easynegative.safetensors')).toBe('embedding:easynegative');
 		expect(embeddingPromptToken('/home/me/models/embeddings/bad.prompt.v2.pt')).toBe('embedding:bad.prompt.v2');
@@ -135,6 +123,24 @@ describe('install phases and version status', () => {
 		expect(versionStatusKind(version(), null, false)).toBe('remote');
 		// Only the install file counts as a local copy.
 		expect(versionStatusKind(version({ files: [SAFETENSORS, { ...PICKLE, local_path: 'D:\\x.pt' }] }), null, false)).toBe('remote');
+	});
+});
+
+describe('install options and outcomes', () => {
+	it('applies the defaults: select and announce', () => {
+		expect(installOptions()).toEqual({ select: true, announce: true });
+		expect(installOptions({})).toEqual({ select: true, announce: true });
+		expect(installOptions({ select: false })).toEqual({ select: false, announce: true });
+		expect(installOptions({ select: undefined, announce: false })).toEqual({ select: true, announce: false });
+	});
+
+	it('tells the library entry an outcome provides, or why it provides none', () => {
+		const installed = installedModel(DETAIL_TWEAKER, DETAIL_TWEAKER_VERSION, 'D:/models/loras/add_detail.safetensors');
+		expect(installOutcomeEntry({ status: 'installed', installed, entryId: 'add-detail' })).toEqual({ entryId: 'add-detail' });
+		expect(installOutcomeEntry({ status: 'installed', installed: { ...installed, kind: 'embedding' }, entryId: null })).toEqual({ problem: NO_LIBRARY_ENTRY });
+		expect(installOutcomeEntry({ status: 'failed', error: 'SHA-256 mismatch' })).toEqual({ problem: 'SHA-256 mismatch' });
+		expect(installOutcomeEntry({ status: 'cancelled' })).toEqual({ problem: INSTALL_CANCELLED });
+		expect(installOutcomeEntry({ status: 'refused', reason: INSTALL_ALREADY_RUNNING })).toEqual({ problem: INSTALL_ALREADY_RUNNING });
 	});
 });
 

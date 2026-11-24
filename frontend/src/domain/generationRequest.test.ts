@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { GENERATION_DEFAULTS } from '../api/defaults.gen';
+import { GENERATION_DEFAULTS, LORA_WEIGHT_DEFAULTS } from '../api/defaults.gen';
 import type { LoRASpec, ModelSpec } from '../api/types';
 import type { Category } from './categories';
 import { makeRule, specificMatcher } from './forbiddenRules';
@@ -50,7 +50,15 @@ function inputs(overrides: Partial<GenerationInputs> = {}): GenerationInputs {
 		categories: CATEGORIES,
 		rules: [],
 		settings: SETTINGS,
-		library: { models: [MODEL], loras: LORAS, selectedModelId: 'model', selectedLoraIds: ['portrait', 'deleted'] },
+		library: {
+			models: [MODEL],
+			loras: LORAS,
+			selectedModelId: 'model',
+			selectedLoras: [
+				{ id: 'portrait', weight: 0.6 },
+				{ id: 'deleted', weight: 1 },
+			],
+		},
 		...overrides,
 	};
 }
@@ -64,7 +72,11 @@ describe('buildGenerationRequest', () => {
 		const { request, nextCategorySeedState, missingLoraIds } = buildGenerationRequest(inputs());
 		expect(request).toEqual({
 			model: MODEL,
-			loras: [LORAS[1], LORAS[0]],
+			// The selected LoRA with its weight, then the prompt-linked one at the default weight.
+			loras: [
+				{ ...LORAS[1], weight: 0.6 },
+				{ ...LORAS[0], weight: LORA_WEIGHT_DEFAULTS.weight },
+			],
 			prompt: '1girl, smile, oil painting',
 			selections: [
 				{ category_name: 'Main', prompt_text: '1girl, smile', locked: true, induced_lora_ids: ['style'] },
@@ -81,6 +93,13 @@ describe('buildGenerationRequest', () => {
 		});
 		expect(nextCategorySeedState).toBe(SETTINGS.promptCategorySeedState);
 		expect(missingLoraIds).toEqual(['deleted', 'gone']);
+	});
+
+	it('a LoRA both selected and prompt-linked keeps its selected weight', () => {
+		const library = { ...inputs().library, selectedLoras: [{ id: 'style', weight: -1.25 }] };
+		const { request, missingLoraIds } = buildGenerationRequest(inputs({ library }));
+		expect(request.loras).toEqual([{ ...LORAS[0], weight: -1.25 }]);
+		expect(missingLoraIds).toEqual(['gone']);
 	});
 
 	it('uses one random prompt seed for both the selection and the request', () => {
@@ -114,10 +133,10 @@ describe('buildGenerationRequest', () => {
 	});
 
 	it('throws clear errors without a usable model or selection', () => {
-		expect(() => buildGenerationRequest(inputs({ library: { models: [MODEL], loras: [], selectedModelId: '', selectedLoraIds: [] } }))).toThrow(
+		expect(() => buildGenerationRequest(inputs({ library: { models: [MODEL], loras: [], selectedModelId: '', selectedLoras: [] } }))).toThrow(
 			'Select a model before generating.',
 		);
-		expect(() => buildGenerationRequest(inputs({ library: { models: [MODEL], loras: [], selectedModelId: 'gone', selectedLoraIds: [] } }))).toThrow(
+		expect(() => buildGenerationRequest(inputs({ library: { models: [MODEL], loras: [], selectedModelId: 'gone', selectedLoras: [] } }))).toThrow(
 			"Unknown model 'gone'.",
 		);
 		expect(() => buildGenerationRequest(inputs({ categories: [] }))).toThrow(PromptSelectionError);

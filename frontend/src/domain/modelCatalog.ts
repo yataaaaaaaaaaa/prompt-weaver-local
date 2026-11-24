@@ -6,7 +6,7 @@
 // - display names of installs: InstalledModel.name / DownloadTaskEvent.title;
 // - search defaults: MODEL_SEARCH_QUERY_DEFAULTS (generated from the backend ModelSearchQuery).
 import { MODEL_SEARCH_QUERY_DEFAULTS } from '../api/defaults.gen';
-import type { ModelKind, ModelSearchQuery, ModelSort, RemoteFile, RemoteModel, RemoteModelVersion } from '../api/types';
+import type { InstalledModel, ModelKind, ModelSearchQuery, ModelSort, RemoteFile, RemoteModel, RemoteModelVersion } from '../api/types';
 import { basename, stripExtension } from './paths';
 
 /** User-editable search filters (the rest of ModelSearchQuery: limit from the defaults, cursor from paging). */
@@ -56,28 +56,6 @@ export function installFile(version: RemoteModelVersion, fileId: string | null =
 	return id == null ? null : (version.files.find((file) => file.id === id) ?? null);
 }
 
-/** Merges a further result page: keeps the order, drops models already listed (same modelKey). */
-export function appendResults(current: readonly RemoteModel[], page: readonly RemoteModel[]): RemoteModel[] {
-	const seen = new Set(current.map(modelKey));
-	const added = page.filter((model) => {
-		const key = modelKey(model);
-		if (seen.has(key)) {
-			return false;
-		}
-		seen.add(key);
-		return true;
-	});
-	return [...current, ...added];
-}
-
-/** Trigger words as pasted into a prompt: trimmed, empty ones dropped, joined with ', '. */
-export function triggerWordsText(words: readonly string[]): string {
-	return words
-		.map((word) => word.trim())
-		.filter(Boolean)
-		.join(', ');
-}
-
 /** Prompt text that uses an installed embedding file: 'embedding:<file name without extension>'
  *  (diffusion-lora-runtime resolves it against the embeddings folder). */
 export function embeddingPromptToken(path: string): string {
@@ -95,6 +73,53 @@ export const RUNNING_INSTALL_PHASES: ReadonlySet<InstallPhase> = new Set<Install
 /** True while an install in `phase` runs (false without install). */
 export function isInstallRunning(phase: InstallPhase | null | undefined): boolean {
 	return phase != null && RUNNING_INSTALL_PHASES.has(phase);
+}
+
+/** Options of one install (src/stores/modelCatalogStore.ts install). */
+export type InstallOptions = {
+	/** Select the installed entry for generation (libraryStore.registerInstalled select). Default true; the image
+	 *  library installs LoRAs with false, then sets the whole selection with their weights. */
+	select?: boolean;
+	/** Announce the installed file (the success / embedding info notification). Default true. Errors and refusals
+	 *  are always notified. */
+	announce?: boolean;
+};
+
+/** InstallOptions with their defaults applied (undefined = default). */
+export function installOptions(options: InstallOptions = {}): Required<InstallOptions> {
+	return { select: options.select ?? true, announce: options.announce ?? true };
+}
+
+/** How an install ended (the promise of src/stores/modelCatalogStore.ts install resolves to it; a second install of
+ *  a running installKey joins it and gets the same outcome):
+ *  - 'installed': the file is local and registered; entryId = its library entry (null for embeddings);
+ *  - 'failed': API error, download error, or no file installed after the download (entry kept as failed);
+ *  - 'cancelled': the download was cancelled;
+ *  - 'refused': not attempted (version.unavailable_reason, or the same install already runs without a known
+ *    engine). */
+export type InstallOutcome =
+	| { status: 'installed'; installed: InstalledModel; entryId: string | null }
+	| { status: 'failed'; error: string }
+	| { status: 'cancelled' }
+	| { status: 'refused'; reason: string };
+
+export const INSTALL_CANCELLED = 'The download was cancelled.';
+export const INSTALL_ALREADY_RUNNING = 'This file is already being installed.';
+export const NO_LIBRARY_ENTRY = 'Installed, but it has no library entry.';
+
+/** The library entry an outcome provides, or why it provides none (failure, cancellation, refusal, or an install
+ *  without library entry such as an embedding). */
+export function installOutcomeEntry(outcome: InstallOutcome): { entryId: string } | { problem: string } {
+	switch (outcome.status) {
+		case 'installed':
+			return outcome.entryId === null ? { problem: NO_LIBRARY_ENTRY } : { entryId: outcome.entryId };
+		case 'failed':
+			return { problem: outcome.error };
+		case 'cancelled':
+			return { problem: INSTALL_CANCELLED };
+		case 'refused':
+			return { problem: outcome.reason };
+	}
 }
 
 /** Status of a remote version as shown by a result card (first match wins, in this order):

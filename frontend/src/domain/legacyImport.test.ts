@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest';
+import { LORA_WEIGHT_DEFAULTS } from '../api/defaults.gen';
 import type { AppState, LibraryState } from '../api/types';
 import {
 	legacyCategories,
@@ -155,10 +156,19 @@ describe('legacyLibrary', () => {
 			models: LEGACY_LIBRARY.models,
 			loras: LEGACY_LIBRARY.loras,
 			selectedModelId: 'jankuv5nsfwtrainednoobai-v50-safetensors',
-			selectedLoraIds: ['alya-multicharacter'],
+			// app_state.json has no weights: every LoRA at the default weight.
+			selectedLoras: [{ id: 'alya-multicharacter', weight: LORA_WEIGHT_DEFAULTS.weight }],
 			lastModelDir: 'D:\\models\\checkpoints',
 			lastLoraDir: 'D:\\models\\loras',
 		});
+	});
+
+	it('maps every last_lora_ids entry to the default weight, in order', () => {
+		expect(legacyLibrary({ ...LEGACY_APP_STATE, last_lora_ids: ['b', 'a'] }, LEGACY_LIBRARY).selectedLoras).toEqual([
+			{ id: 'b', weight: LORA_WEIGHT_DEFAULTS.weight },
+			{ id: 'a', weight: LORA_WEIGHT_DEFAULTS.weight },
+		]);
+		expect(legacyLibrary({ ...LEGACY_APP_STATE, last_lora_ids: [] }, LEGACY_LIBRARY).selectedLoras).toEqual([]);
 	});
 
 	it('selects the first model when app_state has none', () => {

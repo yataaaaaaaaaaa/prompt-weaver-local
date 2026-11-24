@@ -2,6 +2,7 @@
 import { Field, SpinButton } from '@fluentui/react-components';
 import { useGenerationSettingsStore } from '../../stores/generationSettingsStore';
 import { PaneGrid, PaneSection } from '../../ui/PaneLayout';
+import { spinButtonValue } from '../../ui/spinButtonValue';
 
 type NumberSettingProps = {
 	label: string;
@@ -21,9 +22,8 @@ function NumberSetting({ label, value, min, max, step = 1, onCommit }: NumberSet
 				max={max}
 				step={step}
 				onChange={(_event, data) => {
-					// Steppers report `value`; typed text is reported as `displayValue` on commit (Enter/blur).
-					const next = data.value ?? (data.displayValue === undefined ? Number.NaN : Number.parseFloat(data.displayValue));
-					if (next !== null && Number.isFinite(next)) {
+					const next = spinButtonValue(data);
+					if (next !== null) {
 						onCommit(next);
 					}
 				}}

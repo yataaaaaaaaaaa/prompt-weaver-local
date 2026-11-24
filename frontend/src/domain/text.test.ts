@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 import {
 	areNameEquivalent,
 	comparePriority,
+	joinPromptTags,
 	normalizeIdPart,
 	normalizePromptName,
 	normalizeTagId,
@@ -95,6 +96,12 @@ describe('prompt matching normalizations', () => {
 		expect(splitPromptWords('A  b, C,,')).toEqual(['a b', 'c']);
 		expect(splitPromptTags('long hair, Long_Hair, blue eyes, , ,')).toEqual(['long hair', 'blue eyes']);
 		expect([...promptTagIds('long hair, blue eyes')]).toEqual(['long_hair', 'blue_eyes']);
+	});
+
+	it('joins tags as prompt text (trigger words, image tags)', () => {
+		expect(joinPromptTags([' easynegative ', '', 'detailed', '   '])).toBe('easynegative, detailed');
+		expect(joinPromptTags(['castle', ' sky ', 'snow'])).toBe('castle, sky, snow');
+		expect(joinPromptTags([])).toBe('');
 	});
 
 	it('promptHasTag compares normalized tag ids', () => {

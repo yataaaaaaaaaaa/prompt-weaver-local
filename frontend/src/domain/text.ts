@@ -125,6 +125,15 @@ export function splitPromptTags(text: string): string[] {
 	return tags;
 }
 
+/** Tags as pasted into a prompt (the inverse of splitPromptTags): trimmed, empty ones dropped, joined with ', '.
+ *  Used for trigger words and for the tags of online images. */
+export function joinPromptTags(tags: readonly string[]): string {
+	return tags
+		.map((tag) => tag.trim())
+		.filter(Boolean)
+		.join(', ');
+}
+
 /** Normalized tag ids of a prompt. */
 export function promptTagIds(promptText: string): Set<string> {
 	return new Set(splitPromptTags(promptText).map((tag) => normalizeTagId(tag)));

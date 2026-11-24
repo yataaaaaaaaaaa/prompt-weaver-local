@@ -52,6 +52,10 @@ export type CategoriesActions = {
 	setCategoryState: (key: CategoryKey, state: CategoryState) => void;
 	/** Appends an empty sub-prompt (rejected with a notification when the category already has one). */
 	addSubPrompt: (key: CategoryKey) => void;
+	/** Appends a sub-prompt with this text (the image library adds an image's tags with it). Returns false without
+	 *  change for an unknown category or a blank text, and rejects duplicates inside the category (the notification
+	 *  of setSubPromptText). */
+	addSubPromptWithText: (key: CategoryKey, text: string) => boolean;
 	/** Edits a sub-prompt text; rejects duplicates inside the category (notification, returns false).
 	 *  Rewrites exact forbidden rules naming the old text. */
 	setSubPromptText: (key: CategoryKey, promptKey: SubPromptKey, text: string) => boolean;
@@ -166,6 +170,18 @@ export const useCategoriesStore = create<CategoriesStore>()(
 						}
 						return { ...category, subPrompts: [...category.subPrompts, makeSubPrompt()] };
 					}),
+				addSubPromptWithText: (key, text) => {
+					const category = findCategory(get().categories, key);
+					if (!category || !text.trim()) {
+						return false;
+					}
+					if (findSubPromptIn(category, subPromptKeyOf(text))) {
+						warnDuplicateSubPrompt(category);
+						return false;
+					}
+					updateCategory(key, (item) => ({ ...item, subPrompts: [...item.subPrompts, makeSubPrompt(text)] }));
+					return true;
+				},
 				setSubPromptText: (key, promptKey, text) => {
 					const category = findCategory(get().categories, key);
 					const subPrompt = category && findSubPromptIn(category, promptKey);

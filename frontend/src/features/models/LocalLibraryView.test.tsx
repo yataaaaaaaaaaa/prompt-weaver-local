@@ -31,7 +31,7 @@ function seed() {
 		models: [INSTALLED_MODEL, LOCAL_MODEL],
 		loras: [INSTALLED_LORA, LOCAL_LORA],
 		selectedModelId: 'local',
-		selectedLoraIds: ['lora-one'],
+		selectedLoras: [{ id: 'lora-one', weight: 0.6 }],
 		...libraryActions,
 	});
 	const copyTriggerWords = vi.fn(async () => undefined);

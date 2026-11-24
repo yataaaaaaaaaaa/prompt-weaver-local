@@ -2,7 +2,7 @@ import { act, renderHook } from '@testing-library/react';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { ApiError, api } from '../api/client';
 import type { DownloadTaskEvent, InstalledModel, InstallJob, InstallResponse, ModelSearchPage, RemoteModel, RemoteModelVersion } from '../api/types';
-import { buildSearchQuery, DEFAULT_CATALOG_FILTERS, installKey } from '../domain/modelCatalog';
+import { buildSearchQuery, DEFAULT_CATALOG_FILTERS, INSTALL_ALREADY_RUNNING, installKey } from '../domain/modelCatalog';
 import { clipboard } from '../services/clipboard';
 import {
 	downloadEvent as buildDownloadEvent,
@@ -20,9 +20,9 @@ import {
 	remoteModel,
 	remoteVersion,
 } from '../test/modelLibraryData';
-import { useLibraryStore } from './libraryStore';
+import { selectSelectedLoras, useLibraryStore } from './libraryStore';
+import { SEARCH_DEBOUNCE_MS } from './pagedSearch';
 import {
-	SEARCH_DEBOUNCE_MS,
 	selectActiveProvider,
 	selectDetachedInstallKeys,
 	useModelCatalogStore,
@@ -283,7 +283,7 @@ describe('install', () => {
 		expect(installModel).toHaveBeenCalledWith({ provider: 'civitai', version_id: '62833', file_id: null });
 		expect(catalog().installs).toEqual({});
 		expect(useLibraryStore.getState().loras).toEqual([{ id: 'add-detail', name: INSTALLED_LORA.name, path: INSTALLED_LORA.path, source: INSTALLED_LORA.source }]);
-		expect(useLibraryStore.getState().selectedLoraIds).toEqual(['add-detail']);
+		expect(selectSelectedLoras(useLibraryStore.getState()).map((lora) => lora.id)).toEqual(['add-detail']);
 		expect(notifications()).toEqual([
 			{ intent: 'success', title: null, message: 'Detail Tweaker LoRA - v1.0 is ready and selected for generation.' },
 		]);
@@ -337,7 +337,7 @@ describe('install', () => {
 			[{ provider: 'civitai', version_id: '62833', file_id: null }],
 		]);
 		expect(catalog().installs).toEqual({});
-		expect(useLibraryStore.getState().selectedLoraIds).toEqual(['add-detail']);
+		expect(selectSelectedLoras(useLibraryStore.getState()).map((lora) => lora.id)).toEqual(['add-detail']);
 	});
 
 	it('keeps a failed download with the event message until dismissed', async () => {
@@ -414,7 +414,7 @@ describe('install', () => {
 		await installing;
 
 		expect(catalog().installs).toEqual({});
-		expect(useLibraryStore.getState().selectedLoraIds).toEqual(['add-detail']);
+		expect(selectSelectedLoras(useLibraryStore.getState()).map((lora) => lora.id)).toEqual(['add-detail']);
 	});
 
 	it('API errors fail the install and are reported; a retry runs again', async () => {
@@ -442,16 +442,48 @@ describe('install', () => {
 		expect(catalog().installs[LORA_KEY]).toMatchObject({ phase: 'failed', error: 'The download completed but the backend did not install the file.' });
 	});
 
-	it('is a no-op while the same install runs', async () => {
+	it('joins the install running under the same key: same promise and outcome, one request, the first options', async () => {
 		const answer = deferred<InstallResponse>();
 		const installModel = vi.spyOn(api, 'installModel').mockReturnValue(answer.promise);
 
 		const first = catalog().install(LORA_MODEL, LORA_VERSION);
-		await catalog().install(LORA_MODEL, LORA_VERSION, LORA_FILE.id);
+		const joined = catalog().install(LORA_MODEL, LORA_VERSION, LORA_FILE.id, { select: false, announce: false });
+		expect(joined).toBe(first);
 		answer.resolve(installedAnswer(INSTALLED_LORA));
-		await first;
 
+		await expect(joined).resolves.toEqual({ status: 'installed', installed: INSTALLED_LORA, entryId: 'add-detail' });
 		expect(installModel).toHaveBeenCalledTimes(1);
+		expect(selectSelectedLoras(useLibraryStore.getState()).map((lora) => lora.id)).toEqual(['add-detail']);
+		expect(notifications()).toEqual([{ intent: 'success', title: null, message: 'Detail Tweaker LoRA - v1.0 is ready and selected for generation.' }]);
+
+		// Once ended, the same key installs again (no stale promise is joined).
+		installModel.mockResolvedValue(installedAnswer(INSTALLED_LORA));
+		const again = catalog().install(LORA_MODEL, LORA_VERSION);
+		expect(again).not.toBe(first);
+		await again;
+		expect(installModel).toHaveBeenCalledTimes(2);
+	});
+
+	it('joins a running download until its end (cancelled)', async () => {
+		vi.spyOn(api, 'installModel').mockResolvedValue(downloadingAnswer('task-joined'));
+
+		const first = catalog().install(LORA_MODEL, LORA_VERSION);
+		await settle();
+		const joined = catalog().install(LORA_MODEL, LORA_VERSION, null, { select: false });
+		act(() => useTasksStore.getState().applyEvent(downloadEvent('task-joined', { stage: 'cancelled' })));
+
+		expect(await Promise.all([first, joined])).toEqual([{ status: 'cancelled' }, { status: 'cancelled' }]);
+	});
+
+	it('refuses an install whose running entry has no known engine (set from outside the actions)', async () => {
+		const installModel = vi.spyOn(api, 'installModel');
+		const running: InstallEntry = { key: LORA_KEY, provider: 'civitai', modelId: '58390', versionId: '62833', fileId: null, kind: 'lora', phase: 'downloading', taskId: 'other', error: null };
+		useModelCatalogStore.setState({ installs: { [LORA_KEY]: running } });
+
+		await expect(catalog().install(LORA_MODEL, LORA_VERSION)).resolves.toEqual({ status: 'refused', reason: INSTALL_ALREADY_RUNNING });
+
+		expect(installModel).not.toHaveBeenCalled();
+		expect(catalog().installs[LORA_KEY]).toBe(running);
 	});
 
 	it('installs an explicitly chosen file under its own key', async () => {
@@ -476,6 +508,81 @@ describe('install', () => {
 		expect(installModel).not.toHaveBeenCalled();
 		expect(catalog().installs['civitai:62833:']).toMatchObject({ phase: 'failed', error: 'Only pickle files: not downloadable.' });
 		expect(notifications()).toEqual([{ intent: 'warning', title: 'Detail Tweaker LoRA cannot be installed', message: 'Only pickle files: not downloadable.' }]);
+	});
+});
+
+describe('install outcomes and options', () => {
+	it('resolves to the outcome: installed with the library entry (null for embeddings)', async () => {
+		vi.spyOn(api, 'installModel')
+			.mockResolvedValueOnce(installedAnswer(INSTALLED_LORA))
+			.mockResolvedValueOnce(installedAnswer(INSTALLED_CHECKPOINT))
+			.mockResolvedValueOnce(installedAnswer(INSTALLED_EMBEDDING));
+
+		await expect(catalog().install(LORA_MODEL, LORA_VERSION)).resolves.toEqual({ status: 'installed', installed: INSTALLED_LORA, entryId: 'add-detail' });
+		await expect(catalog().install(CHECKPOINT_MODEL, CHECKPOINT_VERSION)).resolves.toEqual({
+			status: 'installed',
+			installed: INSTALLED_CHECKPOINT,
+			entryId: 'janku-v7-777-safetensors',
+		});
+		await expect(catalog().install(EMBEDDING_MODEL, EMBEDDING_VERSION)).resolves.toEqual({ status: 'installed', installed: INSTALLED_EMBEDDING, entryId: null });
+	});
+
+	it('resolves to failed (download error or API error), cancelled or refused', async () => {
+		vi.spyOn(api, 'installModel')
+			.mockResolvedValueOnce(downloadingAnswer('task-error'))
+			.mockRejectedValueOnce(new ApiError('This file needs a Civitai API token', 403, null))
+			.mockResolvedValueOnce(downloadingAnswer('task-cancel'));
+
+		const downloadFailure = catalog().install(LORA_MODEL, LORA_VERSION);
+		await settle();
+		act(() => useTasksStore.getState().applyEvent(downloadEvent('task-error', { stage: 'error', message: '' })));
+		await expect(downloadFailure).resolves.toEqual({ status: 'failed', error: 'The download failed.' });
+
+		await expect(catalog().install(LORA_MODEL, LORA_VERSION)).resolves.toEqual({ status: 'failed', error: 'This file needs a Civitai API token' });
+
+		const cancelled = catalog().install(LORA_MODEL, LORA_VERSION);
+		await settle();
+		act(() => useTasksStore.getState().applyEvent(downloadEvent('task-cancel', { stage: 'cancelled' })));
+		await expect(cancelled).resolves.toEqual({ status: 'cancelled' });
+
+		const unavailable = { ...LORA_VERSION, unavailable_reason: 'Unsupported base model: Flux.1 D' };
+		await expect(catalog().install(LORA_MODEL, unavailable)).resolves.toEqual({ status: 'refused', reason: 'Unsupported base model: Flux.1 D' });
+	});
+
+	it('select: false registers without changing the selection; the announcement says so', async () => {
+		vi.spyOn(api, 'installModel').mockResolvedValueOnce(installedAnswer(INSTALLED_LORA)).mockResolvedValueOnce(installedAnswer(INSTALLED_CHECKPOINT));
+
+		await expect(catalog().install(LORA_MODEL, LORA_VERSION, null, { select: false })).resolves.toMatchObject({ entryId: 'add-detail' });
+		await catalog().install(CHECKPOINT_MODEL, CHECKPOINT_VERSION, null, { select: false });
+
+		expect(useLibraryStore.getState().loras.map((lora) => lora.id)).toEqual(['add-detail']);
+		expect(useLibraryStore.getState().models.map((model) => model.id)).toEqual(['janku-v7-777-safetensors']);
+		expect(selectSelectedLoras(useLibraryStore.getState())).toEqual([]);
+		expect(useLibraryStore.getState().selectedModelId).toBe('');
+		expect(notifications()).toEqual([
+			{ intent: 'success', title: null, message: 'Detail Tweaker LoRA - v1.0 is ready.' },
+			{ intent: 'success', title: null, message: `${INSTALLED_CHECKPOINT.name} is ready.` },
+		]);
+	});
+
+	it('announce: false installs silently, but failures and refusals are still notified', async () => {
+		vi.spyOn(api, 'installModel')
+			.mockResolvedValueOnce(installedAnswer(INSTALLED_LORA))
+			.mockResolvedValueOnce(installedAnswer(INSTALLED_EMBEDDING))
+			.mockRejectedValueOnce(new ApiError('Disk full', 507, null));
+		const silent = { announce: false };
+
+		await catalog().install(LORA_MODEL, LORA_VERSION, null, silent);
+		await catalog().install(EMBEDDING_MODEL, EMBEDDING_VERSION, null, silent);
+		expect(selectSelectedLoras(useLibraryStore.getState()).map((lora) => lora.id)).toEqual(['add-detail']);
+		expect(notifications()).toEqual([]);
+
+		await catalog().install(CHECKPOINT_MODEL, CHECKPOINT_VERSION, null, silent);
+		await catalog().install(LORA_MODEL, { ...LORA_OLD_VERSION, unavailable_reason: 'No SafeTensors file' }, null, silent);
+		expect(notifications()).toEqual([
+			{ intent: 'error', title: 'Install failed', message: 'Disk full' },
+			{ intent: 'warning', title: 'Detail Tweaker LoRA cannot be installed', message: 'No SafeTensors file' },
+		]);
 	});
 });
 
@@ -514,7 +621,24 @@ describe('resumeInstalls', () => {
 
 		expect(installModel).toHaveBeenCalledWith({ provider: 'civitai', version_id: '62833', file_id: '44319' });
 		expect(catalog().installs).toEqual({});
-		expect(useLibraryStore.getState().selectedLoraIds).toEqual(['add-detail']);
+		expect(selectSelectedLoras(useLibraryStore.getState()).map((lora) => lora.id)).toEqual(['add-detail']);
+	});
+
+	it('runs the install engine: an install() of the resumed key joins it', async () => {
+		vi.spyOn(api, 'listInstalls').mockResolvedValue([JOB]);
+		const installModel = vi.spyOn(api, 'installModel').mockResolvedValue(installedAnswer(INSTALLED_LORA));
+
+		const resuming = catalog().resumeInstalls();
+		await settle();
+		const joined = catalog().install(LORA_MODEL, LORA_VERSION, null, { select: false, announce: false });
+		act(() => useTasksStore.getState().applyEvent(downloadEvent('task-resumed', { stage: 'complete' })));
+
+		await expect(joined).resolves.toEqual({ status: 'installed', installed: INSTALLED_LORA, entryId: 'add-detail' });
+		await resuming;
+		expect(installModel).toHaveBeenCalledTimes(1);
+		// The resumed install keeps the default options: selected and announced.
+		expect(selectSelectedLoras(useLibraryStore.getState()).map((lora) => lora.id)).toEqual(['add-detail']);
+		expect(notifications()).toEqual([{ intent: 'success', title: null, message: 'Detail Tweaker LoRA - v1.0 is ready and selected for generation.' }]);
 	});
 
 	it('does not follow an install twice', async () => {

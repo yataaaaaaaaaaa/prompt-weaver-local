@@ -22,7 +22,10 @@ const DETAILS: CurrentOutputDetails = {
 	seed: 123456,
 	promptSeed: 77,
 	modelName: 'Noobai v50',
-	loraNames: ['Detail tweaker', 'Film grain'],
+	loras: [
+		{ name: 'Detail tweaker', weight: 0.6 },
+		{ name: 'Film grain', weight: -1.25 },
+	],
 	prompt: '1girl, red hair',
 	negativePrompt: 'lowres',
 };
@@ -119,13 +122,13 @@ describe('OutputBrowserPane details', () => {
 		expect(value('Seed')).toBe('123456');
 		expect(value('Prompt seed')).toBe('77');
 		expect(value('Model')).toBe('Noobai v50');
-		expect(value('LoRAs')).toBe('Detail tweaker, Film grain');
+		expect(value('LoRAs')).toBe('Detail tweaker (0.6), Film grain (-1.25)');
 		expect(button('Copy prompt')).toBeEnabled();
 	});
 
 	it('shows placeholders for missing optional values', () => {
 		useOutputsStore.setState({ ids: ['0000000002'], currentId: '0000000002' });
-		vi.mocked(useCurrentOutputDetails).mockReturnValue({ ...DETAILS, promptSeed: null, loraNames: [], prompt: '' });
+		vi.mocked(useCurrentOutputDetails).mockReturnValue({ ...DETAILS, promptSeed: null, loras: [], prompt: '' });
 		renderWithProviders(<OutputBrowserPane />);
 
 		const list = within(screen.getByLabelText('Output details'));
