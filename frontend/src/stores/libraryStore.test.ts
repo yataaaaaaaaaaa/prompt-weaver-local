@@ -1,14 +1,18 @@
 import { act, renderHook } from '@testing-library/react';
 import { describe, expect, it, vi } from 'vitest';
-import type { LoRASpec, ModelSpec } from '../api/types';
+import type { InstalledModel, LoRASpec, ModelSource, ModelSpec } from '../api/types';
 import type { Category } from '../domain/categories';
 import { flushPersistence, hydratePersistedStores } from '../persistence/persist';
 import { createMemoryStoreBackend, setStoreBackend } from '../persistence/storeBackend';
 import { desktop } from '../services/desktop';
+import { DETAIL_TWEAKER_SOURCE } from '../test/modelLibraryData';
 import { useCategoriesStore } from './categoriesStore';
 import { useGenerationSettingsStore } from './generationSettingsStore';
 import {
 	DESKTOP_DIALOGS_UNAVAILABLE,
+	LIBRARY_STORE_VERSION,
+	migrateLibraryState,
+	selectIsEntrySelected,
 	selectModelName,
 	selectSelectedModel,
 	useLibraryStore,
@@ -26,9 +30,10 @@ const MODEL: ModelSpec = {
 	default_width: 1024,
 	default_height: 1024,
 	torch_dtype: 'float16',
+	source: null,
 };
-const SHION: LoRASpec = { id: 'shion', name: 'Shion.safetensors', path: 'D:\\loras\\Shion.safetensors' };
-const STYLE: LoRASpec = { id: 'style', name: 'style.safetensors', path: 'D:\\loras\\style.safetensors' };
+const SHION: LoRASpec = { id: 'shion', name: 'Shion.safetensors', path: 'D:\\loras\\Shion.safetensors', source: null };
+const STYLE: LoRASpec = { id: 'style', name: 'style.safetensors', path: 'D:\\loras\\style.safetensors', source: null };
 
 function enableDesktop() {
 	vi.spyOn(desktop, 'isAvailable').mockReturnValue(true);
@@ -69,6 +74,19 @@ describe('selection actions', () => {
 		expect(store().selectedLoraIds).toEqual(['shion']);
 		store().clearSelectedLoras();
 		expect(store().selectedLoraIds).toEqual([]);
+	});
+
+	it('selectIsEntrySelected tells whether a checkpoint or LoRA entry is selected for generation', () => {
+		store().replaceAll({ models: [MODEL], loras: [SHION, STYLE], selectedModelId: MODEL.id, selectedLoraIds: ['style'] });
+		expect(selectIsEntrySelected('checkpoint', MODEL.id)(store())).toBe(true);
+		expect(selectIsEntrySelected('checkpoint', 'other')(store())).toBe(false);
+		expect(selectIsEntrySelected('lora', 'style')(store())).toBe(true);
+		expect(selectIsEntrySelected('lora', 'shion')(store())).toBe(false);
+		// A LoRA id is not a checkpoint selection and the other way round; embeddings and missing ids never are.
+		expect(selectIsEntrySelected('lora', MODEL.id)(store())).toBe(false);
+		expect(selectIsEntrySelected('checkpoint', 'style')(store())).toBe(false);
+		expect(selectIsEntrySelected('embedding', 'style')(store())).toBe(false);
+		expect(selectIsEntrySelected('lora', null)(store())).toBe(false);
 	});
 
 	it('removeLora drops it from the library and the selection and unlinks it from the sub-prompts', () => {
@@ -150,7 +168,7 @@ describe('desktop dialogs', () => {
 			title: 'Add LoRA',
 			filters: [{ name: 'LoRA files', extensions: ['safetensors', 'bin', 'pt'] }],
 		});
-		expect(store().loras).toEqual([SHION, { id: 'style', name: 'Style.pt', path: 'D:\\new\\Style.pt' }]);
+		expect(store().loras).toEqual([SHION, { id: 'style', name: 'Style.pt', path: 'D:\\new\\Style.pt', source: null }]);
 		expect(store().selectedLoraIds).toEqual(['shion', 'style']);
 		expect(store().lastLoraDir).toBe('D:\\loras');
 	});
@@ -159,7 +177,7 @@ describe('desktop dialogs', () => {
 		enableDesktop();
 		vi.spyOn(desktop, 'pickDirectory').mockResolvedValue('D:\\loras\\character.v2');
 		await store().addLoraDirectory();
-		expect(store().loras).toEqual([{ id: 'character-v2', name: 'character.v2', path: 'D:\\loras\\character.v2' }]);
+		expect(store().loras).toEqual([{ id: 'character-v2', name: 'character.v2', path: 'D:\\loras\\character.v2', source: null }]);
 		expect(store().selectedLoraIds).toEqual(['character-v2']);
 	});
 
@@ -198,29 +216,144 @@ describe('hooks', () => {
 	});
 });
 
+describe('registerInstalled', () => {
+	const LORA_PATH = 'D:\\Anything\\ComfyUI\\ComfyUI\\models\\loras\\add_detail.safetensors';
+	const CHECKPOINT_PATH = 'D:\\Anything\\ComfyUI\\ComfyUI\\models\\checkpoints\\JANKU v7.777.safetensors';
+	const LORA_INSTALL: InstalledModel = { kind: 'lora', name: 'Detail Tweaker LoRA - v1.0', path: LORA_PATH, source: DETAIL_TWEAKER_SOURCE };
+	const CHECKPOINT_INSTALL: InstalledModel = {
+		kind: 'checkpoint',
+		name: 'JANKU Illustrious XL - v7.77',
+		path: CHECKPOINT_PATH,
+		source: { ...DETAIL_TWEAKER_SOURCE, model_id: '1277670', version_id: '2786084', file_id: '2672243', sha256: null },
+	};
+
+	it('adds a checkpoint with the current generation size and selects it', () => {
+		store().replaceAll({ models: [MODEL], loras: [SHION], selectedLoraIds: ['shion'] });
+		useGenerationSettingsStore.setState({ width: 832, height: 1216 });
+
+		const id = store().registerInstalled(CHECKPOINT_INSTALL);
+
+		expect(id).toBe('janku-v7-777-safetensors');
+		expect(store().models[1]).toEqual({
+			id,
+			name: CHECKPOINT_INSTALL.name,
+			path: CHECKPOINT_PATH,
+			default_width: 832,
+			default_height: 1216,
+			torch_dtype: 'float16',
+			source: CHECKPOINT_INSTALL.source,
+		});
+		expect(store()).toMatchObject({ selectedModelId: id, selectedLoraIds: ['shion'], lastModelDir: null });
+	});
+
+	it('adds a LoRA to the selection once', () => {
+		store().replaceAll({ loras: [SHION], selectedLoraIds: ['shion'] });
+
+		const id = store().registerInstalled(LORA_INSTALL);
+		expect(store().registerInstalled(LORA_INSTALL)).toBe(id);
+
+		expect(store().loras).toEqual([SHION, { id: 'add-detail', name: LORA_INSTALL.name, path: LORA_PATH, source: DETAIL_TWEAKER_SOURCE }]);
+		expect(store().selectedLoraIds).toEqual(['shion', 'add-detail']);
+	});
+
+	it('reuses a manual entry with the same path and attaches the source', () => {
+		const manual: LoRASpec = { id: 'detail', name: 'add_detail.safetensors', path: LORA_PATH.toLowerCase(), source: null };
+		store().replaceAll({ loras: [manual] });
+
+		expect(store().registerInstalled(LORA_INSTALL)).toBe('detail');
+
+		expect(store().loras).toEqual([{ ...manual, source: DETAIL_TWEAKER_SOURCE }]);
+		expect(store().selectedLoraIds).toEqual(['detail']);
+	});
+
+	it('reuses the entry with the same provenance', () => {
+		const installed = { ...MODEL, id: 'janku', path: 'D:\\old\\JANKU v7.777.safetensors', source: CHECKPOINT_INSTALL.source };
+		store().replaceAll({ models: [MODEL, installed], selectedModelId: MODEL.id });
+
+		expect(store().registerInstalled(CHECKPOINT_INSTALL)).toBe('janku');
+
+		expect(store().models).toEqual([MODEL, { ...installed, path: CHECKPOINT_PATH }]);
+		expect(store().selectedModelId).toBe('janku');
+	});
+
+	it('changes nothing for an embedding', () => {
+		store().replaceAll({ models: [MODEL], loras: [SHION] });
+		const before = store();
+
+		expect(store().registerInstalled({ ...LORA_INSTALL, kind: 'embedding', path: 'D:\\embeddings\\easynegative.safetensors' })).toBeNull();
+
+		expect(store()).toBe(before);
+	});
+});
+
 describe('persistence', () => {
-	it('round-trips the real library-store format', async () => {
-		const state = {
-			models: [
-				MODEL,
-				{ ...MODEL, id: 'catponyreal-ilv41-safetensors', name: 'catponyReal_ilV41.safetensors', path: 'D:\\models\\catponyReal_ilV41.safetensors', default_width: 896, default_height: 1344 },
-			],
-			loras: [SHION, STYLE],
-			selectedModelId: 'catponyreal-ilv41-safetensors',
-			selectedLoraIds: [],
-			lastModelDir: 'D:\\models',
-			lastLoraDir: 'D:\\loras',
-		};
-		const backend = createMemoryStoreBackend({ 'library-store': { state, version: 0 } });
+	/** A real v0 'library-store' envelope (trimmed): entries have no `source`. */
+	const REAL_V0_STATE = {
+		models: [
+			{
+				id: 'jankuv5nsfwtrainednoobai-v50-safetensors',
+				name: 'JANKUV5NSFWTrainedNoobai_v50.safetensors',
+				path: 'D:\\Anything\\ComfyUI\\ComfyUI\\models\\checkpoints\\JANKUV5NSFWTrainedNoobai_v50.safetensors',
+				default_width: 1024,
+				default_height: 1024,
+				torch_dtype: 'float16',
+			},
+			{
+				id: 'catponyreal-ilv41-safetensors',
+				name: 'catponyReal_ilV41.safetensors',
+				path: 'D:\\Anything\\ComfyUI\\ComfyUI\\models\\checkpoints\\catponyReal_ilV41.safetensors',
+				default_width: 896,
+				default_height: 1344,
+				torch_dtype: 'float16',
+			},
+		],
+		loras: [
+			{
+				id: 'zy-illustrious-realism-enhancer-v1',
+				name: 'zy_illustrious_Realism_Enhancer_v1.safetensors',
+				path: 'D:\\Anything\\ComfyUI\\ComfyUI\\models\\loras\\illustrous\\zy_illustrious_Realism_Enhancer_v1.safetensors',
+			},
+			{ id: 'shion', name: 'Shion.safetensors', path: 'D:\\Anything\\ComfyUI\\ComfyUI\\models\\loras\\illustrous\\charachter\\Shion.safetensors' },
+		],
+		selectedModelId: 'catponyreal-ilv41-safetensors',
+		selectedLoraIds: ['shion'],
+		lastModelDir: 'D:\\Anything\\ComfyUI\\ComfyUI\\models\\checkpoints',
+		lastLoraDir: 'D:\\Anything\\ComfyUI\\ComfyUI\\models\\loras\\illustrous\\charachter',
+	};
+	const withNullSources = {
+		...REAL_V0_STATE,
+		models: REAL_V0_STATE.models.map((model) => ({ ...model, source: null })),
+		loras: REAL_V0_STATE.loras.map((lora) => ({ ...lora, source: null })),
+	};
+
+	it('migrates a real v0 envelope: entries get source null and the store is written back as version 1', async () => {
+		const backend = createMemoryStoreBackend({ 'library-store': { state: REAL_V0_STATE, version: 0 } });
 		setStoreBackend(backend);
 
 		expect(await hydratePersistedStores([useLibraryStore])).toEqual([]);
-		expect(store()).toMatchObject(state);
-
-		store().setLoraSelected('style', true);
+		expect(store()).toMatchObject(withNullSources);
 		await flushPersistence();
 
-		expect(backend.snapshot()['library-store']).toEqual({ state: { ...state, selectedLoraIds: ['style'] }, version: 0 });
+		expect(backend.snapshot()['library-store']).toEqual({ state: withNullSources, version: LIBRARY_STORE_VERSION });
+		expect(LIBRARY_STORE_VERSION).toBe(1);
+		expect(migrateLibraryState(REAL_V0_STATE)).toBe(REAL_V0_STATE);
+	});
+
+	it('round-trips v1 sources', async () => {
+		const state = { ...withNullSources, loras: [{ ...withNullSources.loras[0], source: DETAIL_TWEAKER_SOURCE }, withNullSources.loras[1]] };
+		const backend = createMemoryStoreBackend({ 'library-store': { state, version: 1 } });
+		setStoreBackend(backend);
+
+		await hydratePersistedStores([useLibraryStore]);
+		expect(store().loras[0].source).toEqual(DETAIL_TWEAKER_SOURCE);
+
+		store().setLoraSelected('zy-illustrious-realism-enhancer-v1', true);
+		await flushPersistence();
+
+		expect(backend.snapshot()['library-store']).toEqual({
+			state: { ...state, selectedLoraIds: ['shion', 'zy-illustrious-realism-enhancer-v1'] },
+			version: 1,
+		});
 	});
 
 	it('repairs a stale selection on hydration', async () => {

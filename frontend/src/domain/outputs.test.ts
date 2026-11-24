@@ -101,7 +101,7 @@ describe('outputDetails', () => {
 	};
 
 	it('resolves names and the image file name', () => {
-		expect(outputDetails(record, 'Model A', [{ id: 'alya', name: 'Alya', path: 'x' }])).toEqual({
+		expect(outputDetails(record, 'Model A', [{ id: 'alya', name: 'Alya', path: 'x', source: null }])).toEqual({
 			outputId: '0000000112',
 			imageName: '0000000112.png',
 			generatedAt: '2026-03-23T10:00:00Z',

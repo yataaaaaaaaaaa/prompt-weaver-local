@@ -1,5 +1,10 @@
 export const OPENAPI_SNAPSHOT_PATH: string;
 export const GENERATED_TYPES_PATH: string;
+export const GENERATED_DEFAULTS_PATH: string;
+export const EXPORT_DEFAULTS_FLAG: string;
 export function normalizeNewlines(text: string): string;
 export function generateApiTypes(openapiJsonText: string): Promise<string>;
+export function defaultsConstantName(schemaName: string): string;
+export function generateApiDefaults(openapiJsonText: string): string;
 export function generateFromSnapshot(): Promise<string>;
+export function generateDefaultsFromSnapshot(): Promise<string>;

@@ -1,9 +1,12 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
+import { GENERATION_DEFAULTS } from '../api/defaults.gen';
 import type { LoRASpec, ModelSpec } from '../api/types';
 import type { Category } from './categories';
 import { makeRule, specificMatcher } from './forbiddenRules';
 import {
 	buildGenerationRequest,
+	DEFAULT_GENERATION_SETTINGS,
+	generationSettingsFromBackend,
 	nextSeedSnapshot,
 	sanitizeGenerationSettings,
 	type GenerationInputs,
@@ -11,10 +14,10 @@ import {
 } from './generationRequest';
 import { PromptSelectionError } from './promptEngine';
 
-const MODEL: ModelSpec = { id: 'model', name: 'model.safetensors', path: 'D:/m/model.safetensors', default_width: 1024, default_height: 1024, torch_dtype: 'float16' };
+const MODEL: ModelSpec = { id: 'model', name: 'model.safetensors', path: 'D:/m/model.safetensors', default_width: 1024, default_height: 1024, torch_dtype: 'float16', source: null };
 const LORAS: LoRASpec[] = [
-	{ id: 'style', name: 'style.safetensors', path: 'D:/l/style.safetensors' },
-	{ id: 'portrait', name: 'portrait.safetensors', path: 'D:/l/portrait.safetensors' },
+	{ id: 'style', name: 'style.safetensors', path: 'D:/l/style.safetensors', source: null },
+	{ id: 'portrait', name: 'portrait.safetensors', path: 'D:/l/portrait.safetensors', source: null },
 ];
 
 const SETTINGS: GenerationSettings = {
@@ -143,6 +146,27 @@ describe('nextSeedSnapshot', () => {
 	it('randomize: the field shows a new random seed', () => {
 		vi.spyOn(Math, 'random').mockReturnValue(0.25);
 		expect(nextSeedSnapshot({ ...SETTINGS, imageSeedBehavior: 'randomize' }, response, {}).seedInput).toBe('536870912');
+	});
+});
+
+describe('generation defaults', () => {
+	it('come from the backend GenerationDefaults (generated), never from a frontend copy', () => {
+		expect(DEFAULT_GENERATION_SETTINGS).toEqual(generationSettingsFromBackend(GENERATION_DEFAULTS));
+		expect(DEFAULT_GENERATION_SETTINGS).toMatchObject({
+			width: GENERATION_DEFAULTS.width,
+			height: GENERATION_DEFAULTS.height,
+			steps: GENERATION_DEFAULTS.steps,
+			guidanceScale: GENERATION_DEFAULTS.guidance_scale,
+			promptSeedInput: '',
+			seedInput: '',
+			promptCategorySeedState: {},
+		});
+	});
+
+	it('maps backend fields (seeds as text, null = random)', () => {
+		expect(
+			generationSettingsFromBackend({ ...GENERATION_DEFAULTS, width: 832, guidance_scale: 4.5, prompt_seed: 12, seed: null, image_seed_behavior: 'increment' }),
+		).toMatchObject({ width: 832, guidanceScale: 4.5, promptSeedInput: '12', seedInput: '', imageSeedBehavior: 'increment' });
 	});
 });
 

@@ -17,6 +17,7 @@ import { useCategoriesStore } from './categoriesStore';
 import { useForbiddenRulesStore } from './forbiddenRulesStore';
 import { useGenerationSettingsStore } from './generationSettingsStore';
 import { useLibraryStore } from './libraryStore';
+import { useModelCatalogStore } from './modelCatalogStore';
 import { describeError, useNotificationsStore } from './notificationsStore';
 import { useOutputsStore } from './outputsStore';
 import { useTasksStore } from './tasksStore';
@@ -38,7 +39,8 @@ export type SessionActions = {
 	 *  3. seed every store absent from payload.persisted_stores from legacy_state/legacy_library
 	 *     (src/domain/legacyImport.ts), except the workspace when a legacy layout store exists;
 	 *  4. useOutputsStore.initialize(payload.output_ids, persisted currentId ?? payload.current_output_id);
-	 *  5. useTasksStore.connect(); setPersistErrorHandler -> notifications; phase 'ready'. */
+	 *  5. useTasksStore.connect(), then useModelCatalogStore.resumeInstalls() in the background (fire and forget:
+	 *     never fails or delays boot); setPersistErrorHandler -> notifications; phase 'ready'. */
 	start: () => Promise<void>;
 	/** After 'failed': resets and runs start() again. */
 	retry: () => Promise<void>;
@@ -137,6 +139,8 @@ export const useSessionStore = create<SessionStore>()((set, get) => ({
 			const outputs = useOutputsStore.getState();
 			await outputs.initialize(payload.output_ids, outputs.currentId ?? payload.current_output_id);
 			useTasksStore.getState().connect();
+			// Downloads started before a reload are followed again (resumeInstalls never rejects).
+			void useModelCatalogStore.getState().resumeInstalls();
 		} catch (error) {
 			set({ phase: 'failed', bootError: `Startup failed: ${describeError(error)}` });
 			return;

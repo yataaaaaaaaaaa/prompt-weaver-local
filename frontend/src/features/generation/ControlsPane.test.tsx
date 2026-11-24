@@ -10,7 +10,7 @@ import { useSessionStore } from '../../stores/sessionStore';
 import { renderWithProviders } from '../../test/render';
 import { ControlsPane } from './ControlsPane';
 
-const MODEL: ModelSpec = { id: 'm1', name: 'Model One', path: 'C:/models/one.safetensors', default_width: 1024, default_height: 1024, torch_dtype: 'float16' };
+const MODEL: ModelSpec = { id: 'm1', name: 'Model One', path: 'C:/models/one.safetensors', default_width: 1024, default_height: 1024, torch_dtype: 'float16', source: null };
 
 function seedGeneration({ withModel = true, generating = false, continuous = false } = {}) {
 	const actions = { generate: vi.fn(async () => undefined), toggleContinuous: vi.fn(async () => undefined), cancel: vi.fn(async () => undefined) };

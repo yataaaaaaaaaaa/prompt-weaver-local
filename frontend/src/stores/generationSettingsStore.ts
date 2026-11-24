@@ -2,7 +2,7 @@
 // (persisted as 'settings-store', version 0 - field names are the existing persisted format).
 import { create } from 'zustand';
 import { persist } from 'zustand/middleware';
-import { sanitizeGenerationSettings, type GenerationSettings } from '../domain/generationRequest';
+import { DEFAULT_GENERATION_SETTINGS, sanitizeGenerationSettings, type GenerationSettings } from '../domain/generationRequest';
 import type { SeedBehavior, SeedSnapshot } from '../domain/seeds';
 import { persistedStoreOptions } from '../persistence/persist';
 import { STORE_NAMES } from '../persistence/storeNames';
@@ -28,18 +28,8 @@ export type GenerationSettingsActions = {
 
 export type GenerationSettingsStore = GenerationSettingsState & GenerationSettingsActions;
 
-export const DEFAULT_GENERATION_SETTINGS: GenerationSettingsState = {
-	width: 1024,
-	height: 1024,
-	steps: 30,
-	guidanceScale: 7,
-	negativePrompt: '',
-	promptSeedInput: '',
-	seedInput: '',
-	promptSeedBehavior: 'fixed',
-	imageSeedBehavior: 'fixed',
-	promptCategorySeedState: {},
-};
+/** Initial state and fallback of invalid persisted values: derived from the backend's GenerationDefaults. */
+export { DEFAULT_GENERATION_SETTINGS };
 
 /** The settings fields only (persisted part, generation request input). */
 export function selectGenerationSettings(state: GenerationSettingsState): GenerationSettings {

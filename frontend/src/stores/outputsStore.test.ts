@@ -349,8 +349,8 @@ describe('outputsStore hooks', () => {
 
 	it('useCurrentOutputDetails resolves library names and is memoized', () => {
 		useLibraryStore.setState({
-			models: [{ id: 'model-a', name: 'Model A', path: 'a', default_width: 1024, default_height: 1024, torch_dtype: 'float16' }],
-			loras: [{ id: 'alya', name: 'Alya', path: 'l' }],
+			models: [{ id: 'model-a', name: 'Model A', path: 'a', default_width: 1024, default_height: 1024, torch_dtype: 'float16', source: null }],
+			loras: [{ id: 'alya', name: 'Alya', path: 'l', source: null }],
 		});
 		const { result, rerender } = renderHook(() => useCurrentOutputDetails());
 		expect(result.current).toBeNull();

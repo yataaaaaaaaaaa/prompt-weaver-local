@@ -7,8 +7,8 @@ describe('LoRA selection (legacy cases)', () => {
 	it('drops stale ids instead of returning unknown runtime entries and reports them as missing', () => {
 		const library = {
 			loras: [
-				{ id: 'portrait', name: 'portrait.safetensors', path: 'D:/loras/portrait.safetensors' },
-				{ id: 'style', name: 'style.safetensors', path: 'D:/loras/style.safetensors' },
+				{ id: 'portrait', name: 'portrait.safetensors', path: 'D:/loras/portrait.safetensors', source: null },
+				{ id: 'style', name: 'style.safetensors', path: 'D:/loras/style.safetensors', source: null },
 			],
 		};
 		const selections: GenerationSelection[] = [
@@ -27,7 +27,7 @@ describe('LoRA selection (legacy cases)', () => {
 	});
 
 	it('sanitizes persisted and generated selection payloads', () => {
-		const library = { loras: [{ id: 'known', name: 'known.safetensors', path: 'D:/loras/known.safetensors' }] };
+		const library = { loras: [{ id: 'known', name: 'known.safetensors', path: 'D:/loras/known.safetensors', source: null }] };
 		const selections: GenerationSelection[] = [
 			{ category_name: 'Style', prompt_text: 'painted', locked: false, induced_lora_ids: ['known', 'unknown', 'known'] },
 		];
@@ -46,7 +46,7 @@ describe('LoRA selection (legacy cases)', () => {
 	});
 
 	it('active ids put the selection first and count shared ids once', () => {
-		const loras = ['a', 'b', 'c'].map((id) => ({ id, name: id, path: id }));
+		const loras = ['a', 'b', 'c'].map((id) => ({ id, name: id, path: id, source: null }));
 		const resolved = resolveLoraSelection({ loras }, ['c', 'a'], [{ induced_lora_ids: ['a', 'b'] }]);
 		expect(resolved.activeIds).toEqual(['c', 'a', 'b']);
 		expect(resolved.missingIds).toEqual([]);

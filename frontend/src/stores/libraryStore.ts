@@ -4,10 +4,11 @@ import { useMemo } from 'react';
 import { create } from 'zustand';
 import { persist } from 'zustand/middleware';
 import { useShallow } from 'zustand/react/shallow';
-import type { LoRASpec, ModelSpec } from '../api/types';
+import type { InstalledModel, LoRASpec, ModelSpec } from '../api/types';
 import { collectLinkedLoraIds } from '../domain/categories';
-import { addLoraPaths, addModelPath, sanitizeLibrary, type LibraryData } from '../domain/library';
+import { addLoraPaths, addModelPath, registerInstalledEntry, sanitizeLibrary, type LibraryData, type LibraryEntryKind } from '../domain/library';
 import { filterKnownLoraIds, resolveLoraSelection } from '../domain/loraSelection';
+import type { Size } from '../domain/layout';
 import { dirname } from '../domain/paths';
 import { persistedStoreOptions } from '../persistence/persist';
 import { STORE_NAMES } from '../persistence/storeNames';
@@ -16,7 +17,7 @@ import { useCategoriesStore } from './categoriesStore';
 import { useGenerationSettingsStore } from './generationSettingsStore';
 import { reportError, useNotificationsStore } from './notificationsStore';
 
-/** Persisted format (version 0): defined once in src/domain/library.ts. */
+/** Persisted format (version 1): defined once in src/domain/library.ts. */
 export type LibraryState = LibraryData;
 
 export type LibraryActions = {
@@ -37,6 +38,12 @@ export type LibraryActions = {
 	/** Removes the LoRA from the library and the selection, and unlinks it from every sub-prompt
 	 *  (useCategoriesStore.unlinkLora). */
 	removeLora: (loraId: string) => void;
+	/** Registers a file installed by the model library (src/domain/library.ts registerInstalledEntry) and selects
+	 *  it for generation: a checkpoint becomes the selected model, a LoRA is added to the selected LoRAs. The entry
+	 *  with the same path (case-insensitive) is reused (its missing source is attached), else the entry with the
+	 *  same provenance (moved to the installed path); new checkpoints get the current generation size.
+	 *  Embeddings have no library entry: returns null and changes nothing. Returns the entry id otherwise. */
+	registerInstalled: (installed: InstalledModel) => string | null;
 };
 
 export type LibraryStore = LibraryState & LibraryActions;
@@ -45,6 +52,21 @@ export const DESKTOP_DIALOGS_UNAVAILABLE = 'File and folder dialogs need the des
 
 const MODEL_FILE_FILTERS = [{ name: 'Checkpoint files', extensions: ['safetensors', 'ckpt'] }];
 const LORA_FILE_FILTERS = [{ name: 'LoRA files', extensions: ['safetensors', 'bin', 'pt'] }];
+
+/** Version of the persisted 'library-store'. v1: entries may carry `source` (model library provenance). */
+export const LIBRARY_STORE_VERSION = 1;
+
+/** Older persisted states -> v1. v0 is v1 without `source` on entries: returned unchanged, merge (sanitizeLibrary)
+ *  fills `source: null` and drops anything malformed. */
+export function migrateLibraryState(persisted: unknown): LibraryState {
+	return persisted as LibraryState;
+}
+
+/** Default size of new checkpoint entries: the current generation size. */
+function currentGenerationSize(): Size {
+	const { width, height } = useGenerationSettingsStore.getState();
+	return { width, height };
+}
 
 function selectLibraryData(state: LibraryState): LibraryData {
 	return {
@@ -74,8 +96,7 @@ export const useLibraryStore = create<LibraryStore>()(
 	persist(
 		(set, get) => {
 			const addModel = (path: string) => {
-				const { width, height } = useGenerationSettingsStore.getState();
-				const { models, modelId } = addModelPath(get().models, path, { width, height });
+				const { models, modelId } = addModelPath(get().models, path, currentGenerationSize());
 				set({ models, selectedModelId: modelId, lastModelDir: dirname(path) });
 			};
 			const addLoras = (paths: string[], kind: 'file' | 'directory') => {
@@ -139,6 +160,18 @@ export const useLibraryStore = create<LibraryStore>()(
 						set({ selectedLoraIds: [] });
 					}
 				},
+				registerInstalled: (installed) => {
+					const { models, loras, entryId } = registerInstalledEntry(get(), installed, currentGenerationSize());
+					if (entryId === null) {
+						return null;
+					}
+					if (installed.kind === 'checkpoint') {
+						set({ models, selectedModelId: entryId });
+					} else {
+						set({ loras, selectedLoraIds: filterKnownLoraIds([...get().selectedLoraIds, entryId], { loras }) });
+					}
+					return entryId;
+				},
 				removeLora: (loraId) => {
 					set((state) => ({
 						loras: state.loras.filter((lora) => lora.id !== loraId),
@@ -150,8 +183,9 @@ export const useLibraryStore = create<LibraryStore>()(
 		},
 		persistedStoreOptions<LibraryStore, LibraryState>({
 			name: STORE_NAMES.library,
-			version: 0,
+			version: LIBRARY_STORE_VERSION,
 			partialize: selectLibraryData,
+			migrate: migrateLibraryState,
 			// Malformed entries dropped, selection restricted to known ids (missing model -> first model).
 			merge: (persisted, current) => (persisted === undefined ? current : { ...current, ...sanitizeLibrary(persisted, selectLibraryData(current)) }),
 		}),
@@ -167,6 +201,20 @@ export const selectSelectedModel = (state: LibraryState): ModelSpec | null =>
 
 export const selectModelName = (modelId: string) => (state: LibraryState): string =>
 	state.models.find((model) => model.id === modelId)?.name ?? modelId;
+
+/** True when the library entry is selected for generation: the selected checkpoint, or one of the selected LoRAs
+ *  (false without an entry id or for kinds without library entries). */
+export const selectIsEntrySelected =
+	(kind: LibraryEntryKind | 'embedding', entryId: string | null) =>
+	(state: LibraryState): boolean => {
+		if (entryId === null) {
+			return false;
+		}
+		if (kind === 'checkpoint') {
+			return state.selectedModelId === entryId;
+		}
+		return kind === 'lora' && state.selectedLoraIds.includes(entryId);
+	};
 
 export type LoraRow = {
 	lora: LoRASpec;

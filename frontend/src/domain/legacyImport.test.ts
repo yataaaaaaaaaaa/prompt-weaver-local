@@ -102,10 +102,11 @@ const LEGACY_LIBRARY: LibraryState = {
 			default_width: 1024,
 			default_height: 1024,
 			torch_dtype: 'float16',
+			source: null,
 		},
-		{ id: 'other', name: 'other', path: 'D:\\models\\other', default_width: 512, default_height: 512, torch_dtype: 'float16' },
+		{ id: 'other', name: 'other', path: 'D:\\models\\other', default_width: 512, default_height: 512, torch_dtype: 'float16', source: null },
 	],
-	loras: [{ id: 'alya-multicharacter', name: 'alya.safetensors', path: 'D:\\models\\loras\\alya.safetensors' }],
+	loras: [{ id: 'alya-multicharacter', name: 'alya.safetensors', path: 'D:\\models\\loras\\alya.safetensors', source: null }],
 };
 
 describe('legacyCategories', () => {
@@ -209,5 +210,16 @@ describe('legacyWorkspaceWindows', () => {
 			workspace: { ...LEGACY_APP_STATE.workspace, used: { x: 690, y: 320, width: 790, height: 420, z_index: 6 } },
 		};
 		expect(legacyWorkspaceWindows(state)['pane:used']).toEqual({ x: 690, y: 320, width: 790, height: 420, z: 6 });
+	});
+
+	it('imports no window for missing or incomplete legacy geometry (the frontend defaults apply)', () => {
+		const state = {
+			categories: [
+				{ ...LEGACY_APP_STATE.categories[0], position: null, size: null, z_index: null },
+				{ ...LEGACY_APP_STATE.categories[1], position: { x: 5, y: null }, z_index: null },
+			],
+			workspace: { image: null, controls: { x: 1, y: 2, width: 300, height: 400, z_index: null } },
+		};
+		expect(legacyWorkspaceWindows(state)).toEqual({ 'pane:controls': { x: 8, y: 8, width: 300, height: 400, z: expect.any(Number) } });
 	});
 });

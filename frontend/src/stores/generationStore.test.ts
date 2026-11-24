@@ -11,8 +11,8 @@ import { useNotificationsStore } from './notificationsStore';
 import { useOutputsStore } from './outputsStore';
 import { useUndoStore } from './undoStore';
 
-const MODEL: ModelSpec = { id: 'model', name: 'model.safetensors', path: 'D:/m/model.safetensors', default_width: 1024, default_height: 1024, torch_dtype: 'float16' };
-const STYLE: LoRASpec = { id: 'style', name: 'style.safetensors', path: 'D:/l/style.safetensors' };
+const MODEL: ModelSpec = { id: 'model', name: 'model.safetensors', path: 'D:/m/model.safetensors', default_width: 1024, default_height: 1024, torch_dtype: 'float16', source: null };
+const STYLE: LoRASpec = { id: 'style', name: 'style.safetensors', path: 'D:/l/style.safetensors', source: null };
 
 const CATEGORIES: Category[] = [
 	{ text: 'Main', activation_text: '', priority: 1, state: 'normal', subPrompts: [{ text: '1girl, smile', state: 'lock', extraLoraIds: ['style'] }] },

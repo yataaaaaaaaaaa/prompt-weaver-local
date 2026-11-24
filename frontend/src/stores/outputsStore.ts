@@ -23,8 +23,8 @@ import {
 } from '../domain/outputs';
 import { persistedStoreOptions } from '../persistence/persist';
 import { STORE_NAMES } from '../persistence/storeNames';
-import { clipboard } from '../services/clipboard';
 import { selectModelName, useLibraryStore } from './libraryStore';
+import { copyTextWithFeedback } from './clipboardActions';
 import { reportError, useNotificationsStore } from './notificationsStore';
 import { useUndoStore } from './undoStore';
 
@@ -166,18 +166,6 @@ export const useOutputsStore = create<OutputsStore>()(
 				}
 			};
 
-			const copy = async (text: string | undefined, what: string): Promise<void> => {
-				if (!text) {
-					return;
-				}
-				try {
-					await clipboard.writeText(text);
-					useNotificationsStore.getState().notify('success', `${what} copied to the clipboard.`);
-				} catch (error) {
-					reportError(error, `Could not copy the ${what.toLowerCase()}`);
-				}
-			};
-
 			return {
 				ids: [],
 				currentId: null,
@@ -247,8 +235,8 @@ export const useOutputsStore = create<OutputsStore>()(
 					await get().select(outputId);
 				},
 
-				copyCurrentPrompt: () => copy(get().record?.prompt, 'Prompt'),
-				copySelectionPrompt: (index) => copy(get().record?.selections[index]?.prompt_text, 'Sub-prompt'),
+				copyCurrentPrompt: () => copyTextWithFeedback(get().record?.prompt, 'Prompt'),
+				copySelectionPrompt: (index) => copyTextWithFeedback(get().record?.selections[index]?.prompt_text, 'Sub-prompt'),
 			};
 		},
 		persistedStoreOptions<OutputsStore, PersistedOutputsState>({

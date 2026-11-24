@@ -1,9 +1,9 @@
 // Background tasks store: latest TaskEvent per task, fed by the /ws/tasks socket (src/api/taskSocket.ts).
-// Generation progress and (batch 2) download progress are read from here. Not persisted.
+// Generation progress and download progress are read from here. Not persisted.
 import { useMemo } from 'react';
 import { create } from 'zustand';
 import { connectTaskSocket } from '../api/taskSocket';
-import type { GenerationStage, GenerationTaskEvent, TaskEvent } from '../api/types';
+import type { DownloadStage, DownloadTaskEvent, GenerationStage, GenerationTaskEvent, TaskEvent } from '../api/types';
 
 export type TasksState = {
 	/** Latest event per task_id. */
@@ -16,6 +16,10 @@ export type TasksActions = {
 	connect: () => void;
 	disconnect: () => void;
 	applyEvent: (event: TaskEvent) => void;
+	/** Resolves with the first terminal event (stage complete | error | cancelled) of `taskId`: immediately when the
+	 *  latest known event already is one, else when it arrives (also through the snapshot sent on reconnect).
+	 *  Never rejects; pending waits stay pending until the event arrives. */
+	waitForTask: (taskId: string) => Promise<TaskEvent>;
 };
 
 export type TasksStore = TasksState & TasksActions;
@@ -42,7 +46,27 @@ export const useTasksStore = create<TasksStore>()((set, get) => ({
 		set({ connected: false });
 	},
 	applyEvent: (event) => set((state) => ({ events: { ...state.events, [event.task_id]: event } })),
+	waitForTask: (taskId) => {
+		const latest = get().events[taskId];
+		if (isTerminal(latest)) {
+			return Promise.resolve(latest);
+		}
+		return new Promise<TaskEvent>((resolve) => {
+			const unsubscribe = useTasksStore.subscribe((state) => {
+				const event = state.events[taskId];
+				if (isTerminal(event)) {
+					unsubscribe();
+					resolve(event);
+				}
+			});
+		});
+	},
 }));
+
+/** The event ends its task (TERMINAL_TASK_STAGES). */
+function isTerminal(event: TaskEvent | undefined): event is TaskEvent {
+	return event !== undefined && TERMINAL_TASK_STAGES.has(event.stage);
+}
 
 export const selectGenerationEvent = (state: TasksState): GenerationTaskEvent | null => {
 	const event = Object.values(state.events).find((item): item is GenerationTaskEvent => item.type === 'generation');
@@ -89,4 +113,54 @@ export function generationProgressOf(event: GenerationTaskEvent | null): Generat
 export function useGenerationProgress(): GenerationProgress {
 	const event = useTasksStore(selectGenerationEvent);
 	return useMemo(() => generationProgressOf(event), [event]);
+}
+
+// ---------------------------------------------------------------------------
+// Downloads (DownloadTaskEvent: current/total are bytes, total 0 = unknown size)
+// ---------------------------------------------------------------------------
+
+export const TERMINAL_TASK_STAGES: ReadonlySet<TaskEvent['stage']> = new Set<TaskEvent['stage']>(['complete', 'error', 'cancelled']);
+
+export type DownloadProgress = {
+	stage: DownloadStage;
+	title: string;
+	message: string;
+	/** Bytes received / expected (0 = unknown). */
+	current: number;
+	total: number;
+	/** 0..1, null while the size is unknown. */
+	ratio: number | null;
+	/** queued | downloading */
+	active: boolean;
+};
+
+const ACTIVE_DOWNLOAD_STAGES: ReadonlySet<DownloadStage> = new Set<DownloadStage>(['queued', 'downloading']);
+
+/** Progress view model of a download event (null = no event). */
+export function downloadProgressOf(event: DownloadTaskEvent | null): DownloadProgress | null {
+	if (!event) {
+		return null;
+	}
+	return {
+		stage: event.stage,
+		title: event.title,
+		message: event.message,
+		current: event.current,
+		total: event.total,
+		ratio: event.total > 0 ? Math.max(0, Math.min(1, event.current / event.total)) : null,
+		active: ACTIVE_DOWNLOAD_STAGES.has(event.stage),
+	};
+}
+
+export const selectDownloadEvent =
+	(taskId: string | null) =>
+	(state: TasksState): DownloadTaskEvent | null => {
+		const event = taskId == null ? undefined : state.events[taskId];
+		return event?.type === 'download' ? event : null;
+	};
+
+/** Progress of one download task (memoized on its event); null without task id or event. */
+export function useDownloadProgress(taskId: string | null): DownloadProgress | null {
+	const event = useTasksStore(useMemo(() => selectDownloadEvent(taskId), [taskId]));
+	return useMemo(() => downloadProgressOf(event), [event]);
 }

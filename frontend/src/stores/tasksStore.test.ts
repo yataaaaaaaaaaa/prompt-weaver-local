@@ -2,7 +2,18 @@ import { act, renderHook } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import * as taskSocket from '../api/taskSocket';
 import type { DownloadTaskEvent, GenerationTaskEvent } from '../api/types';
-import { generationProgressOf, IDLE_GENERATION_PROGRESS, selectGenerationEvent, useGenerationProgress, useTasksStore } from './tasksStore';
+import {
+	downloadProgressOf,
+	generationProgressOf,
+	IDLE_GENERATION_PROGRESS,
+	selectDownloadEvent,
+	selectGenerationEvent,
+	TERMINAL_TASK_STAGES,
+	useDownloadProgress,
+	useGenerationProgress,
+	useTasksStore,
+} from './tasksStore';
+import { downloadEvent as buildDownloadEvent } from '../test/modelLibraryData';
 
 vi.mock('../api/taskSocket', async (importOriginal) => {
 	const actual = await importOriginal<typeof import('../api/taskSocket')>();
@@ -55,7 +66,7 @@ const generationEvent = (overrides: Partial<GenerationTaskEvent> = {}): Generati
 	...overrides,
 });
 
-const downloadEvent: DownloadTaskEvent = { type: 'download', task_id: 'd1', stage: 'downloading', message: '', current: 1, total: 2 };
+const downloadEvent = buildDownloadEvent('d1', { title: 'Model', current: 1, total: 2 });
 
 describe('tasksStore connection', () => {
 	it('connects once, tracks the connection and applies socket events', () => {
@@ -136,5 +147,106 @@ describe('generation progress', () => {
 		act(() => useTasksStore.getState().applyEvent(downloadEvent));
 		rerender();
 		expect(result.current).toBe(progress);
+	});
+});
+
+const download = (overrides: Partial<DownloadTaskEvent> = {}): DownloadTaskEvent => ({ ...downloadEvent, ...overrides });
+
+describe('download progress', () => {
+	it('derives the progress view model of a download event', () => {
+		expect(downloadProgressOf(null)).toBeNull();
+		expect(downloadProgressOf(download({ current: 512, total: 2048 }))).toEqual({
+			stage: 'downloading',
+			title: 'Model',
+			message: '',
+			current: 512,
+			total: 2048,
+			ratio: 0.25,
+			active: true,
+		});
+		expect(downloadProgressOf(download({ current: 10, total: 0 }))?.ratio).toBeNull();
+		expect(downloadProgressOf(download({ current: 9, total: 4 }))?.ratio).toBe(1);
+		expect(downloadProgressOf(download({ stage: 'queued', current: 0 }))?.active).toBe(true);
+		for (const stage of ['complete', 'error', 'cancelled'] as const) {
+			expect(downloadProgressOf(download({ stage }))?.active).toBe(false);
+		}
+	});
+
+	it('selects the download event of a task only', () => {
+		const tasks = useTasksStore.getState();
+		tasks.applyEvent(generationEvent());
+		tasks.applyEvent(downloadEvent);
+		const state = useTasksStore.getState();
+		expect(selectDownloadEvent('d1')(state)).toBe(downloadEvent);
+		expect(selectDownloadEvent('generation')(state)).toBeNull();
+		expect(selectDownloadEvent('unknown')(state)).toBeNull();
+		expect(selectDownloadEvent(null)(state)).toBeNull();
+	});
+
+	it('useDownloadProgress follows one task and is memoized on its event', () => {
+		const { result, rerender } = renderHook(({ taskId }) => useDownloadProgress(taskId), { initialProps: { taskId: 'd1' as string | null } });
+		expect(result.current).toBeNull();
+
+		act(() => useTasksStore.getState().applyEvent(downloadEvent));
+		const progress = result.current;
+		expect(progress).toMatchObject({ title: 'Model', ratio: 0.5, active: true });
+
+		act(() => useTasksStore.getState().applyEvent(download({ task_id: 'd2' })));
+		act(() => useTasksStore.getState().applyEvent(generationEvent()));
+		rerender({ taskId: 'd1' });
+		expect(result.current).toBe(progress);
+
+		act(() => useTasksStore.getState().applyEvent(download({ stage: 'complete', current: 2 })));
+		expect(result.current).toMatchObject({ stage: 'complete', ratio: 1, active: false });
+
+		rerender({ taskId: null });
+		expect(result.current).toBeNull();
+	});
+});
+
+describe('waitForTask', () => {
+	it('knows the terminal stages', () => {
+		expect([...TERMINAL_TASK_STAGES]).toEqual(['complete', 'error', 'cancelled']);
+	});
+
+	it('resolves immediately when the latest event already is terminal', async () => {
+		const done = download({ stage: 'complete', current: 2 });
+		useTasksStore.getState().applyEvent(done);
+		await expect(useTasksStore.getState().waitForTask('d1')).resolves.toBe(done);
+	});
+
+	it('resolves with the first terminal event of the task, ignoring other events, then unsubscribes', async () => {
+		const realSubscribe = useTasksStore.subscribe;
+		const unsubscribe = vi.fn();
+		vi.spyOn(useTasksStore, 'subscribe').mockImplementation((listener) => {
+			unsubscribe.mockImplementation(realSubscribe(listener));
+			return unsubscribe;
+		});
+		const settled = vi.fn();
+		const waiting = useTasksStore.getState().waitForTask('d1').then(settled);
+		const tasks = useTasksStore.getState();
+
+		tasks.applyEvent(download({ stage: 'queued', current: 0 }));
+		tasks.applyEvent(downloadEvent);
+		tasks.applyEvent(download({ task_id: 'other', stage: 'error', message: 'not this one' }));
+		tasks.applyEvent(generationEvent({ stage: 'complete' }));
+		await Promise.resolve();
+		expect(settled).not.toHaveBeenCalled();
+		expect(unsubscribe).not.toHaveBeenCalled();
+
+		const failed = download({ stage: 'error', message: 'Hash mismatch' });
+		tasks.applyEvent(failed);
+		expect(unsubscribe).toHaveBeenCalledTimes(1);
+		tasks.applyEvent(download({ stage: 'complete' }));
+		await waiting;
+		expect(settled).toHaveBeenCalledTimes(1);
+		expect(settled).toHaveBeenCalledWith(failed);
+	});
+
+	it('resolves on events delivered by the task socket (e.g. the snapshot after a reconnect)', async () => {
+		const waiting = useTasksStore.getState().waitForTask('d1');
+		useTasksStore.getState().connect();
+		FakeSocket.instances[0].emit(download({ stage: 'cancelled', message: 'Cancelled' }));
+		await expect(waiting).resolves.toMatchObject({ task_id: 'd1', stage: 'cancelled' });
 	});
 });

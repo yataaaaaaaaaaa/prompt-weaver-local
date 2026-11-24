@@ -7,6 +7,7 @@ import { useCategoriesStore } from './categoriesStore';
 import { useForbiddenRulesStore } from './forbiddenRulesStore';
 import { useGenerationSettingsStore, type GenerationSettingsState } from './generationSettingsStore';
 import { useLibraryStore, type LibraryState } from './libraryStore';
+import { useModelCatalogStore } from './modelCatalogStore';
 import { useNotificationsStore } from './notificationsStore';
 import { useOutputsStore } from './outputsStore';
 import { BOOTSTRAP_TIMEOUT_MS, useSessionStore } from './sessionStore';
@@ -66,8 +67,8 @@ function payload(overrides: Partial<BootstrapResponse> = {}): BootstrapResponse 
 		data_dir: 'C:\\temp\\prompt-weaver',
 		legacy_state: legacyState,
 		legacy_library: {
-			models: [{ id: 'model-a', name: 'Model A', path: 'D:\\models\\a.safetensors', default_width: 1024, default_height: 1024, torch_dtype: 'float16' }],
-			loras: [{ id: 'alya', name: 'alya.safetensors', path: 'D:\\loras\\alya.safetensors' }],
+			models: [{ id: 'model-a', name: 'Model A', path: 'D:\\models\\a.safetensors', default_width: 1024, default_height: 1024, torch_dtype: 'float16', source: null }],
+			loras: [{ id: 'alya', name: 'alya.safetensors', path: 'D:\\loras\\alya.safetensors', source: null }],
 		},
 		persisted_stores: [],
 		output_ids: ['0000000001', '0000000002', '0000000003'],
@@ -99,6 +100,8 @@ const record = (outputId: string) => ({ output_id: outputId, selections: [], act
 
 beforeEach(() => {
 	vi.spyOn(api, 'getOutput').mockImplementation(async (outputId) => record(outputId));
+	// No download running in the backend (resumeInstalls at boot).
+	vi.spyOn(api, 'listInstalls').mockResolvedValue([]);
 });
 
 afterEach(() => {
@@ -279,6 +282,44 @@ describe('sessionStore.start', () => {
 		expect(useNotificationsStore.getState().notifications).toMatchObject([
 			{ intent: 'error', title: 'Saving failed', message: expect.stringContaining('disk full') },
 		]);
+	});
+});
+
+describe('sessionStore.start: model library installs', () => {
+	it('resumes the running installs once the task socket is connected', async () => {
+		vi.spyOn(api, 'bootstrap').mockResolvedValue(payload());
+		const spies = spyOnSeeding();
+		const calls: string[] = [];
+		spies.connect.mockImplementation(() => calls.push('connect'));
+		const listInstalls = vi.mocked(api.listInstalls).mockImplementation(async () => {
+			calls.push('listInstalls');
+			return [];
+		});
+
+		await session().start();
+
+		expect(session().phase).toBe('ready');
+		expect(listInstalls).toHaveBeenCalledTimes(1);
+		expect(calls).toEqual(['connect', 'listInstalls']);
+	});
+
+	it('neither waits for nor fails on resuming the installs', async () => {
+		vi.spyOn(api, 'bootstrap').mockResolvedValue(payload());
+		spyOnSeeding();
+		vi.mocked(api.listInstalls).mockReturnValue(new Promise(() => undefined));
+
+		await session().start();
+		expect(session().phase).toBe('ready');
+
+		useSessionStore.setState({ phase: 'idle' });
+		vi.mocked(api.listInstalls).mockRejectedValue(new Error('backend restarting'));
+		await session().start();
+		await new Promise((resolve) => setTimeout(resolve, 0));
+
+		expect(api.listInstalls).toHaveBeenCalledTimes(2);
+		expect(session()).toMatchObject({ phase: 'ready', bootError: null });
+		expect(useNotificationsStore.getState().notifications).toEqual([]);
+		expect(useModelCatalogStore.getState().installs).toEqual({});
 	});
 });
 

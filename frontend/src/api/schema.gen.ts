@@ -24,6 +24,26 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/downloads/{task_id}/cancel": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Cancel Download
+         * @description Cancels a queued or running download (its task then ends with stage 'cancelled').
+         */
+        post: operations["cancel_download_api_downloads__task_id__cancel_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/generate": {
         parameters: {
             query?: never;
@@ -71,6 +91,148 @@ export interface paths {
         };
         /** Health */
         get: operations["health_api_health_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/models/info": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Model Library Info
+         * @description Registered providers (filters, token state) and the local model folders.
+         */
+        get: operations["model_library_info_api_models_info_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/models/install": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Install Model
+         * @description 'installed' (+ InstalledModel) when the file is already on disk, else 'downloading' (+ task_id, progress
+         *     as DownloadTaskEvent on /ws/tasks). Call again after the download completed to get the InstalledModel.
+         *     Hashing a large local candidate can take seconds (sync route: runs in the threadpool).
+         */
+        post: operations["install_model_api_models_install_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/models/installs": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List Installs
+         * @description Installs whose download is still running.
+         */
+        get: operations["list_installs_api_models_installs_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/models/providers/{provider}/by-hash/{sha256}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Find Model By Hash
+         * @description The model version whose file has this SHA-256, same shape as get_model_version.
+         */
+        get: operations["find_model_by_hash_api_models_providers__provider__by_hash__sha256__get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/models/providers/{provider}/token": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        /**
+         * Set Provider Token
+         * @description Stores (or, with null / "", removes) the provider's API token. The token is never sent back.
+         */
+        put: operations["set_provider_token_api_models_providers__provider__token_put"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/models/providers/{provider}/versions/{version_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get Model Version
+         * @description The model owning a version, with `versions` == [that version].
+         */
+        get: operations["get_model_version_api_models_providers__provider__versions__version_id__get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/models/search": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Search Models
+         * @description One page of online models; files already on disk carry their local_path.
+         */
+        get: operations["search_models_api_models_search_get"];
         put?: never;
         post?: never;
         delete?: never;
@@ -288,6 +450,16 @@ export interface components {
             width: number;
             workspace: components["schemas"]["WorkspaceLayout"];
         };
+        /**
+         * BaseModelOption
+         * @description One base-model filter value of a provider (e.g. Civitai "SD 1.5", "Illustrious").
+         */
+        BaseModelOption: {
+            /** Architecture */
+            architecture: ("sd15" | "sdxl") | null;
+            /** Id */
+            id: string;
+        };
         /** BootstrapResponse */
         BootstrapResponse: {
             /**
@@ -314,33 +486,22 @@ export interface components {
         };
         /** CategoryPosition */
         CategoryPosition: {
-            /**
-             * X
-             * @default 0
-             */
-            x: number;
-            /**
-             * Y
-             * @default 0
-             */
-            y: number;
+            /** X */
+            x: number | null;
+            /** Y */
+            y: number | null;
         };
         /** CategorySize */
         CategorySize: {
-            /**
-             * Height
-             * @default 360
-             */
-            height: number;
-            /**
-             * Width
-             * @default 320
-             */
-            width: number;
+            /** Height */
+            height: number | null;
+            /** Width */
+            width: number | null;
         };
         /**
          * DownloadTaskEvent
-         * @description Progress of a file download. Reserved for the model library batch; nothing publishes it yet.
+         * @description Progress of a file download (services/downloads.py DownloadManager). current/total are bytes (total 0 =
+         *     unknown size); task_id is returned by the API call that started the download.
          */
         DownloadTaskEvent: {
             /**
@@ -360,6 +521,12 @@ export interface components {
             stage: "queued" | "downloading" | "complete" | "error" | "cancelled";
             /** Task Id */
             task_id: string;
+            /**
+             * Title
+             * @description What is being downloaded (display name).
+             * @default
+             */
+            title: string;
             /**
              * Total
              * @default 0
@@ -438,7 +605,7 @@ export interface components {
             /** Height */
             height: number;
             /** Loras */
-            loras?: components["schemas"]["LoRASpec"][];
+            loras?: components["schemas"]["LoRASpec-Input"][];
             model: components["schemas"]["ModelSpec-Input"];
             /**
              * Negative Prompt
@@ -462,6 +629,66 @@ export interface components {
              */
             steps: number;
             /** Width */
+            width: number;
+        };
+        /**
+         * GenerationDefaults
+         * @description The single definition of the generation setting defaults (the backend models below and the frontend
+         *     generation settings / library stores derive theirs from it).
+         */
+        GenerationDefaults: {
+            /**
+             * Guidance Scale
+             * @default 7
+             */
+            guidance_scale: number;
+            /**
+             * Height
+             * @default 1024
+             */
+            height: number;
+            /**
+             * Image Seed Behavior
+             * @default fixed
+             * @enum {string}
+             */
+            image_seed_behavior: "fixed" | "increment" | "randomize" | "per_category_cycle";
+            /**
+             * Negative Prompt
+             * @default
+             */
+            negative_prompt: string;
+            /**
+             * Prompt Seed
+             * @default null
+             */
+            prompt_seed: number | null;
+            /**
+             * Prompt Seed Behavior
+             * @default fixed
+             * @enum {string}
+             */
+            prompt_seed_behavior: "fixed" | "increment" | "randomize" | "per_category_cycle";
+            /**
+             * Seed
+             * @default null
+             */
+            seed: number | null;
+            /**
+             * Steps
+             * @default 30
+             */
+            steps: number;
+            /**
+             * Torch Dtype
+             * @default float16
+             * @enum {string}
+             */
+            torch_dtype: "float16" | "bfloat16" | "float32";
+            /**
+             * Width
+             * @default 1024
+             */
             width: number;
         };
         /**
@@ -549,23 +776,236 @@ export interface components {
             status: "ok";
         };
         /**
+         * InstallJob
+         * @description An install whose download is still running (lets the frontend resume tracking after a reload).
+         */
+        InstallJob: {
+            /** File Id */
+            file_id: string;
+            /**
+             * Kind
+             * @enum {string}
+             */
+            kind: "checkpoint" | "lora" | "embedding";
+            /** Model Id */
+            model_id: string;
+            /** Provider */
+            provider: string;
+            /** Task Id */
+            task_id: string;
+            /**
+             * Title
+             * @description Same display name as InstalledModel.name and the download task title.
+             */
+            title: string;
+            /** Version Id */
+            version_id: string;
+        };
+        /**
+         * InstallRequest
+         * @description Install (download unless already present) one file of a provider model version.
+         */
+        InstallRequest: {
+            /**
+             * File Id
+             * @description Default: the primary downloadable file of the version.
+             */
+            file_id?: string | null;
+            /** Provider */
+            provider: string;
+            /** Version Id */
+            version_id: string;
+        };
+        /** InstallResponse */
+        InstallResponse: {
+            /** @description Set when state is 'installed'. */
+            installed: components["schemas"]["InstalledModel"] | null;
+            /**
+             * State
+             * @enum {string}
+             */
+            state: "installed" | "downloading";
+            /**
+             * Task Id
+             * @description Download task (state 'downloading'): follow it on /ws/tasks.
+             */
+            task_id: string | null;
+        };
+        /**
+         * InstalledModel
+         * @description A model file present on disk, ready to be registered in the library store.
+         */
+        InstalledModel: {
+            /**
+             * Kind
+             * @enum {string}
+             */
+            kind: "checkpoint" | "lora" | "embedding";
+            /**
+             * Name
+             * @description Display name (library entry name, download title): '<model name> - <version name>'.
+             */
+            name: string;
+            /** Path */
+            path: string;
+            source: components["schemas"]["ModelSource"];
+        };
+        /**
          * LibraryState
          * @description Legacy library.json format (read at bootstrap to seed the frontend library store).
          */
         LibraryState: {
             /** Loras */
-            loras: components["schemas"]["LoRASpec"][];
+            loras: components["schemas"]["LoRASpec-Output"][];
             /** Models */
             models: components["schemas"]["ModelSpec-Output"][];
         };
         /** LoRASpec */
-        LoRASpec: {
+        "LoRASpec-Input": {
             /** Id */
             id: string;
             /** Name */
             name: string;
             /** Path */
             path: string;
+            source?: components["schemas"]["ModelSource"] | null;
+        };
+        /** LoRASpec */
+        "LoRASpec-Output": {
+            /** Id */
+            id: string;
+            /** Name */
+            name: string;
+            /** Path */
+            path: string;
+            source: components["schemas"]["ModelSource"] | null;
+        };
+        /**
+         * ModelDirs
+         * @description Local folder of every model kind (settings.py owns them; downloads land there).
+         */
+        ModelDirs: {
+            /** Checkpoint */
+            checkpoint: string;
+            /** Embedding */
+            embedding: string;
+            /** Lora */
+            lora: string;
+        };
+        /** ModelLibraryInfo */
+        ModelLibraryInfo: {
+            model_dirs: components["schemas"]["ModelDirs"];
+            /** Providers */
+            providers: components["schemas"]["ModelProviderInfo"][];
+        };
+        /** ModelProviderInfo */
+        ModelProviderInfo: {
+            /** Base Models */
+            base_models: components["schemas"]["BaseModelOption"][];
+            /** Id */
+            id: string;
+            /** Kinds */
+            kinds: ("checkpoint" | "lora" | "embedding")[];
+            /** Label */
+            label: string;
+            /** Sorts */
+            sorts: ("most_downloaded" | "highest_rated" | "newest")[];
+            /**
+             * Token Set
+             * @description An API token is stored in the backend settings (its value is never sent).
+             */
+            token_set: boolean;
+            /** Token Supported */
+            token_supported: boolean;
+        };
+        /** ModelSearchPage */
+        ModelSearchPage: {
+            /** Items */
+            items: components["schemas"]["RemoteModel"][];
+            /** Next Cursor */
+            next_cursor: string | null;
+        };
+        /**
+         * ModelSearchQuery
+         * @description Query parameters of GET /api/models/search.
+         */
+        ModelSearchQuery: {
+            /**
+             * Base Models
+             * @description BaseModelOption ids; empty = any.
+             * @default []
+             */
+            base_models: string[];
+            /**
+             * Cursor
+             * @description ModelSearchPage.next_cursor of the previous page.
+             * @default null
+             */
+            cursor: string | null;
+            /**
+             * Kinds
+             * @description Empty = every kind the provider supports.
+             * @default []
+             */
+            kinds: ("checkpoint" | "lora" | "embedding")[];
+            /**
+             * Limit
+             * @default 20
+             */
+            limit: number;
+            /**
+             * Nsfw
+             * @default false
+             */
+            nsfw: boolean;
+            /**
+             * Provider
+             * @default civitai
+             */
+            provider: string;
+            /**
+             * Query
+             * @default
+             */
+            query: string;
+            /**
+             * Sort
+             * @default most_downloaded
+             * @enum {string}
+             */
+            sort: "most_downloaded" | "highest_rated" | "newest";
+        };
+        /**
+         * ModelSource
+         * @description Provenance of a library entry installed from an online provider (model library). Stored with the entry
+         *     in the frontend library store; null for entries added from local files.
+         */
+        ModelSource: {
+            /** Base Model */
+            base_model: string;
+            /** File Id */
+            file_id: string;
+            /** Model Id */
+            model_id: string;
+            /** Model Name */
+            model_name: string;
+            /** Page Url */
+            page_url: string | null;
+            /** Preview Url */
+            preview_url: string | null;
+            /** Provider */
+            provider: string;
+            /**
+             * Sha256
+             * @description Lowercase hex SHA-256 of the file, when the provider publishes it.
+             */
+            sha256: string | null;
+            /** Trigger Words */
+            trigger_words: string[];
+            /** Version Id */
+            version_id: string;
+            /** Version Name */
+            version_name: string;
         };
         /** ModelSpec */
         "ModelSpec-Input": {
@@ -585,6 +1025,7 @@ export interface components {
             name: string;
             /** Path */
             path: string;
+            source?: components["schemas"]["ModelSource"] | null;
             /**
              * Torch Dtype
              * @default float16
@@ -610,6 +1051,7 @@ export interface components {
             name: string;
             /** Path */
             path: string;
+            source: components["schemas"]["ModelSource"] | null;
             /**
              * Torch Dtype
              * @default float16
@@ -695,11 +1137,8 @@ export interface components {
             x: number;
             /** Y */
             y: number;
-            /**
-             * Z Index
-             * @default 1
-             */
-            z_index: number;
+            /** Z Index */
+            z_index: number | null;
         };
         /**
          * PersistedStoreEnvelope
@@ -737,6 +1176,20 @@ export interface components {
             /** Name */
             name: string;
         };
+        /** PreviewImage */
+        PreviewImage: {
+            /** Height */
+            height: number | null;
+            /** Nsfw */
+            nsfw: boolean;
+            /**
+             * Url
+             * @description Thumbnail-sized image URL.
+             */
+            url: string;
+            /** Width */
+            width: number | null;
+        };
         /** PromptCategory */
         PromptCategory: {
             /**
@@ -757,20 +1210,17 @@ export interface components {
             muted: boolean;
             /** Name */
             name: string;
-            position: components["schemas"]["CategoryPosition"];
+            position: components["schemas"]["CategoryPosition"] | null;
             /**
              * Priority
-             * @default 1
+             * @description null: the frontend's default priority.
              */
-            priority: string;
+            priority: string | null;
             /** Prompts */
             prompts: components["schemas"]["PromptEntry"][];
-            size: components["schemas"]["CategorySize"];
-            /**
-             * Z Index
-             * @default 50
-             */
-            z_index: number;
+            size: components["schemas"]["CategorySize"] | null;
+            /** Z Index */
+            z_index: number | null;
         };
         /** PromptEntry */
         PromptEntry: {
@@ -785,6 +1235,106 @@ export interface components {
             skipped: boolean;
             /** Text */
             text: string;
+        };
+        /**
+         * ProviderTokenUpdate
+         * @description PUT body of a provider API token. null or an empty string removes the stored token.
+         */
+        ProviderTokenUpdate: {
+            /** Token */
+            token?: string | null;
+        };
+        /** RemoteFile */
+        RemoteFile: {
+            /**
+             * Downloadable
+             * @description False for formats the app refuses to download (pickle-based files).
+             */
+            downloadable: boolean;
+            /**
+             * Format
+             * @description Provider format label, e.g. "SafeTensor" or "PickleTensor".
+             */
+            format: string | null;
+            /** Id */
+            id: string;
+            /**
+             * Local Path
+             * @description Known local copy (cheap check: same name and size in the kind's folder, or a cached hash match).
+             */
+            local_path: string | null;
+            /** Name */
+            name: string;
+            /** Precision */
+            precision: string | null;
+            /** Primary */
+            primary: boolean;
+            /** Sha256 */
+            sha256: string | null;
+            /** Size Bytes */
+            size_bytes: number;
+            /**
+             * Variant
+             * @description e.g. "pruned" or "full".
+             */
+            variant: string | null;
+        };
+        /** RemoteModel */
+        RemoteModel: {
+            /** Creator */
+            creator: string | null;
+            /** Download Count */
+            download_count: number;
+            /** Id */
+            id: string;
+            /**
+             * Kind
+             * @enum {string}
+             */
+            kind: "checkpoint" | "lora" | "embedding";
+            /** Name */
+            name: string;
+            /** Nsfw */
+            nsfw: boolean;
+            /** Page Url */
+            page_url: string | null;
+            /** Provider */
+            provider: string;
+            /** Tags */
+            tags: string[];
+            /** Versions */
+            versions: components["schemas"]["RemoteModelVersion"][];
+        };
+        /** RemoteModelVersion */
+        RemoteModelVersion: {
+            /** Architecture */
+            architecture: ("sd15" | "sdxl") | null;
+            /** Base Model */
+            base_model: string;
+            /**
+             * Default File Id
+             * @description File installed when InstallRequest.file_id is null (model_providers/base.py default_file).
+             */
+            default_file_id: string | null;
+            /** Files */
+            files: components["schemas"]["RemoteFile"][];
+            /** Id */
+            id: string;
+            /** Images */
+            images: components["schemas"]["PreviewImage"][];
+            /** Name */
+            name: string;
+            /** Page Url */
+            page_url: string | null;
+            /** Published At */
+            published_at: string | null;
+            /** Trigger Words */
+            trigger_words: string[];
+            /**
+             * Unavailable Reason
+             * @description Why this version cannot be installed (model_providers/base.py); null when it can.
+             */
+            unavailable_reason: string | null;
         };
         /**
          * TaskSnapshot
@@ -809,10 +1359,10 @@ export interface components {
         };
         /** WorkspaceLayout */
         WorkspaceLayout: {
-            controls: components["schemas"]["PaneLayout"];
-            details: components["schemas"]["PaneLayout"];
-            image: components["schemas"]["PaneLayout"];
-            used: components["schemas"]["PaneLayout"];
+            controls: components["schemas"]["PaneLayout"] | null;
+            details: components["schemas"]["PaneLayout"] | null;
+            image: components["schemas"]["PaneLayout"] | null;
+            used: components["schemas"]["PaneLayout"] | null;
         };
     };
     responses: never;
@@ -839,6 +1389,44 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["BootstrapResponse"];
+                };
+            };
+        };
+    };
+    cancel_download_api_downloads__task_id__cancel_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                task_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["OkResponse"];
+                };
+            };
+            /** @description Unknown or finished download */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
                 };
             };
         };
@@ -920,6 +1508,324 @@ export interface operations {
                 content: {
                     "application/json": components["schemas"]["HealthResponse"];
                 };
+            };
+        };
+    };
+    model_library_info_api_models_info_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ModelLibraryInfo"];
+                };
+            };
+        };
+    };
+    install_model_api_models_install_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["InstallRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["InstallResponse"];
+                };
+            };
+            /** @description The provider requires an API token, or rejected the stored one */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Unknown provider, model, version or hash */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description The file cannot be installed (see detail) */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+            /** @description The provider could not be reached or answered an error */
+            502: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    list_installs_api_models_installs_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["InstallJob"][];
+                };
+            };
+        };
+    };
+    find_model_by_hash_api_models_providers__provider__by_hash__sha256__get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                provider: string;
+                sha256: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RemoteModel"];
+                };
+            };
+            /** @description The provider requires an API token, or rejected the stored one */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Unknown provider, model, version or hash */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+            /** @description The provider could not be reached or answered an error */
+            502: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    set_provider_token_api_models_providers__provider__token_put: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                provider: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ProviderTokenUpdate"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ModelProviderInfo"];
+                };
+            };
+            /** @description Unknown provider, model, version or hash */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description The provider takes no API token */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    get_model_version_api_models_providers__provider__versions__version_id__get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                provider: string;
+                version_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RemoteModel"];
+                };
+            };
+            /** @description The provider requires an API token, or rejected the stored one */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Unknown provider, model, version or hash */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+            /** @description The provider could not be reached or answered an error */
+            502: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    search_models_api_models_search_get: {
+        parameters: {
+            query?: {
+                provider?: string;
+                query?: string;
+                /** @description Empty = every kind the provider supports. */
+                kinds?: ("checkpoint" | "lora" | "embedding")[];
+                /** @description BaseModelOption ids; empty = any. */
+                base_models?: string[];
+                sort?: "most_downloaded" | "highest_rated" | "newest";
+                nsfw?: boolean;
+                limit?: number;
+                /** @description ModelSearchPage.next_cursor of the previous page. */
+                cursor?: string | null;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ModelSearchPage"];
+                };
+            };
+            /** @description The provider requires an API token, or rejected the stored one */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Unknown provider, model, version or hash */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+            /** @description The provider could not be reached or answered an error */
+            502: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
             };
         };
     };

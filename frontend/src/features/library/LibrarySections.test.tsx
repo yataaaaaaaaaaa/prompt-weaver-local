@@ -15,12 +15,12 @@ vi.mock('../../stores/libraryStore', async (importOriginal) => {
 });
 
 const MODELS: ModelSpec[] = [
-	{ id: 'm1', name: 'Model One', path: 'C:/models/one.safetensors', default_width: 1024, default_height: 1024, torch_dtype: 'float16' },
-	{ id: 'm2', name: 'Model Two', path: 'C:/models/two', default_width: 1024, default_height: 1024, torch_dtype: 'float16' },
+	{ id: 'm1', name: 'Model One', path: 'C:/models/one.safetensors', default_width: 1024, default_height: 1024, torch_dtype: 'float16', source: null },
+	{ id: 'm2', name: 'Model Two', path: 'C:/models/two', default_width: 1024, default_height: 1024, torch_dtype: 'float16', source: null },
 ];
 
-const LORA_A: LoRASpec = { id: 'a', name: 'Lora A', path: 'C:/loras/a.safetensors' };
-const LORA_B: LoRASpec = { id: 'b', name: 'Lora B', path: 'C:/loras/b.safetensors' };
+const LORA_A: LoRASpec = { id: 'a', name: 'Lora A', path: 'C:/loras/a.safetensors', source: null };
+const LORA_B: LoRASpec = { id: 'b', name: 'Lora B', path: 'C:/loras/b.safetensors', source: null };
 
 function seedLibraryActions() {
 	const actions = {

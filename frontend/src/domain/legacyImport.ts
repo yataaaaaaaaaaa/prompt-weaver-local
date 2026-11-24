@@ -4,7 +4,7 @@
 import type { AppState, LegacyPaneLayout, LegacyPromptCategory, LegacyPromptEntry, LibraryState as LegacyLibrary } from '../api/types';
 import { categoryKeyOf, priorityOr, type Category, type SubPromptState } from './categories';
 import type { ForbiddenRule } from './forbiddenRules';
-import type { GenerationSettings } from './generationRequest';
+import { generationSettingsFromBackend, type GenerationSettings } from './generationRequest';
 import { categoryWindowKey, isCompleteRect, paneWindowKey, sanitizeWindowLayout, type WindowLayouts } from './layout';
 import type { LibraryData } from './library';
 
@@ -53,24 +53,9 @@ export function legacyLibrary(
 	};
 }
 
-export function legacyGenerationSettings(
-	state: Pick<
-		AppState,
-		'width' | 'height' | 'steps' | 'guidance_scale' | 'negative_prompt' | 'prompt_seed' | 'seed' | 'prompt_seed_behavior' | 'image_seed_behavior'
-	>,
-): GenerationSettings {
-	return {
-		width: state.width,
-		height: state.height,
-		steps: state.steps,
-		guidanceScale: state.guidance_scale,
-		negativePrompt: state.negative_prompt,
-		promptSeedInput: state.prompt_seed != null ? String(state.prompt_seed) : '',
-		seedInput: state.seed != null ? String(state.seed) : '',
-		promptSeedBehavior: state.prompt_seed_behavior,
-		imageSeedBehavior: state.image_seed_behavior,
-		promptCategorySeedState: {},
-	};
+/** app_state.json generation fields -> settings (same mapping as the backend defaults). */
+export function legacyGenerationSettings(state: AppState): GenerationSettings {
+	return generationSettingsFromBackend(state);
 }
 
 /** Legacy app_state workspace entry -> pane id of src/workspace/paneRegistry.tsx. */
@@ -78,8 +63,9 @@ export const LEGACY_WORKSPACE_PANES = { image: 'image', controls: 'controls', us
 
 type LegacyWorkspace = Partial<Record<keyof typeof LEGACY_WORKSPACE_PANES, LegacyPaneLayout | null>>;
 
-function windowFrom(rect: Partial<{ x: number; y: number; width: number; height: number }>, z: number) {
-	return isCompleteRect(rect) ? sanitizeWindowLayout({ ...rect, z }) : null;
+/** Legacy geometry has no backend defaults: incomplete rects import nothing (the frontend defaults apply). */
+function windowFrom(rect: Partial<Record<'x' | 'y' | 'width' | 'height', number | null>>, z: number | null | undefined) {
+	return isCompleteRect(rect) ? sanitizeWindowLayout({ ...rect, z: z ?? undefined }) : null;
 }
 
 /** Pane layouts (image/controls/used) and every category's position/size/z_index -> workspace windows.

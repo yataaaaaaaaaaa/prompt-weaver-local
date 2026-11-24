@@ -1,7 +1,8 @@
 // Generation request building: categories + forbidden rules + generation settings
 // + library -> the GenerateRequest sent to the backend, and the seed settings after the generation.
 // Pure module; the generation store snapshots the stores and calls it.
-import type { ForbiddenRule, GenerateRequest, GenerationSelection, OutputRecord } from '../api/types';
+import { GENERATION_DEFAULTS } from '../api/defaults.gen';
+import type { ForbiddenRule, GenerateRequest, GenerationDefaults, GenerationSelection, OutputRecord } from '../api/types';
 import type { Category } from './categories';
 import type { LibraryData } from './library';
 import { filterSelectionLoraIds, makeLoraMap, resolveLoraSelection } from './loraSelection';
@@ -32,6 +33,32 @@ export type GenerationSettings = {
 	imageSeedBehavior: SeedBehavior;
 	promptCategorySeedState: CategorySeedState;
 };
+
+/** The backend's snake_case generation fields (GenerationDefaults, legacy app_state.json AppState). */
+export type BackendGenerationFields = Pick<
+	GenerationDefaults,
+	'width' | 'height' | 'steps' | 'guidance_scale' | 'negative_prompt' | 'prompt_seed' | 'seed' | 'prompt_seed_behavior' | 'image_seed_behavior'
+>;
+
+/** Backend generation fields -> settings (a null seed = '' = random; no per-category counters yet). */
+export function generationSettingsFromBackend(fields: BackendGenerationFields): GenerationSettings {
+	return {
+		width: fields.width,
+		height: fields.height,
+		steps: fields.steps,
+		guidanceScale: fields.guidance_scale,
+		negativePrompt: fields.negative_prompt,
+		promptSeedInput: fields.prompt_seed != null ? String(fields.prompt_seed) : '',
+		seedInput: fields.seed != null ? String(fields.seed) : '',
+		promptSeedBehavior: fields.prompt_seed_behavior,
+		imageSeedBehavior: fields.image_seed_behavior,
+		promptCategorySeedState: {},
+	};
+}
+
+/** Defaults of every generation setting, derived from the backend's GenerationDefaults (the single definition,
+ *  exported by `npm run gen:api` to src/api/defaults.gen.ts). */
+export const DEFAULT_GENERATION_SETTINGS: GenerationSettings = generationSettingsFromBackend(GENERATION_DEFAULTS);
 
 export type GenerationInputs = {
 	categories: readonly Category[];

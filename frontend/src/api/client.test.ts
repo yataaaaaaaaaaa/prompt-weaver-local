@@ -36,6 +36,43 @@ describe('api client', () => {
 		await expect(api.readStore('library-store')).resolves.toBeNull();
 	});
 
+	it('serializes model searches as repeated query parameters and omits a null cursor', async () => {
+		const fetchMock = stubFetch(200, { items: [], next_cursor: null });
+
+		await api.searchModels({
+			provider: 'civitai',
+			query: 'detail',
+			kinds: ['lora', 'checkpoint'],
+			base_models: ['SD 1.5', 'Pony'],
+			sort: 'most_downloaded',
+			nsfw: false,
+			limit: 20,
+			cursor: null,
+		});
+
+		const url = new URL(fetchMock.mock.calls[0][0].url);
+		expect(url.pathname).toBe('/api/models/search');
+		expect(url.searchParams.getAll('kinds')).toEqual(['lora', 'checkpoint']);
+		expect(url.searchParams.getAll('base_models')).toEqual(['SD 1.5', 'Pony']);
+		expect(url.searchParams.get('query')).toBe('detail');
+		expect(url.searchParams.has('cursor')).toBe(false);
+	});
+
+	it('posts installs, provider tokens and download cancellations', async () => {
+		const fetchMock = stubFetch(200, { ok: true });
+
+		await api.installModel({ provider: 'civitai', version_id: '62833', file_id: null });
+		await api.setProviderToken('civitai', 'secret');
+		await api.cancelDownload('download-1');
+
+		const [install, token, cancel] = fetchMock.mock.calls.map((call) => call[0]);
+		expect([install.method, new URL(install.url).pathname]).toEqual(['POST', '/api/models/install']);
+		expect(await install.json()).toEqual({ provider: 'civitai', version_id: '62833', file_id: null });
+		expect([token.method, new URL(token.url).pathname]).toEqual(['PUT', '/api/models/providers/civitai/token']);
+		expect(await token.json()).toEqual({ token: 'secret' });
+		expect([cancel.method, new URL(cancel.url).pathname]).toEqual(['POST', '/api/downloads/download-1/cancel']);
+	});
+
 	it('throws ApiError with the FastAPI detail on failure', async () => {
 		stubFetch(409, { detail: 'Generation cancelled' });
 

@@ -8,9 +8,17 @@ import type { paths } from './schema.gen';
 import type {
 	BootstrapResponse,
 	GenerateRequest,
+	InstallJob,
+	InstallRequest,
+	InstallResponse,
+	ModelLibraryInfo,
+	ModelProviderInfo,
+	ModelSearchPage,
+	ModelSearchQuery,
 	OutputRecord,
 	PersistedStoreEnvelope,
 	PersistedStoreEnvelopeInput,
+	RemoteModel,
 	TaskSnapshot,
 } from './types';
 
@@ -51,6 +59,7 @@ async function unwrap<T>(request: Promise<{ data?: T; error?: unknown; response:
 
 const outputPath = (outputId: string) => ({ params: { path: { output_id: outputId } } });
 const storePath = (name: string) => ({ params: { path: { name } } });
+const providerPath = (provider: string) => ({ params: { path: { provider } } });
 
 export const api = {
 	health: () => unwrap(http.GET('/api/health')),
@@ -76,6 +85,23 @@ export const api = {
 	},
 	deleteStore: async (name: string): Promise<void> => {
 		await unwrap(http.DELETE('/api/stores/{name}', storePath(name)));
+	},
+
+	// Model library (backend app/routers/models.py, model_installs.py, downloads.py)
+	modelLibraryInfo: (): Promise<ModelLibraryInfo> => unwrap(http.GET('/api/models/info')),
+	searchModels: (query: ModelSearchQuery, signal?: AbortSignal): Promise<ModelSearchPage> =>
+		unwrap(http.GET('/api/models/search', { params: { query: { ...query, cursor: query.cursor ?? undefined } }, signal })),
+	getModelVersion: (provider: string, versionId: string): Promise<RemoteModel> =>
+		unwrap(http.GET('/api/models/providers/{provider}/versions/{version_id}', { params: { path: { provider, version_id: versionId } } })),
+	findModelByHash: (provider: string, sha256: string): Promise<RemoteModel> =>
+		unwrap(http.GET('/api/models/providers/{provider}/by-hash/{sha256}', { params: { path: { provider, sha256 } } })),
+	/** null or '' removes the stored token. The backend never sends a token back (only token_set). */
+	setProviderToken: (provider: string, token: string | null): Promise<ModelProviderInfo> =>
+		unwrap(http.PUT('/api/models/providers/{provider}/token', { ...providerPath(provider), body: { token } })),
+	installModel: (request: InstallRequest): Promise<InstallResponse> => unwrap(http.POST('/api/models/install', { body: request })),
+	listInstalls: (): Promise<InstallJob[]> => unwrap(http.GET('/api/models/installs')),
+	cancelDownload: async (taskId: string): Promise<void> => {
+		await unwrap(http.POST('/api/downloads/{task_id}/cancel', { params: { path: { task_id: taskId } } }));
 	},
 };
 
