@@ -8,15 +8,16 @@ A local, Windows-first desktop tool for prompt-combinator diffusion generation.
 - Keeps the current diffusion model and its loaded LoRAs in memory between generations.
 - Lets you pick:
   - one diffusion model
-  - N LoRAs
+  - N LoRAs, each with its own weight
   - width / height / steps / CFG
   - a prompt seed and an image seed, each with its own behavior after each generation
 - Builds the final positive prompt by choosing one sub-prompt per active category.
 - Supports forbidden associations between sub-prompts, categories and tags.
 - Supports categories that are disabled by default and only become active when a selected sub-prompt contains their activation text.
 - Has an online model library: search Civitai for checkpoints, LoRAs and embeddings, and pick one to use it. If the file is not on disk yet it is downloaded into the ComfyUI model folders, verified, added to the local library and selected for generation.
+- Has an online image library: search Civitai images by keyword, see each image's tags, LoRAs (with their weights), checkpoint and generation parameters, and in one click use the same LoRAs with the same weights (missing ones are downloaded first), switch to the same checkpoint, or add the tags to a prompt category.
 - Saves every generation as an image plus an adjacent JSON metadata file in `<data dir>/output`.
-- Keeps everything else in the data directory too: frontend state (`<data dir>/stores`), the app-managed trash (`<data dir>/trash`), backend settings such as the optional Civitai API token (`<data dir>/backend_settings.json`), the file hash cache (`<data dir>/cache/file_hashes.json`) and the legacy `app_state.json` / `library.json`.
+- Keeps everything else in the data directory too: frontend state (`<data dir>/stores`), the app-managed trash (`<data dir>/trash`), backend settings such as the optional Civitai API token (`<data dir>/backend_settings.json`), the file hash cache (`<data dir>/cache/file_hashes.json`), the favorite online images (`<data dir>/image_favorites.json`) and the legacy `app_state.json` / `library.json`.
 
 The data directory is `D:\Anything\storage\prompt-weaver-local-storage` on Windows, or `<repo>/.prompt_weaver_local_data` on other systems. Set the `PROMPT_WEAVER_DATA_DIR` environment variable to use a different one. The backend owns this layout in `backend/app/settings.py`.
 
@@ -26,7 +27,7 @@ Model files live in the ComfyUI models folder, `D:\Anything\ComfyUI\ComfyUI\mode
 
 ### Workspace
 
-- The workspace holds movable, resizable floating windows: the panes (Image, Output browser, Generation, Used sub-prompts, Model library) and one card per prompt category. Every window shares one stacking order; clicking a window brings it to the front.
+- The workspace holds movable, resizable floating windows: the panes (Image, Output browser, Generation, Used sub-prompts, Model library, Image library) and one card per prompt category. Every window shares one stacking order; clicking a window brings it to the front.
 - Drag a window by its header and resize it with the bottom-right grip. Both handles also work from the keyboard: focus them and use the arrow keys (8 px per press, 40 px with `Shift`).
 - Each window header has a "Send to back" button; panes also have a Close button.
 - The app bar at the top has Add category, Reorganize categories, one toggle per pane to show or hide it, the visibility mode, and Undo. Tooltips show the keyboard shortcuts.
@@ -34,17 +35,19 @@ Model files live in the ComfyUI models folder, `D:\Anything\ComfyUI\ComfyUI\mode
 - `Ctrl+H` cycles visibility between everything, categories only, and panes only.
 - `Ctrl+O` sorts the categories by priority, then name, renumbers their priorities and arranges their cards in a grid.
 - The UI follows Microsoft Fluent 2 (Fluent UI React v9) and switches between light and dark to match the OS setting, live.
+- Web links (Civitai model and image pages) open in the system browser, never inside the app window (`frontend/electron/externalLinks.cjs`).
 
 ### Models and LoRAs
 
 - Choose the model from a dropdown in the Generation pane.
 - The LoRA list has one checkbox per LoRA for the default selection, plus Clear, Add files and Add folder. LoRAs that a sub-prompt pulls in are marked "Prompt-linked" and can be unlinked from every sub-prompt in one click. A summary shows the default-selected, prompt-linked and possibly active counts.
+- Every selected LoRA has its own weight, edited with the "Weight of <name>" spin button next to its checkbox (arrow keys step it; typed values are clamped). The range is -10 to 10 in steps of 0.05, default 1 (`LoraWeightDefaults` in `backend/app/schemas.py`). A LoRA enters the selection at weight 1 (checkbox, added files, model library installs); "Use these LoRAs" of the image library sets the image's weights. LoRAs that only a sub-prompt pulls in are applied at weight 1; a LoRA both selected and prompt-linked keeps its selected weight.
 - Add models and LoRAs through Electron file and folder dialogs:
   - model files (`.safetensors`, `.ckpt`) or a Diffusers model directory
   - LoRA files (`.safetensors`, `.bin`, `.pt`, several at once) or LoRA directories
 - The dialogs open in the last model folder or last LoRA folder you used. They need the desktop app; in a plain browser the app says so instead.
 - Adding a model or LoRA whose path is already in the library reuses (and selects) the existing entry.
-- The backend keeps the current model loaded and only reloads LoRAs when the set changes.
+- The backend keeps the current model and its LoRAs loaded between generations. The runtime prepares the pipeline again (model included) when the model, the LoRA set or a LoRA weight changes, so the first generation after a weight change takes as long as a model switch.
 - A sub-prompt can pull in extra LoRAs (`extra_lora_ids`). Removing a LoRA from the library also unlinks it from every sub-prompt.
 - The runtime resolves inline `<lora:name:weight>` tags against the ComfyUI `loras` folder and textual-inversion embeddings (`embedding:name`) against the `embeddings` folder (see the model folders above).
 - Library entries installed from the model library keep their provenance (provider, model, version and file ids, SHA-256, preview image, base model, trigger words, page URL). Entries added from disk have none and show as "Local file".
@@ -84,6 +87,36 @@ Downloads:
 - Starting the same download twice (double click, a second window) joins the running one. Closing the app cancels running downloads and waits at most 10 s.
 - Progress, completion, errors and cancellation are `DownloadTaskEvent`s on `/ws/tasks` and `GET /api/tasks`, like generation progress. Their messages never contain URLs (signed storage URLs carry credentials) or headers.
 - The SHA-256 of every model file the backend hashes or downloads is cached in `<data dir>/cache/file_hashes.json`, valid while the file's size and modification time are unchanged, so later checks need no hashing. The cache is derived data and safe to delete.
+
+### Image library
+
+The Image library pane (app bar toggle "Image library") has two tabs, Search and Favorites. Picking a thumbnail opens its detail view in the pane; Back or `Escape` returns to the grid, with the focus on the image you opened.
+
+**Search** lists Civitai images in a grid of thumbnails that loads more as you scroll (a "Load more" button does the same):
+
+- A search box (it searches as you type), plus:
+  - sort: Most reactions, Most comments, Most collected, Newest
+  - period: Day, Week, Month, Year, All time. It only applies without a keyword (it is disabled, with a hint, while a keyword is typed).
+  - "Show NSFW" (off by default: only images Civitai rates safe, `nsfwLevel` 1-2, are shown)
+  - "Only locally usable models" (on by default: only images made with a base model the local runtime can load)
+- Keywords search the models' galleries. The Civitai images API has no free-text filter (it ignores `query`, and `tags` only takes numeric tag ids), so a keyword is looked up in the model catalog (the model library search: LoRAs and checkpoints, most downloaded, up to 4 models, with the usable base models when that switch is on), and the page interleaves the image galleries of those models, read through each model's newest version made for an allowed base model (Civitai answers version galleries in well under a second, whole-model galleries in up to 20 s). When those galleries run out, the next models of the search are used. An empty keyword browses the Civitai image feed with the sort and period.
+
+**Detail view** of an image:
+
+- the large preview, author, base model ("Not supported locally" when the runtime cannot load it), Favorite, "Copy prompt" and a link to the image page on civitai.com;
+- **Tags**: the prompt split into tags, inline `<lora:...>` tags removed. "Add to category" adds them, all or only the tags you select, as one new sub-prompt of the category you pick, or of a new category. A sub-prompt that already exists in that category is refused.
+- **LoRAs**: each LoRA with its name (linked to its Civitai page once identified), its weight ("unpublished, default" when the image publishes none) and its status: In library, On disk, Available to download, Downloading (with the progress bar and Cancel of the model library), Failed, Not supported, Not identified or Resolving; the reason is in a tooltip.
+- **Use these LoRAs** makes the selection exactly the image's LoRAs, with the image's weights. LoRAs already in the library are used as they are; missing ones are installed through the model library first (same downloads, progress and checks; a download already running is joined); LoRAs that cannot be identified, downloaded or loaded are skipped with a warning listing why. When none can be used, the selection is left unchanged.
+- **Checkpoint**: the checkpoint the image was made with, its status, and "Use this checkpoint", which selects it, after installing it through the model library when needed.
+- **Generation parameters**: prompt, negative prompt, sampler, steps, CFG, seed, size and clip skip, as published (an em dash when missing).
+
+How an image's models are found:
+
+- The backend reads the image metadata Civitai publishes and merges its sources into one entry per model (`backend/app/services/model_providers/civitai_image_meta.py`, rules in its docstring): `civitaiResources` (version ids and weights of images made on Civitai), `resources` (name, weight, hash), `hashes`, `Model` / `Model hash`, and the inline `<lora:name:weight>` tags of the prompt (parsed by `diffusion_lora_runtime.prompt_lora`). Types other than checkpoints, LoRAs and embeddings (VAE, upscalers...) are ignored.
+- Each model is then identified by its version id, else by its file hash: Civitai's short AutoV2 (10 hex) and AutoV3 (12 hex) hashes are accepted, as well as a full SHA-256. A model published by name only cannot be identified.
+- A library entry of the same kind is used when its provenance (version) or SHA-256 matches, or else when its file name without extension equals the published name (case-insensitive).
+
+**Favorites** keeps images you mark with Favorite, newest first. The backend stores them in `<data dir>/image_favorites.json` (`{"version": 1, "items": [...]}`); unreadable entries are skipped.
 
 ### Prompt categories
 
@@ -126,7 +159,8 @@ Downloads:
 - Every generation is saved in `<data dir>/output` under a fixed-width 10-digit number: `0000000001.png` + `0000000001.json`.
 - After a generation, the UI jumps to the newest output.
 - The arrow keys move through the output history: left/up goes to the previous output, right/down to the next. They are left to the focused control when it uses them itself (text fields, window handles, menus, dropdowns, the app bar); click elsewhere to browse again. The Output browser pane offers First / Previous / Next / Last buttons.
-- For the current output, the Output browser shows its number and position, image name, size, steps, CFG, seed, prompt seed, model and LoRAs; the Used sub-prompts pane lists each category with its chosen sub-prompt. "Copy prompt" (Output browser and Generation pane) copies the full prompt.
+- For the current output, the Output browser shows its number and position, image name, size, steps, CFG, seed, prompt seed, model and LoRAs with their weights (`name (weight)`); the Used sub-prompts pane lists each category with its chosen sub-prompt. "Copy prompt" (Output browser and Generation pane) copies the full prompt.
+- The metadata JSON lists the LoRAs used as `active_loras: [{"id", "weight"}]`. Files written before LoRA weights existed (`active_lora_ids`) still load, with weight 1; they are not rewritten.
 - Output ids come from file names only, so the list stays fast with thousands of outputs. Metadata and images are loaded by id through the backend API.
 
 ### Delete and undo
@@ -176,14 +210,18 @@ prompt-weaver-local/
       openapi_export.py    dumps the OpenAPI document without a server
       routers/             one APIRouter per area, registered in routers/__init__.py (ROUTERS)
         health, bootstrap, outputs, generation, tasks, stores,
-        models, model_installs, downloads, provider_errors (provider error -> HTTP status)
+        models, model_installs, downloads, images, provider_errors (provider error -> HTTP status)
       services/            domain logic and IO, constructed with injected paths
         container.py       build_services -> AppServices
         json_files.py      crash-resilient JSON files (.new/.old sidecars)
         http.py            the only place that builds outgoing httpx clients (HttpClientFactory)
         backend_settings.py  backend_settings.json: provider API tokens (never leave the backend)
-        model_providers/   ModelProvider protocol + shared install rules (base.py), registry, civitai.py
+        model_providers/   ModelProvider / ImageProvider protocols + shared install rules (base.py), registries,
+                           civitai.py (models), civitai_images.py (image feed and galleries),
+                           civitai_image_meta.py (image generation metadata -> params and resources)
         model_catalog.py   provider info, search, version / by-hash lookups annotated with local copies
+        image_library.py   image search (feed, keyword -> models -> galleries, opaque cursor), resource resolution
+        image_favorites.py favorite images (image_favorites.json)
         downloads.py       generic DownloadManager (.part, SHA-256, retry/resume, cancel, dedupe, progress)
         file_hashes.py     streamed SHA-256, persistent hash cache, the one SHA-256 normalization
         local_models.py    download targets and "already on disk" detection (by path and by hash)
@@ -193,15 +231,17 @@ prompt-weaver-local/
         persisted_stores.py  frontend store files, legacy Electron formats included
         task_hub.py        latest event per task + WebSocket fan-out
         generation.py      generation orchestration, GeneratorPort
-        runtime_adapter.py the only importer of diffusion_lora_runtime (loaded lazily)
+        runtime_adapter.py the only importer of the diffusion_lora_runtime generator (loaded lazily)
         signals.py         Ctrl+C cancels, second Ctrl+C exits
     openapi.json           committed OpenAPI snapshot
     tests/                 pytest + TestClient on temp dirs with a fake generator and a fake network
-                           (support.py: FakeHttp, StubProvider, FakeDownloadManager; fixtures/civitai: real answers)
+                           (support.py: FakeHttp, StubProvider, StubImageProvider, CatalogStub, FakeDownloadManager;
+                           fixtures/civitai: real answers)
     run_backend.py
   frontend/
     electron/              main.cjs (backend start, window, dialogs), preload.cjs (bridge), ipcChannels.cjs,
-                           shortcutMenu.cjs (menu from keymap.json), windowTheme.cjs (Fluent background) + tests
+                           shortcutMenu.cjs (menu from keymap.json), windowTheme.cjs (Fluent background),
+                           externalLinks.cjs (web links open in the system browser) + tests
     scripts/               apiTypes.mjs + generate-api-types.mjs (npm run gen:api)
     src/
       api/                 schema.gen.ts + defaults.gen.ts (generated), types.ts, config.ts (URLs), client.ts,
@@ -209,14 +249,18 @@ prompt-weaver-local/
       persistence/         persist.ts (the one persistence mechanism), storeBackend.ts, storeNames.ts
       domain/              pure logic: text, guards, categories, forbiddenRules, reachability, promptEngine,
                            seeds, library, loraSelection, generationRequest, outputs, layout, legacyImport, paths,
-                           modelCatalog
-      stores/              one zustand store per domain (see "Frontend stores" below)
-      features/            thin Fluent views per feature (categories, forbidden, generation, library, models, outputs)
+                           modelCatalog, imageLibrary
+      stores/              one zustand store per domain (see "Frontend stores" below), pagedSearch.ts (the search
+                           engine of the online catalogs), clipboardActions.ts
+      features/            thin Fluent views per feature (categories, forbidden, generation, library, models, images,
+                           outputs)
       workspace/           Workspace shell, FloatingPane, app bar, paneRegistry.tsx (PANES)
-      ui/                  shared views: boot screen, error boundary, notifications host, PaneLayout, keyboard hints
+      ui/                  shared views and hooks: boot screen, error boundary, notifications host, PaneLayout, keyboard
+                           hints, useInfiniteScroll, spinButtonValue
       app/                 App, providers + theme, keymap.json, commands.ts, global shortcuts
       services/            desktop bridge (Electron preload) and clipboard
-      test/                Vitest setup, render and dialog helpers, model library test data
+      test/                Vitest setup, render and dialog helpers, IntersectionObserver stub, model and image
+                           library test data
     __mocks__/zustand.ts   resets every store between tests
   launcher/
     src/prompt_weaver_launcher/cli.py
@@ -225,10 +269,14 @@ prompt-weaver-local/
 ### Single sources of truth
 
 - **Shared data types.** `backend/app/schemas.py` is the truth. From `frontend/`, run `npm run gen:api` to export the OpenAPI document to `backend/openapi.json` and generate `frontend/src/api/schema.gen.ts` from it. The frontend imports named aliases from `src/api/types.ts`; never hand-write a TypeScript mirror. Two tests fail when either generated file is stale: `backend/tests/test_openapi_snapshot.py` and `frontend/src/api/apiTypes.test.ts`.
-- **Shared defaults.** Defaults needed on both sides are defined once, in a `schemas.py` model decorated with `@export_defaults`: `GenerationDefaults` (size, steps, CFG, negative prompt, seed behaviors, torch dtype) and `ModelSearchQuery`. `npm run gen:api` writes their values to `frontend/src/api/defaults.gen.ts` (`GENERATION_DEFAULTS`, `MODEL_SEARCH_QUERY_DEFAULTS`), and the frontend derives its own defaults from them: `DEFAULT_GENERATION_SETTINGS` in `src/domain/generationRequest.ts` and `DEFAULT_CATALOG_FILTERS` in `src/domain/modelCatalog.ts`. The staleness test covers this file too.
+- **Shared defaults.** Defaults needed on both sides are defined once, in a `schemas.py` model decorated with `@export_defaults`: `GenerationDefaults` (size, steps, CFG, negative prompt, seed behaviors, torch dtype), `ModelSearchQuery`, `ImageSearchQuery` (provider, sort, period, NSFW off, locally usable only, page size) and `LoraWeightDefaults` (weight 1, range -10..10, step 0.05). `npm run gen:api` writes their values to `frontend/src/api/defaults.gen.ts` (`GENERATION_DEFAULTS`, `MODEL_SEARCH_QUERY_DEFAULTS`, `IMAGE_SEARCH_QUERY_DEFAULTS`, `LORA_WEIGHT_DEFAULTS`), and the frontend derives its own defaults from them: `DEFAULT_GENERATION_SETTINGS` in `src/domain/generationRequest.ts`, `DEFAULT_CATALOG_FILTERS` in `src/domain/modelCatalog.ts` and `DEFAULT_IMAGE_FILTERS` in `src/domain/imageLibrary.ts`. The staleness test covers this file too.
+- **LoRA weights.** One representation end to end: `LoraWeight {id, weight}` (`schemas.py`). The LoRA selection (`libraryStore.selectedLoras`), the generation request (`GenerationLoRA` = library entry + weight), the output metadata (`active_loras`) and the runtime call (`LoRASpec.weight` of `diffusion-lora-runtime`) all use it. The frontend clamps weights only with `clampLoraWeight` and formats them only with `formatLoraWeight` / `weightedLorasText` (`src/domain/loraSelection.ts`).
+- **Inline LoRA syntax** (`<lora:name:weight>`) belongs to `diffusion_lora_runtime.prompt_lora` (`extract_prompt_lora_specs`, `strip_prompt_lora_tags`), which imports without torch: the image library reads the prompts of online images with it.
+- **Online image metadata.** Parsing Civitai's image metadata and merging its model lists is backend-owned (`civitai_image_meta.py`); the frontend only reads `RemoteImage.resources` and `ImageGenerationParams.clean_prompt`. Splitting a prompt into tags (`splitPromptTags`) and joining tags back into prompt text (`joinPromptTags`, also used for trigger words) live in `src/domain/text.ts`.
 - **Window geometry and category priority defaults** belong to the frontend (default layouts in `paneRegistry.tsx`, the categories domain). The legacy `app_state.json` fields are nullable on the backend and carry no defaults.
 - **Model folders and data dir layout.** `backend/app/settings.py` (`DEFAULT_MODELS_ROOT`, `MODEL_KIND_SUBDIRS`, `AppPaths`); the UI shows the folders reported by `GET /api/models/info`.
-- **Model library rules** are backend-owned and only read by the frontend: which file of a version gets installed (`RemoteModelVersion.default_file_id`), whether it can be installed (`unavailable_reason`), the display name of an install (`InstalledModel.name`, the download task title), and the base model -> architecture mapping (`model_providers/civitai.py`).
+- **Model library rules** are backend-owned and only read by the frontend: which file of a version gets installed (`RemoteModelVersion.default_file_id`), whether it can be installed (`unavailable_reason`), the display name of an install (`InstalledModel.name`, the download task title), the base model -> architecture mapping and the NSFW level rule (`model_providers/civitai.py`), and file hash normalization (`services/file_hashes.py`: `normalize_sha256` for SHA-256, `normalize_file_hash` for the short Civitai hashes too).
+- **Downloads.** Every model file, including the LoRAs and checkpoints of "Use these LoRAs" / "Use this checkpoint", is installed through one flow: `modelCatalogStore.install` -> `POST /api/models/install` -> `DownloadManager`.
 - **Host and ports.** `config/defaults.json` is read by the launcher, `backend/run_backend.py` and `config/appConfig.cjs` (Vite and Electron). The frontend builds every backend URL in `src/api/config.ts`.
 - **Frontend state.** Each domain has exactly one zustand store that owns its state and actions (see below).
 - **Untrusted values.** Persisted and imported data is validated through `src/domain/guards.ts`; lists of backend enum values (seed behaviors, torch dtypes) are exhaustive typed records, so the type-check fails when the schema changes.
@@ -239,10 +287,11 @@ The frontend is organized around zustand stores, one per domain. Each store is t
 
 | Store | Owns | Persisted as |
 | --- | --- | --- |
-| `categoriesStore` | categories and sub-prompts; reachability ("indirectly disabled") hooks | `categorie-store` |
+| `categoriesStore` | categories and sub-prompts (`addSubPromptWithText` for tags from the image library); reachability ("indirectly disabled") hooks | `categorie-store` |
 | `forbiddenRulesStore` | forbidden rules, the association source of the Used sub-prompts pane, highlights | `forbidden-associations-store` |
-| `libraryStore` | models, LoRAs (with model library provenance), model/LoRA selection, file dialogs, registration of installed models | `library-store` (version 1) |
-| `modelCatalogStore` | model library: provider info, search filters, results and paging, picked versions, installs in progress, provider token updates | - |
+| `libraryStore` | models, LoRAs (with model library provenance), the model selection and the LoRA selection with weights (`selectedLoras`), file dialogs, registration of installed models | `library-store` (version 2) |
+| `modelCatalogStore` | model library: provider info, search filters, results and paging, picked versions, installs in progress, provider token updates. `install(model, version, fileId, {select, announce})` resolves to an `InstallOutcome` (installed + library entry, failed, cancelled, refused); a second install of a running install joins it | - |
+| `imageLibraryStore` | image library: search filters, results and paging, the image in the detail view, the resolution of each image's models, running "Use these LoRAs" and checkpoint switches, favorites (read from and saved to the backend) | - |
 | `generationSettingsStore` | size, steps, CFG, negative prompt, seed inputs and behaviors | `settings-store` |
 | `generationStore` | single and continuous generations, cancel | - |
 | `outputsStore` | output ids, current output and its metadata, delete/restore, copy | `current-image-store` |
@@ -252,7 +301,7 @@ The frontend is organized around zustand stores, one per domain. Each store is t
 | `notificationsStore` | user-facing errors, warnings and confirmations | - |
 | `sessionStore` | boot: bootstrap, hydration of every persisted store, legacy seeding, resuming running installs | - |
 
-Copying text with a notification goes through one action module, `src/stores/clipboardActions.ts` (`copyTextWithFeedback`), used by the outputs and model catalog stores.
+Copying text with a notification goes through one action module, `src/stores/clipboardActions.ts` (`copyTextWithFeedback`), used by the outputs, model catalog and image library stores. The two online catalogs share one search engine, `src/stores/pagedSearch.ts` (debounced query, abort of the previous request, stale answers ignored, pages appended without duplicates).
 
 Persisted stores are declared with `persistedStoreOptions` (`src/persistence/persist.ts`) and their names come from `src/persistence/storeNames.ts`; a shape change bumps the store version and adds a `migrate` with a test.
 
@@ -261,16 +310,19 @@ Persisted stores are declared with `persistedStoreOptions` (`src/persistence/per
 - The backend persists the frontend stores at `<data dir>/stores/<name>/state.json`, through `GET/PUT/DELETE /api/stores/{name}`. Each file holds the zustand envelope `{"state": ..., "version": n}`. The formats written by the former Electron storage still load: JSON `null`, a legacy string map, and legacy flat `<name>.json` files. A file that exists but cannot be read is reported as an error rather than treated as empty, so it is never overwritten.
 - `src/persistence/persist.ts` is the only persistence mechanism. It hydrates stores explicitly at boot, ignores writes until a store has been read, coalesces writes, and runs legacy merge migrations.
 - On first start, stores without persisted data are seeded from the legacy `app_state.json` and `library.json`, which `GET /api/bootstrap` returns (LoRA references missing from the library are stripped). The app no longer saves its state to these two files: `library.json` is a read-only seed, and the library lives in `library-store`.
-- `library-store` is version 1: entries may carry a `source` (model library provenance). Version 0 data loads unchanged and gets `source: null`.
+- `library-store` is version 2: entries may carry a `source` (model library provenance), and the LoRA selection is `selectedLoras: [{id, weight}]`. Older data migrates on load: version 0 entries get `source: null`, and the `selectedLoraIds` of versions 0 and 1 become `selectedLoras` at weight 1. The `last_lora_ids` of a legacy `app_state.json` seed the selection at weight 1 too.
+- The backend owns the favorite online images (`<data dir>/image_favorites.json`, version 1).
 - The frontend reads outputs through the backend API: `/api/outputs`, `/api/outputs/{id}`, `/api/outputs/{id}/image`, `/api/outputs/{id}/trash` and `/api/trash/{id}/restore`.
 
 ### Extension points
 
-- **New panes** (for example an image library or characters pane): add or extend a store in `src/stores` (logic in `src/domain`), then the view in `src/features/<area>` (using `src/ui/PaneLayout.tsx`), then one entry in `frontend/src/workspace/paneRegistry.tsx`. The app bar gets its show/hide toggle automatically.
+- **New panes** (for example a characters pane): add or extend a store in `src/stores` (logic in `src/domain`), then the view in `src/features/<area>` (using `src/ui/PaneLayout.tsx`), then one entry in `frontend/src/workspace/paneRegistry.tsx`. The app bar gets its show/hide toggle automatically.
 - **New API areas:** add `backend/app/routers/<area>.py` exposing an `APIRouter`, append it to `ROUTERS`, put its logic in a service wired in `services/container.py`, add its models to `schemas.py`, then run `npm run gen:api` and add the client calls to `src/api/client.ts`.
 - **Background tasks:** progress events form one discriminated union, `TaskEvent` = `GenerationTaskEvent | DownloadTaskEvent`, keyed by `task_id` and published through `TaskHub.publish` from any thread. The frontend reads them from `tasksStore` (`useDownloadProgress`, `waitForTask`).
 - **Downloads:** `services/downloads.py` `DownloadManager.start(DownloadSpec(url, dest, title, headers, expected_sha256, expected_size), on_complete=...)` is generic: any feature that needs a file gets streaming, verification, retries, cancel (`POST /api/downloads/{task_id}/cancel`) and progress events.
 - **Model providers:** implement the `ModelProvider` protocol of `services/model_providers/base.py` (`info`, `search`, `get_version`, `find_by_hash`, `download_source`; run every version through `complete_version` so the shared install rules apply) and add it to the registry in `services/container.py`. A Hugging Face provider would plug in there; the API, the install flow and the UI take the provider id from `GET /api/models/info`.
+- **New shortcuts:** add the command to `APP_COMMANDS` and its handler in `src/app/commands.ts`, and the binding to `keymap.json` (a test checks both agree).
+- **Image providers:** implement the `ImageProvider` protocol (`search_images(ImageFeedRequest)`, parsing the images' generation data into `RemoteImage.params` / `resources`) with the id of the model provider that resolves its images' models, and add it to the image provider registry in `services/container.py`.
 
 ### Model library API
 
@@ -279,14 +331,25 @@ Persisted stores are declared with `persistedStoreOptions` (`src/persistence/per
 | `GET /api/models/info` | providers (types, base models with their local architecture or null, sorts, `token_set`) and the model folders |
 | `GET /api/models/search` | one result page (`provider`, `query`, `kinds`, `base_models`, `sort`, `nsfw`, `limit` 1-100, `cursor`); files carry `local_path` when a local copy is known |
 | `GET /api/models/providers/{provider}/versions/{version_id}` | one model version |
-| `GET /api/models/providers/{provider}/by-hash/{sha256}` | the version whose file has this SHA-256 (any case) |
+| `GET /api/models/providers/{provider}/by-hash/{sha256}` | the version whose file has this SHA-256 (any case; the route takes 64-hex SHA-256 only, the image library also resolves short Civitai hashes internally) |
 | `PUT /api/models/providers/{provider}/token` | `{"token": "..."}` stores the API token (whitespace stripped); `null` or `""` removes it; answers the provider info |
 | `POST /api/models/install` | `{"provider", "version_id", "file_id"?}`: `installed` + `InstalledModel` (kind, name, path, source) when the file is on disk, else `downloading` + `task_id`. Call it again when the task completes: it then answers `installed` from the hash cache |
 | `GET /api/models/installs` | installs whose download is still running (resumed by the UI after a reload) |
 | `POST /api/downloads/{task_id}/cancel` | cancels a running download (404 when unknown or finished) |
 
 Errors: 404 for an unknown provider, model, version or hash; 403 when Civitai needs a token or rejected it; 502 for a network failure or an unexpected Civitai answer (its error text is quoted, at most 300 characters); 409 for a file that cannot be installed (unsupported base model, pickle file, unknown file) or a token for a provider that takes none; 422 for invalid parameters.
-- **New shortcuts:** add the command to `APP_COMMANDS` and its handler in `src/app/commands.ts`, and the binding to `keymap.json` (a test checks both agree).
+
+### Image library API
+
+| Endpoint | Purpose |
+| --- | --- |
+| `GET /api/images/search` | one page of images (`provider`, `query`, `sort`, `period`, `nsfw`, `usable_only`, `limit` 1-100, `cursor`), each with its generation parameters and models (`resources`: kind, name, weight, version id, hash). An empty `query` reads the feed; a keyword reads the galleries of the matching models. `next_cursor` is opaque; a page may be short, or even empty while `next_cursor` is set: keep paging until it is null |
+| `POST /api/images/resolve` | `{"provider", "resources"}`: one entry per resource, in order: the identified model version (with `local_path` when a local copy is known) and its `sha256`, or an `error` (a failure of one resource never fails the request) |
+| `GET /api/images/favorites` | the favorite images, newest first |
+| `PUT /api/images/favorites` | saves an image (`RemoteImage`) as a favorite, or moves it to the front |
+| `DELETE /api/images/favorites/{provider}/{image_id}` | removes a favorite (404 when it is not one) |
+
+Errors: 422 for invalid parameters or a cursor this backend did not produce; 404 for an unknown provider; 403 / 502 from Civitai as above. A model gallery Civitai no longer knows is skipped.
 
 ## Stack
 
@@ -379,11 +442,11 @@ Tests never touch the real data directory, the model folders or the network. The
 
 ```powershell
 cd backend
-uv run pytest              # 331 tests: API tests (TestClient), service unit tests, the download manager against a
-                           # local HTTP server, and the install flow end to end
+uv run pytest              # 619 tests: API tests (TestClient), service unit tests, the download manager against a
+                           # local HTTP server, and the install and image library flows end to end
 
 cd frontend
-npm test                   # 632 Vitest tests: domain, stores, persistence, API client, components, Electron helpers
+npm test                   # 818 Vitest tests: domain, stores, persistence, API client, components, Electron helpers
 npm run typecheck          # tsc -b
 npm run build              # type-check + production bundle
 npm run gen:api            # regenerate backend/openapi.json, src/api/schema.gen.ts and src/api/defaults.gen.ts
@@ -391,7 +454,7 @@ npm run gen:api            # regenerate backend/openapi.json, src/api/schema.gen
 
 cd D:\Anything\libs\diffusion-lora-runtime
 D:\Anything\prompt-weaver-local\backend\.venv\Scripts\python.exe -m pytest -q -p no:cacheprovider tests
-                           # runtime lib (34 tests, torch and diffusers are stubbed)
+                           # runtime lib (47 tests, torch and diffusers are stubbed)
 ```
 
 If `VIRTUAL_ENV` points at another virtual environment, unset it before running `uv` commands in `backend/`.
@@ -405,6 +468,7 @@ If `VIRTUAL_ENV` points at another virtual environment, unset it before running 
 - The first load of an SD 1.x single-file checkpoint lets Diffusers fetch the SD 1.5 pipeline config and tokenizer files from the Hugging Face Hub, unless they are already cached (SDXL already did this for its own config).
 - On SD 1.x models the prompt is plain text: Diffusers truncates it at 77 tokens (long-prompt chunking is SDXL only). Embeddings work on SD 1.x with their CLIP-L vectors.
 - New checkpoint entries, installed SD 1.5 checkpoints included, get the current generation size as their default size: set 512 x 512 (or 512 x 768) yourself for SD 1.5.
-- A LoRA entry can point to either a file or a directory. Every LoRA is applied with weight 1.0 for now.
-- The shared `diffusion-lora-runtime` package handles runtime model loading, LoRA loading, inline prompt LoRA resolution, textual-inversion resolution and KSample mapping. The backend imports it on the first generation only, because importing it loads torch.
+- A LoRA entry can point to either a file or a directory.
+- The shared `diffusion-lora-runtime` package handles runtime model loading, LoRA loading (with per-LoRA weights), inline prompt LoRA resolution, textual-inversion resolution and KSample mapping. The backend imports its generator on the first generation only, because that loads torch; its `prompt_lora` module (the inline LoRA syntax) is torch-free and used at any time.
+- Civitai rate-limits and sometimes slows down its public API; the image library shows such failures with a Retry button. With "Only locally usable models" on, Civitai is asked for images of loadable base models only, but it may still return images whose base model is unknown: they show "Not supported locally", and models the runtime cannot load are never installed.
 - Width, height, steps and CFG stay user-editable in the UI.
