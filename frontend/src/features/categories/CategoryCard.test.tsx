@@ -4,6 +4,7 @@ import type { Category, CategoryUiState, SubPromptUiState } from '../../domain/c
 import { useCategoriesStore, useCategoryUiState, useSubPromptUiState } from '../../stores/categoriesStore';
 import { useForbiddenHighlight } from '../../stores/forbiddenRulesStore';
 import { useCurrentSelectionKey, useIsSubPromptInCurrentOutput } from '../../stores/outputsStore';
+import { openDialog, waitForDialogClose } from '../../test/dialogs';
 import { renderWithProviders } from '../../test/render';
 import { CategoryCard } from './CategoryCard';
 
@@ -242,14 +243,14 @@ describe('CategoryCard', () => {
 		const actions = seed();
 		const { user } = renderCard();
 
-		await user.click(screen.getByRole('button', { name: 'Delete category' }));
-		let dialog = await screen.findByRole('alertdialog');
+		let dialog = await openDialog(user, screen.getByRole('button', { name: 'Delete category' }), 'alertdialog');
 		expect(dialog).toHaveTextContent("Delete category 'Hair'?");
 		await user.click(within(dialog).getByRole('button', { name: 'Cancel' }));
+		await waitForDialogClose('alertdialog');
 		expect(actions.removeCategory).not.toHaveBeenCalled();
 
-		await user.click(screen.getByRole('button', { name: 'Delete category' }));
-		dialog = await screen.findByRole('alertdialog');
+		// The modal restores the page's aria-hidden asynchronously after the close: find the trigger again.
+		dialog = await openDialog(user, await screen.findByRole('button', { name: 'Delete category' }), 'alertdialog');
 		await user.click(within(dialog).getByRole('button', { name: 'Delete' }));
 		expect(actions.removeCategory).toHaveBeenCalledWith('hair');
 	});

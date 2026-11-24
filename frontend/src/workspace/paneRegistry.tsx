@@ -2,11 +2,12 @@
 // FloatingPane per entry and the toolbar lists them (show/hide). Future panes (Model library, Image
 // library, Characters) plug in by adding an entry here (their store first, then the view).
 import type { FluentIcon } from '@fluentui/react-icons';
-import { ImageMultipleRegular, ImageRegular, OptionsRegular, TextBulletListSquareRegular } from '@fluentui/react-icons';
+import { ImageMultipleRegular, ImageRegular, LibraryRegular, OptionsRegular, TextBulletListSquareRegular } from '@fluentui/react-icons';
 import type { ComponentType } from 'react';
 import type { Rect } from '../domain/layout';
 import { UsedSelectionsPane } from '../features/forbidden/UsedSelectionsPane';
 import { ControlsPane } from '../features/generation/ControlsPane';
+import { ModelLibraryPane } from '../features/models/ModelLibraryPane';
 import { ImagePane } from '../features/outputs/ImagePane';
 import { OutputBrowserPane } from '../features/outputs/OutputBrowserPane';
 
@@ -50,5 +51,14 @@ export const PANES: readonly PaneDefinition[] = [
 		icon: TextBulletListSquareRegular,
 		defaultLayout: { x: 690, y: 320, width: 790, height: 420 },
 		component: UsedSelectionsPane,
+	},
+	{
+		id: 'models',
+		title: 'Model library',
+		icon: LibraryRegular,
+		defaultLayout: { x: 1490, y: 24, width: 560, height: 760 },
+		minWidth: 360,
+		minHeight: 320,
+		component: ModelLibraryPane,
 	},
 ];

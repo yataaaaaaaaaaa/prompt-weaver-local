@@ -3,7 +3,7 @@ import { PANES } from './paneRegistry';
 
 describe('pane registry', () => {
 	it('keeps the persisted pane ids (window layouts and hidden panes are stored by id)', () => {
-		expect(PANES.map((pane) => pane.id)).toEqual(['image', 'browser', 'controls', 'used']);
+		expect(PANES.map((pane) => pane.id)).toEqual(['image', 'browser', 'controls', 'used', 'models']);
 	});
 
 	it('declares each pane once with a title, an icon, a view and a usable default layout', () => {
