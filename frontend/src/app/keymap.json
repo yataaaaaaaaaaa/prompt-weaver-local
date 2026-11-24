@@ -1,0 +1,11 @@
+[
+	{ "command": "generate", "accelerator": "CommandOrControl+G", "label": "Generate", "menu": true, "allowInEditable": true },
+	{ "command": "toggle-continuous-generate", "accelerator": "CommandOrControl+T", "label": "Toggle continuous generation", "menu": true, "allowInEditable": true },
+	{ "command": "toggle-visibility", "accelerator": "CommandOrControl+H", "label": "Toggle visibility", "menu": true, "allowInEditable": false },
+	{ "command": "reorganize-categories", "accelerator": "CommandOrControl+O", "label": "Reorganize categories", "menu": true, "allowInEditable": false },
+	{ "command": "undo", "accelerator": "CommandOrControl+Z", "label": "Undo", "menu": false, "allowInEditable": false },
+	{ "command": "output-previous", "accelerator": "ArrowLeft", "label": "Previous output", "menu": false, "allowInEditable": false },
+	{ "command": "output-previous", "accelerator": "ArrowUp", "label": "Previous output", "menu": false, "allowInEditable": false },
+	{ "command": "output-next", "accelerator": "ArrowRight", "label": "Next output", "menu": false, "allowInEditable": false },
+	{ "command": "output-next", "accelerator": "ArrowDown", "label": "Next output", "menu": false, "allowInEditable": false }
+]
