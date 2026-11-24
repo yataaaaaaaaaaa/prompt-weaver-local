@@ -3,6 +3,7 @@
 
 from __future__ import annotations
 
+from dataclasses import dataclass
 from pathlib import Path
 
 import pytest
@@ -11,11 +12,21 @@ from app.schemas import ModelKind
 from app.services.container import FILE_HASH_CACHE_NAME
 from app.services.downloads import PART_SUFFIX
 from app.services.file_hashes import FileHashCache
-from app.services.local_models import LocalModelFiles, download_file_name, safe_file_name
+from app.services.local_models import LocalFileSpec, LocalModelFiles, download_file_name, safe_file_name
 from app.settings import AppPaths
-from support import MODEL_CONTENT, OTHER_MODEL_CONTENT, put_file, remote_file
+from support import MODEL_CONTENT, OTHER_MODEL_CONTENT, put_file, remote_file, sha256_of
 
 VERSION_ID = "200"
+
+
+@dataclass(frozen=True)
+class PlainFile:
+    """A LocalFileSpec that is not a RemoteFile (like services/ip_adapters.py IpAdapterFileSpec)."""
+
+    id: str = "adapter"
+    name: str = "ip-adapter.safetensors"
+    size_bytes: int = len(MODEL_CONTENT)
+    sha256: str | None = sha256_of(MODEL_CONTENT)
 
 
 def snapshot(root: Path) -> dict[str, tuple[bool, int, int]]:
@@ -277,3 +288,91 @@ def test_the_model_folders_are_never_written(
 
     assert snapshot(app_paths.models_root) == before
     assert not app_paths.model_dir("embedding").exists()
+
+
+# ---------------------------------------------------------------------------
+# Folder-based methods (any folder, any LocalFileSpec: IP-Adapter files use them)
+# ---------------------------------------------------------------------------
+
+
+@pytest.fixture()
+def adapters(app_paths: AppPaths) -> Path:
+    return app_paths.ip_adapter_dir
+
+
+def test_a_plain_file_spec_is_a_local_file_spec() -> None:
+    spec: LocalFileSpec = PlainFile()
+    assert download_file_name(spec) == "ip-adapter.safetensors"
+    assert download_file_name(PlainFile(name="a/b:c.safetensors")) == "b_c.safetensors"
+
+
+def test_target_path_in_a_folder(local_files: LocalModelFiles, adapters: Path) -> None:
+    file = PlainFile()
+    assert local_files.target_path_in(adapters, file, version_id="rev") == adapters / "ip-adapter.safetensors"
+
+    put_file(adapters / "ip-adapter.safetensors", OTHER_MODEL_CONTENT)  # same size, other hash
+    assert local_files.target_path_in(adapters, file, version_id="rev") == adapters / "ip-adapter-rev.safetensors"
+    reserved = [adapters / "ip-adapter-rev.safetensors"]
+    assert (
+        local_files.target_path_in(adapters, file, version_id="rev", reserved=reserved)
+        == adapters / "ip-adapter-rev-adapter.safetensors"
+    )
+
+
+def test_known_path_in_a_folder_never_hashes(
+    local_files: LocalModelFiles, app_paths: AppPaths, adapters: Path, hash_calls: list[Path]
+) -> None:
+    file = PlainFile()
+    assert local_files.known_path_in(adapters, file) is None
+
+    elsewhere = put_file(app_paths.image_encoder_dir / "renamed.safetensors")
+    local_files.remember(elsewhere, sha256_of(MODEL_CONTENT))
+    assert local_files.known_path_in(adapters, file) is None  # cached hash match outside the folder
+    assert local_files.known_path_in(app_paths.image_encoder_dir, file) == elsewhere
+
+    named = put_file(adapters / "ip-adapter.safetensors")
+    assert local_files.known_path_in(adapters, file) == named
+    assert local_files.known_path_in(adapters, PlainFile(sha256=None)) == named
+    assert hash_calls == []
+
+
+def test_locate_in_a_folder_verifies_by_hash(
+    local_files: LocalModelFiles, app_paths: AppPaths, adapters: Path, hash_calls: list[Path]
+) -> None:
+    file = PlainFile()
+    assert local_files.locate_in(adapters, file) is None  # missing folder
+    assert not adapters.exists()
+
+    put_file(adapters / "ip-adapter.safetensors", b"another file with this name")
+    renamed = put_file(adapters / "faces" / "My adapter.safetensors")
+    assert local_files.locate_in(adapters, file, version_id="rev") == renamed
+    assert hash_calls == [renamed]
+
+    # Answered from the hash cache, and found by the cheap check too.
+    hash_calls.clear()
+    assert local_files.locate_in(adapters, file) == renamed
+    assert local_files.known_path_in(adapters, file) == renamed
+    assert hash_calls == []
+
+    # Without a hash: only a same-named same-size file counts.
+    unhashed = PlainFile(sha256=None)
+    assert local_files.locate_in(adapters, unhashed) is None
+    suffixed = put_file(adapters / "ip-adapter-rev.safetensors")
+    assert local_files.locate_in(adapters, unhashed, version_id="rev") == suffixed
+
+
+def test_the_kind_methods_are_the_folder_methods_on_the_kind_folder(
+    local_files: LocalModelFiles, app_paths: AppPaths, loras: Path
+) -> None:
+    file = PlainFile(name="pixel_style.safetensors")
+    renamed = put_file(loras / "styles" / "pixel.safetensors")
+    put_file(loras / "pixel_style.safetensors", b"another size")
+
+    assert local_files.locate("lora", file) == local_files.locate_in(loras, file) == renamed
+    assert local_files.known_path("lora", file) == local_files.known_path_in(loras, file) == renamed
+    assert (
+        local_files.target_path("lora", file, version_id=VERSION_ID)
+        == local_files.target_path_in(loras, file, version_id=VERSION_ID)
+        == loras / "pixel_style-200.safetensors"
+    )
+    assert local_files.locate("checkpoint", file) is None

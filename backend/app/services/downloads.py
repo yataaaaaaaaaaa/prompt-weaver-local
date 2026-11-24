@@ -54,7 +54,8 @@ import httpx
 
 from ..schemas import DownloadStage, DownloadTaskEvent
 from .file_hashes import normalize_sha256, sha256_file
-from .http import HttpClientFactory
+from .files import remove_quietly
+from .http import HttpClientFactory, describe_http_error
 from .task_hub import TaskHub
 
 logger = logging.getLogger(__name__)
@@ -323,7 +324,7 @@ class DownloadManager:
             outcome = self._execute(job)
         except Exception as exc:
             logger.exception("Download %s failed unexpectedly", job.task_id)
-            _remove_quietly(part_path(job.spec.dest))
+            remove_quietly(part_path(job.spec.dest))
             outcome = _Outcome("error", f"Unexpected download error ({type(exc).__name__}).")
         with self._lock:
             self._end_locked(job, outcome)
@@ -343,17 +344,17 @@ class DownloadManager:
             sha256, size = self._fetch(job, part, progress)
             _verify(spec, sha256, size)
         except _Cancelled:
-            _remove_quietly(part)
+            remove_quietly(part)
             return _Outcome("cancelled", CANCELLED_MESSAGE, progress.current, progress.total)
         except _DownloadFailed as exc:
-            _remove_quietly(part)
+            remove_quietly(part)
             return _Outcome("error", str(exc), progress.current, progress.total)
         except OSError as exc:
-            _remove_quietly(part)
+            remove_quietly(part)
             logger.warning("Download %s: file error: %s", job.task_id, exc)
             return _Outcome("error", f"File error: {exc}", progress.current, progress.total)
         except BaseException:
-            _remove_quietly(part)
+            remove_quietly(part)
             raise
         return self._install(job, part, sha256, size)
 
@@ -379,18 +380,18 @@ class DownloadManager:
         dest = job.spec.dest
         callbacks = self._claim_completion(job)
         if callbacks is None:
-            _remove_quietly(part)
+            remove_quietly(part)
             return _Outcome("cancelled", CANCELLED_MESSAGE, size, size)
         try:
             if dest.exists():
                 # Appeared while downloading (another process): never overwrite it.
-                _remove_quietly(part)
+                remove_quietly(part)
                 if sha256_file(dest) != sha256:
                     return _different_file(dest)
             else:
                 os.replace(part, dest)
         except OSError as exc:
-            _remove_quietly(part)
+            remove_quietly(part)
             logger.warning("Download %s: moving the file into place failed: %s", job.task_id, exc)
             return _Outcome("error", f"Could not move the downloaded file into place: {exc}", size, size)
         return self._run_callbacks(job, callbacks, sha256, size, COMPLETE_MESSAGE)
@@ -439,10 +440,10 @@ class DownloadManager:
                 return self._receive(job, response, part, offset, progress)
         except httpx.TransportError as exc:
             logger.warning("Download %s: %s", job.task_id, _loggable(exc))
-            raise _RetryableError(_describe(exc)) from None
+            raise _RetryableError(describe_http_error(exc)) from None
         except httpx.HTTPError as exc:
             logger.warning("Download %s: %s", job.task_id, _loggable(exc))
-            raise _DownloadFailed(_describe(exc)) from None
+            raise _DownloadFailed(describe_http_error(exc)) from None
 
     def _receive(
         self, job: _Job, response: httpx.Response, part: Path, offset: int, progress: _Progress
@@ -517,19 +518,6 @@ def _different_file(dest: Path) -> _Outcome:
     return _Outcome("error", f"A different file already exists at {dest}; it was left untouched.")
 
 
-def _describe(exc: httpx.HTTPError) -> str:
-    """User-facing text for an httpx error. Never str(exc): it may quote the (possibly signed) URL."""
-    if isinstance(exc, httpx.TimeoutException):
-        return "The connection timed out"
-    if isinstance(exc, httpx.ConnectError):
-        return "Could not connect to the server"
-    if isinstance(exc, (httpx.ReadError, httpx.WriteError, httpx.RemoteProtocolError)):
-        return "The connection was interrupted"
-    if isinstance(exc, httpx.TooManyRedirects):
-        return "Too many redirects"
-    return f"Network error ({type(exc).__name__})"
-
-
 def _loggable(exc: httpx.HTTPError) -> str:
     """Exception type and text for the log, with URLs (possibly signed) masked."""
     return f"{type(exc).__name__}: {_URL.sub('<url>', str(exc))}"
@@ -544,9 +532,3 @@ def _content_range_start(value: str | None) -> int | None:
     match = _CONTENT_RANGE_START.match(value or "")
     return int(match.group(1)) if match else None
 
-
-def _remove_quietly(path: Path) -> None:
-    try:
-        path.unlink(missing_ok=True)
-    except OSError:
-        logger.warning("Could not delete %s", path, exc_info=True)

@@ -12,6 +12,7 @@ from diffusion_lora_runtime import (
     AdapterLoadError,
     DiffusionGenerator,
     GenerationCancelled,
+    IPAdapterSpec,
     KSampleConfig,
     LoRASpec as RuntimeLoRASpec,
     PromptEmbeddingResolutionError,
@@ -24,9 +25,14 @@ from .generation import (
     GenerationCancelledError,
     GenerationFailed,
     GeneratorPort,
+    ReferenceInput,
     StepCallback,
 )
 
+# Every runtime failure a generation can raise, reported as GenerationFailed. IP-Adapter failures are covered: a
+# missing/unreadable reference image is a ReferenceImageError (ValueError); missing weights, a bad image encoder,
+# an adapter made for another model family or any Diffusers error while loading/scaling/unloading the adapter is an
+# AdapterLoadError (RuntimeError).
 _FAILURES = (
     RuntimeError,
     ValueError,
@@ -37,7 +43,8 @@ _FAILURES = (
 
 
 class RuntimeGenerator:
-    """GeneratorPort over one long-lived DiffusionGenerator (keeps the model and LoRAs loaded between calls)."""
+    """GeneratorPort over one long-lived DiffusionGenerator. The model stays loaded between calls; LoRA and IP-Adapter
+    changes are applied to it in place (only a model, dtype or sampler change reloads it)."""
 
     def __init__(self, generator: DiffusionGenerator) -> None:
         self._generator = generator
@@ -49,6 +56,7 @@ class RuntimeGenerator:
         prompt_lora_dir: Path,
         prompt_embedding_dir: Path,
         on_step: StepCallback,
+        reference: ReferenceInput | None = None,
     ) -> GeneratedImage:
         model = request.model
         try:
@@ -73,6 +81,7 @@ class RuntimeGenerator:
                 prompt_lora_dir=prompt_lora_dir,
                 prompt_embedding_dir=prompt_embedding_dir,
                 progress_callback=on_step,
+                ip_adapter=_ip_adapter_spec(reference),
             )
         # GenerationCancelled is a RuntimeError: it must be matched first.
         except GenerationCancelled as exc:
@@ -94,6 +103,19 @@ class RuntimeGenerator:
 
     def unload(self) -> None:
         self._generator.unload()
+
+
+def _ip_adapter_spec(reference: ReferenceInput | None) -> IPAdapterSpec | None:
+    """The runtime's IP-Adapter request for the character's reference images (None: no IP-Adapter)."""
+    if reference is None:
+        return None
+    return IPAdapterSpec(
+        adapter_path=str(reference.adapter_path),
+        image_encoder_path=str(reference.image_encoder_path),
+        image_paths=tuple(str(path) for path in reference.image_paths),
+        scale=reference.strength,
+        architecture=reference.architecture,
+    )
 
 
 def create_runtime_generator() -> GeneratorPort:

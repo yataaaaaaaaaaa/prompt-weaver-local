@@ -1,17 +1,23 @@
-"""Local copies of provider model files: where a download goes and whether a file is already on disk.
+"""Local copies of downloadable files: where a download goes and whether a file is already on disk.
 
-The model folders are AppPaths.model_dir(kind) (ComfyUI checkpoints / loras / embeddings by default) and are
-searched recursively (users keep LoRAs in sub-folders). "Already downloaded" is detected
+Single owner of the "already on disk" rule for every downloadable file described by a LocalFileSpec (id, name,
+size_bytes, sha256): provider model files (RemoteFile, in AppPaths.model_dir(kind): ComfyUI checkpoints / loras /
+embeddings by default, through the kind-based methods) and IP-Adapter files (services/ip_adapters.py, in
+AppPaths.ip_adapter_dir / image_encoder_dir, through the folder-based *_in methods). The kind-based methods are
+the folder-based ones on model_dir(kind).
+
+Folders are searched recursively (users keep LoRAs in sub-folders). "Already downloaded" is detected
 - by path: the download target (or a same-named file) exists with the expected size, and
-- by hash: any file of the kind's folder with the expected size whose SHA-256 (FileHashCache) matches,
-so a file renamed by the user (Civitai's Content-Disposition names differ from the API file names) is found
-too. Sizes are exact (RemoteFile.size_bytes), so only same-size files are ever hashed.
+- by hash: any file of the folder with the expected size whose SHA-256 (FileHashCache) matches,
+so a file renamed by the user (Civitai's Content-Disposition names differ from the API file names, ComfyUI
+users rename IP-Adapter files) is found too. Sizes are exact (size_bytes), so only same-size files are ever
+hashed.
 
-File names (single owner: safe_file_name / target_path below): the provider file name reduced to its basename
+File names (single owner: safe_file_name / target_path_in below): the provider file name reduced to its basename
 and made safe for Windows; when that name already holds a different file, "<stem>-<version_id><suffix>", then
 "<stem>-<version_id>-<file id><suffix>", then "<stem>-<version_id>-<file id>-<n><suffix>" (n = 2, 3, ...).
 
-Never creates, deletes or overwrites anything in the model folders (it only stats and reads files).
+Never creates, deletes or overwrites anything in the searched folders (it only stats and reads files).
 """
 
 from __future__ import annotations
@@ -20,8 +26,9 @@ import os
 import re
 from collections.abc import Collection, Iterator
 from pathlib import Path
+from typing import Protocol
 
-from ..schemas import ModelKind, RemoteFile
+from ..schemas import ModelKind
 from ..settings import AppPaths
 from .downloads import PART_SUFFIX
 from .file_hashes import FileHashCache, file_signature, normalize_sha256, path_key
@@ -34,6 +41,25 @@ _WINDOWS_RESERVED_NAMES = frozenset(
 )
 # Upper bound of the "-<n>" fallback names (only reached when thousands of different files share a name).
 _MAX_NUMBERED_NAMES = 1000
+
+
+class LocalFileSpec(Protocol):
+    """A downloadable file as the on-disk check sees it: schemas.RemoteFile (provider model files) and
+    services/ip_adapters.py IpAdapterFileSpec satisfy it. `name` is the preferred local file name (made safe by
+    download_file_name), `size_bytes` the exact size and `sha256` the expected SHA-256 (None when unknown: only
+    a same-named same-size file then counts)."""
+
+    @property
+    def id(self) -> str: ...
+
+    @property
+    def name(self) -> str: ...
+
+    @property
+    def size_bytes(self) -> int: ...
+
+    @property
+    def sha256(self) -> str | None: ...
 
 
 def _replace_unsafe(text: str) -> str:
@@ -52,7 +78,7 @@ def safe_file_name(name: str) -> str:
     return cleaned
 
 
-def download_file_name(file: RemoteFile) -> str:
+def download_file_name(file: LocalFileSpec) -> str:
     """Preferred local name of `file`: safe_file_name(file.name), or "<file id>.safetensors" when it is empty."""
     return safe_file_name(file.name) or safe_file_name(f"{file.id}.safetensors") or "model.safetensors"
 
@@ -62,7 +88,7 @@ def _with_parts(name: str, *parts: str) -> str:
     return f"{_replace_unsafe('-'.join((stem, *parts))).rstrip(' .')}{suffix}"
 
 
-def _target_names(file: RemoteFile, version_id: str) -> Iterator[str]:
+def _target_names(file: LocalFileSpec, version_id: str) -> Iterator[str]:
     """Download target candidates of `file`, in order of preference (see the module docstring)."""
     name = download_file_name(file)
     yield name
@@ -72,7 +98,7 @@ def _target_names(file: RemoteFile, version_id: str) -> Iterator[str]:
         yield _with_parts(name, version_id, file.id, str(index))
 
 
-def _expected_sha256(file: RemoteFile) -> str | None:
+def _expected_sha256(file: LocalFileSpec) -> str | None:
     return normalize_sha256(file.sha256)
 
 
@@ -90,16 +116,33 @@ class LocalModelFiles:
         self._paths = paths
         self._hashes = hashes
 
+    # -- model files: the folder of their kind ----------------------------------------------------------
+
     def target_path(
-        self, kind: ModelKind, file: RemoteFile, *, version_id: str, reserved: Collection[Path] = ()
+        self, kind: ModelKind, file: LocalFileSpec, *, version_id: str, reserved: Collection[Path] = ()
     ) -> Path:
-        """Download target: model_dir(kind) / <file.name made safe for Windows (no separators, reserved
-        characters, trailing dots/spaces)>. When that path already holds a *different* file (other size, or
-        another hash when file.sha256 is set) or is in `reserved` (destinations of other running downloads),
+        """target_path_in(model_dir(kind), ...)."""
+        return self.target_path_in(self._paths.model_dir(kind), file, version_id=version_id, reserved=reserved)
+
+    def known_path(self, kind: ModelKind, file: LocalFileSpec) -> Path | None:
+        """known_path_in(model_dir(kind), ...): annotates search results."""
+        return self.known_path_in(self._paths.model_dir(kind), file)
+
+    def locate(self, kind: ModelKind, file: LocalFileSpec, *, version_id: str | None = None) -> Path | None:
+        """locate_in(model_dir(kind), ...): checked before installing a model."""
+        return self.locate_in(self._paths.model_dir(kind), file, version_id=version_id)
+
+    # -- any folder ----------------------------------------------------------------------------------------
+
+    def target_path_in(
+        self, folder: Path, file: LocalFileSpec, *, version_id: str, reserved: Collection[Path] = ()
+    ) -> Path:
+        """Download target: folder / <file.name made safe for Windows (no separators, reserved characters,
+        trailing dots/spaces)>. When that path already holds a *different* file (other size, or another hash
+        when file.sha256 is set) or is in `reserved` (destinations of other running downloads),
         <stem>-<version_id><suffix> instead, then <stem>-<version_id>-<file.id><suffix>, then numbered names.
         An existing path is returned only when it holds this very file. Creates nothing; may hash (cached) a
         same-size file holding the name."""
-        folder = self._paths.model_dir(kind)
         taken = {path_key(path) for path in reserved}
         for name in _target_names(file, version_id):
             candidate = folder / name
@@ -107,11 +150,10 @@ class LocalModelFiles:
                 return candidate
         raise FileExistsError(f"No free file name for '{file.name}' in {folder}.")
 
-    def known_path(self, kind: ModelKind, file: RemoteFile) -> Path | None:
-        """Cheap check used to annotate search results (never hashes): a file named like the target with
-        file.size_bytes (unless its cached hash differs from file.sha256), or a cached hash match
-        (FileHashCache.paths_with_hash) inside model_dir(kind)."""
-        folder = self._paths.model_dir(kind)
+    def known_path_in(self, folder: Path, file: LocalFileSpec) -> Path | None:
+        """Cheap check (never hashes): a file of `folder` named like the target with file.size_bytes (unless
+        its cached hash differs from file.sha256), or a cached hash match (FileHashCache.paths_with_hash)
+        inside `folder`."""
         expected = _expected_sha256(file)
         named = folder / download_file_name(file)
         if _regular_file_size(named) == file.size_bytes:
@@ -124,20 +166,19 @@ class LocalModelFiles:
                     return path
         return None
 
-    def locate(self, kind: ModelKind, file: RemoteFile, *, version_id: str | None = None) -> Path | None:
-        """Full check used before downloading: known_path() verified by hash when file.sha256 is set, else every
-        file of model_dir(kind) (recursive, '.part' files skipped) whose size is file.size_bytes, hashed
-        (cached) and compared with file.sha256, target-named files first. Without a provider hash, only a
-        same-named same-size file counts: the download target (target_path for `version_id`, when given) or a
-        file with the target's name in a sub-folder. None when absent or when the folder does not exist."""
-        folder = self._paths.model_dir(kind)
+    def locate_in(self, folder: Path, file: LocalFileSpec, *, version_id: str | None = None) -> Path | None:
+        """Full check used before downloading: known_path_in() verified by hash when file.sha256 is set, else
+        every file of `folder` (recursive, '.part' files skipped) whose size is file.size_bytes, hashed (cached)
+        and compared with file.sha256, target-named files first. Without a provider hash, only a same-named
+        same-size file counts: the download target (target_path_in for `version_id`, when given) or a file
+        with the target's name in a sub-folder. None when absent or when the folder does not exist."""
         if not folder.is_dir():
             return None
         name_key = download_file_name(file).casefold()
         expected = _expected_sha256(file)
         if expected is None:
             target = (
-                self.target_path(kind, file, version_id=version_id)
+                self.target_path_in(folder, file, version_id=version_id)
                 if version_id is not None
                 else folder / download_file_name(file)
             )
@@ -148,7 +189,7 @@ class LocalModelFiles:
                 None,
             )
 
-        known = self.known_path(kind, file)
+        known = self.known_path_in(folder, file)
         if known is not None and self._has_hash(known, expected):
             return known
         candidates = sorted(
@@ -160,12 +201,13 @@ class LocalModelFiles:
         )
 
     def remember(self, path: Path, sha256: str) -> None:
-        """Records a verified file (a finished download) so the next locate() needs no hashing."""
+        """Records a verified file (a finished download) so the next locate() / locate_in() needs no hashing
+        (and known_path() / known_path_in() find it by hash). Usable as a DownloadManager on_complete."""
         self._hashes.remember(path, sha256)
 
     # -- internals --------------------------------------------------------------------------------------
 
-    def _holds_other_file(self, path: Path, file: RemoteFile) -> bool:
+    def _holds_other_file(self, path: Path, file: LocalFileSpec) -> bool:
         """True when `path` exists but is not `file` (not a regular file, other size, or other hash)."""
         size = _regular_file_size(path)
         if size is None:

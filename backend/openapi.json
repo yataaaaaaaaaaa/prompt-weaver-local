@@ -1,6 +1,28 @@
 {
   "components": {
     "schemas": {
+      "ActiveCharacterUpdate": {
+        "description": "Body of PUT /api/characters/active.",
+        "properties": {
+          "id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Character to activate for generation; null deactivates.",
+            "title": "Id"
+          }
+        },
+        "required": [
+          "id"
+        ],
+        "title": "ActiveCharacterUpdate",
+        "type": "object"
+      },
       "AppState": {
         "properties": {
           "categories": {
@@ -336,6 +358,482 @@
         "title": "CategorySize",
         "type": "object"
       },
+      "Character": {
+        "description": "A character: a recognizable subject reused across generations (backend-owned, <data dir>/characters/).",
+        "properties": {
+          "created_at": {
+            "format": "date-time",
+            "title": "Created At",
+            "type": "string"
+          },
+          "id": {
+            "pattern": "^chr-[0-9a-f]{12}$",
+            "title": "Id",
+            "type": "string"
+          },
+          "identity_tags": {
+            "description": "Appearance tags that identify the character (face, hair, eyes, body...): the locked sub-prompt of the pinned 'Character' category while the character is active.",
+            "items": {
+              "type": "string"
+            },
+            "title": "Identity Tags",
+            "type": "array"
+          },
+          "loras": {
+            "description": "Character LoRAs (library entry ids) with their weights, applied while the character is active.",
+            "items": {
+              "$ref": "#/components/schemas/LoraWeight-Output"
+            },
+            "title": "Loras",
+            "type": "array"
+          },
+          "name": {
+            "maxLength": 120,
+            "minLength": 1,
+            "title": "Name",
+            "type": "string"
+          },
+          "negative_tags": {
+            "description": "Appended to the negative prompt while the character is active.",
+            "items": {
+              "type": "string"
+            },
+            "title": "Negative Tags",
+            "type": "array"
+          },
+          "outfit_tags": {
+            "description": "Default outfit, kept separate from the identity: the locked sub-prompt of the pinned 'Character outfit' category (no such category when empty).",
+            "items": {
+              "type": "string"
+            },
+            "title": "Outfit Tags",
+            "type": "array"
+          },
+          "reference_focus": {
+            "default": "face",
+            "description": "IP-Adapter variant used for the reference images.",
+            "enum": [
+              "face",
+              "general"
+            ],
+            "title": "Reference Focus",
+            "type": "string"
+          },
+          "reference_images": {
+            "description": "Reference images for the IP-Adapter, in order (at most REFERENCE_DEFAULTS.max_images).",
+            "items": {
+              "$ref": "#/components/schemas/CharacterImage"
+            },
+            "title": "Reference Images",
+            "type": "array"
+          },
+          "reference_strength": {
+            "default": 0.6,
+            "description": "IP-Adapter strength of the reference images.",
+            "maximum": 1.0,
+            "minimum": 0.0,
+            "title": "Reference Strength",
+            "type": "number"
+          },
+          "seed": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Image seed of the character (e.g. of the output it was made from).",
+            "title": "Seed"
+          },
+          "seed_locked": {
+            "default": false,
+            "description": "While the character is active, generate with `seed` (the image seed field is left unchanged). Requires a seed.",
+            "title": "Seed Locked",
+            "type": "boolean"
+          },
+          "thumbnail": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/CharacterImage"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Gallery picture (a downscaled copy)."
+          },
+          "updated_at": {
+            "format": "date-time",
+            "title": "Updated At",
+            "type": "string"
+          }
+        },
+        "required": [
+          "name",
+          "identity_tags",
+          "outfit_tags",
+          "negative_tags",
+          "loras",
+          "seed",
+          "seed_locked",
+          "reference_strength",
+          "reference_focus",
+          "id",
+          "reference_images",
+          "thumbnail",
+          "created_at",
+          "updated_at"
+        ],
+        "title": "Character",
+        "type": "object"
+      },
+      "CharacterCollection": {
+        "description": "Every character (in creation order) and the active one.",
+        "properties": {
+          "active_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "The character active for generation; null when none is.",
+            "title": "Active Id"
+          },
+          "items": {
+            "items": {
+              "$ref": "#/components/schemas/Character"
+            },
+            "title": "Items",
+            "type": "array"
+          }
+        },
+        "required": [
+          "items",
+          "active_id"
+        ],
+        "title": "CharacterCollection",
+        "type": "object"
+      },
+      "CharacterCreateRequest": {
+        "description": "Body of POST /api/characters.",
+        "properties": {
+          "identity_tags": {
+            "description": "Appearance tags that identify the character (face, hair, eyes, body...): the locked sub-prompt of the pinned 'Character' category while the character is active.",
+            "items": {
+              "type": "string"
+            },
+            "title": "Identity Tags",
+            "type": "array"
+          },
+          "loras": {
+            "description": "Character LoRAs (library entry ids) with their weights, applied while the character is active.",
+            "items": {
+              "$ref": "#/components/schemas/LoraWeight-Input"
+            },
+            "title": "Loras",
+            "type": "array"
+          },
+          "name": {
+            "maxLength": 120,
+            "minLength": 1,
+            "title": "Name",
+            "type": "string"
+          },
+          "negative_tags": {
+            "description": "Appended to the negative prompt while the character is active.",
+            "items": {
+              "type": "string"
+            },
+            "title": "Negative Tags",
+            "type": "array"
+          },
+          "outfit_tags": {
+            "description": "Default outfit, kept separate from the identity: the locked sub-prompt of the pinned 'Character outfit' category (no such category when empty).",
+            "items": {
+              "type": "string"
+            },
+            "title": "Outfit Tags",
+            "type": "array"
+          },
+          "reference_focus": {
+            "default": "face",
+            "description": "IP-Adapter variant used for the reference images.",
+            "enum": [
+              "face",
+              "general"
+            ],
+            "title": "Reference Focus",
+            "type": "string"
+          },
+          "reference_sources": {
+            "description": "Imported as reference images, in order, all or nothing (nothing is created when one fails); the first one also becomes the thumbnail. 'character_image' sources are refused (the character has no image yet).",
+            "items": {
+              "discriminator": {
+                "mapping": {
+                  "character_image": "#/components/schemas/CharacterImageCopySource",
+                  "file": "#/components/schemas/FileImageSource",
+                  "output": "#/components/schemas/OutputImageSource",
+                  "url": "#/components/schemas/UrlImageSource"
+                },
+                "propertyName": "kind"
+              },
+              "oneOf": [
+                {
+                  "$ref": "#/components/schemas/OutputImageSource"
+                },
+                {
+                  "$ref": "#/components/schemas/FileImageSource"
+                },
+                {
+                  "$ref": "#/components/schemas/UrlImageSource"
+                },
+                {
+                  "$ref": "#/components/schemas/CharacterImageCopySource"
+                }
+              ]
+            },
+            "maxItems": 4,
+            "title": "Reference Sources",
+            "type": "array"
+          },
+          "reference_strength": {
+            "default": 0.6,
+            "description": "IP-Adapter strength of the reference images.",
+            "maximum": 1.0,
+            "minimum": 0.0,
+            "title": "Reference Strength",
+            "type": "number"
+          },
+          "seed": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Image seed of the character (e.g. of the output it was made from).",
+            "title": "Seed"
+          },
+          "seed_locked": {
+            "default": false,
+            "description": "While the character is active, generate with `seed` (the image seed field is left unchanged). Requires a seed.",
+            "title": "Seed Locked",
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "name"
+        ],
+        "title": "CharacterCreateRequest",
+        "type": "object"
+      },
+      "CharacterDraft": {
+        "description": "The editable fields of a character: body of PUT /api/characters/{character_id}, base of the create request\nand of Character.",
+        "properties": {
+          "identity_tags": {
+            "description": "Appearance tags that identify the character (face, hair, eyes, body...): the locked sub-prompt of the pinned 'Character' category while the character is active.",
+            "items": {
+              "type": "string"
+            },
+            "title": "Identity Tags",
+            "type": "array"
+          },
+          "loras": {
+            "description": "Character LoRAs (library entry ids) with their weights, applied while the character is active.",
+            "items": {
+              "$ref": "#/components/schemas/LoraWeight-Input"
+            },
+            "title": "Loras",
+            "type": "array"
+          },
+          "name": {
+            "maxLength": 120,
+            "minLength": 1,
+            "title": "Name",
+            "type": "string"
+          },
+          "negative_tags": {
+            "description": "Appended to the negative prompt while the character is active.",
+            "items": {
+              "type": "string"
+            },
+            "title": "Negative Tags",
+            "type": "array"
+          },
+          "outfit_tags": {
+            "description": "Default outfit, kept separate from the identity: the locked sub-prompt of the pinned 'Character outfit' category (no such category when empty).",
+            "items": {
+              "type": "string"
+            },
+            "title": "Outfit Tags",
+            "type": "array"
+          },
+          "reference_focus": {
+            "default": "face",
+            "description": "IP-Adapter variant used for the reference images.",
+            "enum": [
+              "face",
+              "general"
+            ],
+            "title": "Reference Focus",
+            "type": "string"
+          },
+          "reference_strength": {
+            "default": 0.6,
+            "description": "IP-Adapter strength of the reference images.",
+            "maximum": 1.0,
+            "minimum": 0.0,
+            "title": "Reference Strength",
+            "type": "number"
+          },
+          "seed": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Image seed of the character (e.g. of the output it was made from).",
+            "title": "Seed"
+          },
+          "seed_locked": {
+            "default": false,
+            "description": "While the character is active, generate with `seed` (the image seed field is left unchanged). Requires a seed.",
+            "title": "Seed Locked",
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "name"
+        ],
+        "title": "CharacterDraft",
+        "type": "object"
+      },
+      "CharacterImage": {
+        "description": "An image stored with a character (<data dir>/characters/images/<id>.png), served by\nGET /api/characters/{character_id}/images/{image_id}.",
+        "properties": {
+          "added_at": {
+            "format": "date-time",
+            "title": "Added At",
+            "type": "string"
+          },
+          "height": {
+            "title": "Height",
+            "type": "integer"
+          },
+          "id": {
+            "pattern": "^img-[0-9a-f]{12}$",
+            "title": "Id",
+            "type": "string"
+          },
+          "source": {
+            "description": "Where the image was imported from.",
+            "discriminator": {
+              "mapping": {
+                "character_image": "#/components/schemas/CharacterImageCopySource",
+                "file": "#/components/schemas/FileImageSource",
+                "output": "#/components/schemas/OutputImageSource",
+                "url": "#/components/schemas/UrlImageSource"
+              },
+              "propertyName": "kind"
+            },
+            "oneOf": [
+              {
+                "$ref": "#/components/schemas/OutputImageSource"
+              },
+              {
+                "$ref": "#/components/schemas/FileImageSource"
+              },
+              {
+                "$ref": "#/components/schemas/UrlImageSource"
+              },
+              {
+                "$ref": "#/components/schemas/CharacterImageCopySource"
+              }
+            ],
+            "title": "Source"
+          },
+          "width": {
+            "title": "Width",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "id",
+          "width",
+          "height",
+          "source",
+          "added_at"
+        ],
+        "title": "CharacterImage",
+        "type": "object"
+      },
+      "CharacterImageCopySource": {
+        "description": "Another image of the same character (e.g. a reference image used as the thumbnail).",
+        "properties": {
+          "image_id": {
+            "pattern": "^img-[0-9a-f]{12}$",
+            "title": "Image Id",
+            "type": "string"
+          },
+          "kind": {
+            "const": "character_image",
+            "title": "Kind",
+            "type": "string"
+          }
+        },
+        "required": [
+          "kind",
+          "image_id"
+        ],
+        "title": "CharacterImageCopySource",
+        "type": "object"
+      },
+      "CharacterImageRequest": {
+        "description": "Body of POST /api/characters/{character_id}/reference-images and PUT /api/characters/{character_id}/thumbnail.",
+        "properties": {
+          "source": {
+            "discriminator": {
+              "mapping": {
+                "character_image": "#/components/schemas/CharacterImageCopySource",
+                "file": "#/components/schemas/FileImageSource",
+                "output": "#/components/schemas/OutputImageSource",
+                "url": "#/components/schemas/UrlImageSource"
+              },
+              "propertyName": "kind"
+            },
+            "oneOf": [
+              {
+                "$ref": "#/components/schemas/OutputImageSource"
+              },
+              {
+                "$ref": "#/components/schemas/FileImageSource"
+              },
+              {
+                "$ref": "#/components/schemas/UrlImageSource"
+              },
+              {
+                "$ref": "#/components/schemas/CharacterImageCopySource"
+              }
+            ],
+            "title": "Source"
+          }
+        },
+        "required": [
+          "source"
+        ],
+        "title": "CharacterImageRequest",
+        "type": "object"
+      },
       "DownloadTaskEvent": {
         "description": "Progress of a file download (services/downloads.py DownloadManager). current/total are bytes (total 0 =\nunknown size); task_id is returned by the API call that started the download.",
         "properties": {
@@ -512,6 +1010,27 @@
         "title": "FavoriteImage",
         "type": "object"
       },
+      "FileImageSource": {
+        "description": "A local image file (picked with the desktop file dialog): PNG, JPEG, WebP or BMP.",
+        "properties": {
+          "kind": {
+            "const": "file",
+            "title": "Kind",
+            "type": "string"
+          },
+          "path": {
+            "minLength": 1,
+            "title": "Path",
+            "type": "string"
+          }
+        },
+        "required": [
+          "kind",
+          "path"
+        ],
+        "title": "FileImageSource",
+        "type": "object"
+      },
       "ForbiddenMatcher": {
         "description": "One side of a forbidden rule. Also the persisted format of the frontend forbidden-rules store.",
         "properties": {
@@ -598,6 +1117,18 @@
       },
       "GenerateRequest": {
         "properties": {
+          "character_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "The active character (Character.id). Its identity/outfit tags, negative tags, LoRAs and seed lock are already part of this request (the frontend prompt engine injects them); the backend applies its reference images through the IP-Adapter when one is installed for the model's family (services/ip_adapters.py) and records OutputRecord.character.",
+            "title": "Character Id"
+          },
           "guidance_scale": {
             "default": 7.0,
             "title": "Guidance Scale",
@@ -1434,6 +1965,210 @@
         "title": "InstalledModel",
         "type": "object"
       },
+      "IpAdapterFile": {
+        "description": "One file an IP-Adapter variant needs (services/ip_adapters.py IP_ADAPTER_CATALOG owns the catalog).",
+        "properties": {
+          "id": {
+            "title": "Id",
+            "type": "string"
+          },
+          "local_path": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Local copy (same name and size, or a cached hash match in its folder); null when it must be downloaded.",
+            "title": "Local Path"
+          },
+          "name": {
+            "description": "Local file name (ComfyUI conventions: models/ipadapter, models/clip_vision).",
+            "title": "Name",
+            "type": "string"
+          },
+          "role": {
+            "enum": [
+              "adapter",
+              "image_encoder"
+            ],
+            "title": "Role",
+            "type": "string"
+          },
+          "size_bytes": {
+            "title": "Size Bytes",
+            "type": "integer"
+          },
+          "task_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Running download of this file (DownloadTaskEvent on /ws/tasks).",
+            "title": "Task Id"
+          }
+        },
+        "required": [
+          "id",
+          "role",
+          "name",
+          "size_bytes",
+          "local_path",
+          "task_id"
+        ],
+        "title": "IpAdapterFile",
+        "type": "object"
+      },
+      "IpAdapterFolders": {
+        "description": "Where IP-Adapter files live and are downloaded to (settings.py AppPaths).",
+        "properties": {
+          "adapter": {
+            "title": "Adapter",
+            "type": "string"
+          },
+          "image_encoder": {
+            "title": "Image Encoder",
+            "type": "string"
+          }
+        },
+        "required": [
+          "adapter",
+          "image_encoder"
+        ],
+        "title": "IpAdapterFolders",
+        "type": "object"
+      },
+      "IpAdapterInstallResponse": {
+        "description": "POST /api/ip-adapters/{variant_id}/install.",
+        "properties": {
+          "state": {
+            "enum": [
+              "installed",
+              "downloading"
+            ],
+            "title": "State",
+            "type": "string"
+          },
+          "task_ids": {
+            "description": "Downloads of the missing files (state 'downloading'; a running download is joined); follow them on /ws/tasks, then ask GET /api/ip-adapters again.",
+            "items": {
+              "type": "string"
+            },
+            "title": "Task Ids",
+            "type": "array"
+          }
+        },
+        "required": [
+          "state",
+          "task_ids"
+        ],
+        "title": "IpAdapterInstallResponse",
+        "type": "object"
+      },
+      "IpAdapterStatus": {
+        "description": "GET /api/ip-adapters: every variant with its files, and the support for a model when model_path is given.",
+        "properties": {
+          "architecture": {
+            "anyOf": [
+              {
+                "enum": [
+                  "sd15",
+                  "sdxl"
+                ],
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Pipeline family of model_path (diffusion_lora_runtime.checkpoint_inspection.pipeline_architecture); null without model_path or when it has no IP-Adapter family.",
+            "title": "Architecture"
+          },
+          "folders": {
+            "$ref": "#/components/schemas/IpAdapterFolders"
+          },
+          "support": {
+            "description": "One entry per ReferenceFocus for model_path; empty without it.",
+            "items": {
+              "$ref": "#/components/schemas/ReferenceSupport"
+            },
+            "title": "Support",
+            "type": "array"
+          },
+          "variants": {
+            "items": {
+              "$ref": "#/components/schemas/IpAdapterVariant"
+            },
+            "title": "Variants",
+            "type": "array"
+          }
+        },
+        "required": [
+          "variants",
+          "folders",
+          "architecture",
+          "support"
+        ],
+        "title": "IpAdapterStatus",
+        "type": "object"
+      },
+      "IpAdapterVariant": {
+        "description": "An IP-Adapter usable with one model family and focus (adapter weights + image encoder).",
+        "properties": {
+          "architecture": {
+            "enum": [
+              "sd15",
+              "sdxl"
+            ],
+            "title": "Architecture",
+            "type": "string"
+          },
+          "files": {
+            "items": {
+              "$ref": "#/components/schemas/IpAdapterFile"
+            },
+            "title": "Files",
+            "type": "array"
+          },
+          "focus": {
+            "enum": [
+              "face",
+              "general"
+            ],
+            "title": "Focus",
+            "type": "string"
+          },
+          "id": {
+            "title": "Id",
+            "type": "string"
+          },
+          "label": {
+            "title": "Label",
+            "type": "string"
+          },
+          "ready": {
+            "description": "Every file is on disk.",
+            "title": "Ready",
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "id",
+          "label",
+          "architecture",
+          "focus",
+          "files",
+          "ready"
+        ],
+        "title": "IpAdapterVariant",
+        "type": "object"
+      },
       "LibraryState": {
         "description": "Legacy library.json format (read at bootstrap to seed the frontend library store).",
         "properties": {
@@ -1494,7 +2229,29 @@
         "title": "LoRASpec",
         "type": "object"
       },
-      "LoraWeight": {
+      "LoraWeight-Input": {
+        "description": "A LoRA applied with a weight: THE representation of per-LoRA weights, end to end. The frontend library\nstore's selection ('library-store' selectedLoras) holds these, GenerateRequest.loras carries them with the\nlibrary entry (GenerationLoRA), OutputRecord.active_loras records them, and services/runtime_adapter.py passes\nthe weight to the runtime LoRASpec.",
+        "properties": {
+          "id": {
+            "description": "LoRA library entry id (LoRASpec.id).",
+            "title": "Id",
+            "type": "string"
+          },
+          "weight": {
+            "default": 1.0,
+            "maximum": 10.0,
+            "minimum": -10.0,
+            "title": "Weight",
+            "type": "number"
+          }
+        },
+        "required": [
+          "id"
+        ],
+        "title": "LoraWeight",
+        "type": "object"
+      },
+      "LoraWeight-Output": {
         "description": "A LoRA applied with a weight: THE representation of per-LoRA weights, end to end. The frontend library\nstore's selection ('library-store' selectedLoras) holds these, GenerateRequest.loras carries them with the\nlibrary entry (GenerationLoRA), OutputRecord.active_loras records them, and services/runtime_adapter.py passes\nthe weight to the runtime LoRASpec.",
         "properties": {
           "id": {
@@ -1985,6 +2742,50 @@
         "title": "OkResponse",
         "type": "object"
       },
+      "OutputCharacter": {
+        "description": "The character active for a generation (snapshot of its id and name when the output was made).",
+        "properties": {
+          "id": {
+            "title": "Id",
+            "type": "string"
+          },
+          "name": {
+            "title": "Name",
+            "type": "string"
+          },
+          "reference": {
+            "$ref": "#/components/schemas/OutputReference"
+          }
+        },
+        "required": [
+          "id",
+          "name",
+          "reference"
+        ],
+        "title": "OutputCharacter",
+        "type": "object"
+      },
+      "OutputImageSource": {
+        "description": "A generated output's image (its PNG in the output folder).",
+        "properties": {
+          "kind": {
+            "const": "output",
+            "title": "Kind",
+            "type": "string"
+          },
+          "output_id": {
+            "pattern": "^\\d{10}$",
+            "title": "Output Id",
+            "type": "string"
+          }
+        },
+        "required": [
+          "kind",
+          "output_id"
+        ],
+        "title": "OutputImageSource",
+        "type": "object"
+      },
       "OutputIndex": {
         "description": "Ids of every complete output (both .png and .json present), ascending.",
         "properties": {
@@ -2008,10 +2809,21 @@
           "active_loras": {
             "description": "LoRAs applied (selected + prompt-linked) with their weights. Files written before per-LoRA weights hold `active_lora_ids` instead: they load as weight LORA_WEIGHT_DEFAULTS.weight.",
             "items": {
-              "$ref": "#/components/schemas/LoraWeight"
+              "$ref": "#/components/schemas/LoraWeight-Output"
             },
             "title": "Active Loras",
             "type": "array"
+          },
+          "character": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/OutputCharacter"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "The character active for this generation (GenerateRequest.character_id) and how its reference images were used; null without a character and in files written before characters existed."
           },
           "generated_at": {
             "format": "date-time",
@@ -2111,9 +2923,72 @@
           "prompt_seed",
           "image_seed",
           "active_loras",
-          "selections"
+          "selections",
+          "character"
         ],
         "title": "OutputRecord",
+        "type": "object"
+      },
+      "OutputReference": {
+        "description": "How the active character's reference images were used for one output (IP-Adapter).",
+        "properties": {
+          "applied": {
+            "title": "Applied",
+            "type": "boolean"
+          },
+          "image_ids": {
+            "description": "CharacterImage ids used, in order; empty when not applied.",
+            "items": {
+              "type": "string"
+            },
+            "title": "Image Ids",
+            "type": "array"
+          },
+          "reason": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Why the references were not applied (no reference image, model family without IP-Adapter, IP-Adapter not installed); null when applied.",
+            "title": "Reason"
+          },
+          "strength": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "IP-Adapter scale used (Character.reference_strength); null when not applied.",
+            "title": "Strength"
+          },
+          "variant_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "IpAdapterVariant.id used; null when not applied.",
+            "title": "Variant Id"
+          }
+        },
+        "required": [
+          "applied",
+          "variant_id",
+          "strength",
+          "image_ids",
+          "reason"
+        ],
+        "title": "OutputReference",
         "type": "object"
       },
       "PaneLayout": {
@@ -2430,6 +3305,105 @@
           }
         },
         "title": "ProviderTokenUpdate",
+        "type": "object"
+      },
+      "ReferenceDefaults": {
+        "description": "The single definition of character reference settings: IP-Adapter strength (default, range, UI step), the\ndefault focus and how many reference images a character holds. Exported to the frontend as REFERENCE_DEFAULTS.",
+        "properties": {
+          "focus": {
+            "default": "face",
+            "enum": [
+              "face",
+              "general"
+            ],
+            "title": "Focus",
+            "type": "string"
+          },
+          "max": {
+            "default": 1.0,
+            "title": "Max",
+            "type": "number"
+          },
+          "max_images": {
+            "default": 4,
+            "title": "Max Images",
+            "type": "integer"
+          },
+          "min": {
+            "default": 0.0,
+            "title": "Min",
+            "type": "number"
+          },
+          "step": {
+            "default": 0.05,
+            "title": "Step",
+            "type": "number"
+          },
+          "strength": {
+            "default": 0.6,
+            "title": "Strength",
+            "type": "number"
+          }
+        },
+        "required": [
+          "strength",
+          "min",
+          "max",
+          "step",
+          "focus",
+          "max_images"
+        ],
+        "title": "ReferenceDefaults",
+        "type": "object",
+        "x-export-defaults": true
+      },
+      "ReferenceSupport": {
+        "description": "Whether reference images can be applied with `focus` to the model asked for: the same rule generation uses\n(services/ip_adapters.py IpAdapterService.resolve).",
+        "properties": {
+          "focus": {
+            "enum": [
+              "face",
+              "general"
+            ],
+            "title": "Focus",
+            "type": "string"
+          },
+          "ready": {
+            "title": "Ready",
+            "type": "boolean"
+          },
+          "reason": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Why references cannot be applied now; null when ready.",
+            "title": "Reason"
+          },
+          "variant_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Variant used for the model's family and this focus; null when none.",
+            "title": "Variant Id"
+          }
+        },
+        "required": [
+          "focus",
+          "variant_id",
+          "ready",
+          "reason"
+        ],
+        "title": "ReferenceSupport",
         "type": "object"
       },
       "RemoteFile": {
@@ -2974,6 +3948,27 @@
         "title": "TaskSnapshot",
         "type": "object"
       },
+      "UrlImageSource": {
+        "description": "An online image (e.g. RemoteImage.url of the image library), downloaded by the backend.",
+        "properties": {
+          "kind": {
+            "const": "url",
+            "title": "Kind",
+            "type": "string"
+          },
+          "url": {
+            "pattern": "^https?://",
+            "title": "Url",
+            "type": "string"
+          }
+        },
+        "required": [
+          "kind",
+          "url"
+        ],
+        "title": "UrlImageSource",
+        "type": "object"
+      },
       "ValidationError": {
         "properties": {
           "ctx": {
@@ -3093,6 +4088,506 @@
         "summary": "Bootstrap",
         "tags": [
           "bootstrap"
+        ]
+      }
+    },
+    "/api/characters": {
+      "get": {
+        "description": "Every character, in creation order, and the active one.",
+        "operationId": "list_characters_api_characters_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CharacterCollection"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "503": {
+            "description": "characters.json cannot be read (it is never overwritten)"
+          }
+        },
+        "summary": "List Characters",
+        "tags": [
+          "characters"
+        ]
+      },
+      "post": {
+        "description": "Creates a character, importing its reference images (all or nothing).",
+        "operationId": "create_character_api_characters_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CharacterCreateRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Character"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "404": {
+            "description": "Unknown character, or the image source does not exist"
+          },
+          "422": {
+            "description": "The source is not a usable image"
+          },
+          "502": {
+            "description": "The image could not be downloaded"
+          },
+          "503": {
+            "description": "characters.json cannot be read (it is never overwritten)"
+          }
+        },
+        "summary": "Create Character",
+        "tags": [
+          "characters"
+        ]
+      }
+    },
+    "/api/characters/active": {
+      "put": {
+        "description": "Activates a character for generation (null deactivates).",
+        "operationId": "set_active_character_api_characters_active_put",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ActiveCharacterUpdate"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CharacterCollection"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "404": {
+            "description": "Unknown character or image"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          },
+          "503": {
+            "description": "characters.json cannot be read (it is never overwritten)"
+          }
+        },
+        "summary": "Set Active Character",
+        "tags": [
+          "characters"
+        ]
+      }
+    },
+    "/api/characters/{character_id}": {
+      "delete": {
+        "description": "Deletes a character and its images (deactivating it when it was active).",
+        "operationId": "delete_character_api_characters__character_id__delete",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "character_id",
+            "required": true,
+            "schema": {
+              "pattern": "^chr-[0-9a-f]{12}$",
+              "title": "Character Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/OkResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "404": {
+            "description": "Unknown character or image"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          },
+          "503": {
+            "description": "characters.json cannot be read (it is never overwritten)"
+          }
+        },
+        "summary": "Delete Character",
+        "tags": [
+          "characters"
+        ]
+      },
+      "put": {
+        "description": "Replaces the editable fields of a character (its images are kept).",
+        "operationId": "update_character_api_characters__character_id__put",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "character_id",
+            "required": true,
+            "schema": {
+              "pattern": "^chr-[0-9a-f]{12}$",
+              "title": "Character Id",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CharacterDraft"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Character"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "404": {
+            "description": "Unknown character or image"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          },
+          "503": {
+            "description": "characters.json cannot be read (it is never overwritten)"
+          }
+        },
+        "summary": "Update Character",
+        "tags": [
+          "characters"
+        ]
+      }
+    },
+    "/api/characters/{character_id}/images/{image_id}": {
+      "get": {
+        "description": "PNG of a reference image or of the thumbnail.",
+        "operationId": "get_character_image_api_characters__character_id__images__image_id__get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "character_id",
+            "required": true,
+            "schema": {
+              "pattern": "^chr-[0-9a-f]{12}$",
+              "title": "Character Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "image_id",
+            "required": true,
+            "schema": {
+              "pattern": "^img-[0-9a-f]{12}$",
+              "title": "Image Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "image/png": {}
+            },
+            "description": "Successful Response"
+          },
+          "404": {
+            "description": "Unknown character or image"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          },
+          "503": {
+            "description": "characters.json cannot be read (it is never overwritten)"
+          }
+        },
+        "summary": "Get Character Image",
+        "tags": [
+          "characters"
+        ]
+      }
+    },
+    "/api/characters/{character_id}/reference-images": {
+      "post": {
+        "description": "Imports a reference image (appended; it becomes the thumbnail when the character has none).",
+        "operationId": "add_character_reference_image_api_characters__character_id__reference_images_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "character_id",
+            "required": true,
+            "schema": {
+              "pattern": "^chr-[0-9a-f]{12}$",
+              "title": "Character Id",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CharacterImageRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Character"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "404": {
+            "description": "Unknown character, or the image source does not exist"
+          },
+          "409": {
+            "description": "The character has the maximum number of reference images"
+          },
+          "422": {
+            "description": "The source is not a usable image"
+          },
+          "502": {
+            "description": "The image could not be downloaded"
+          },
+          "503": {
+            "description": "characters.json cannot be read (it is never overwritten)"
+          }
+        },
+        "summary": "Add Character Reference Image",
+        "tags": [
+          "characters"
+        ]
+      }
+    },
+    "/api/characters/{character_id}/reference-images/{image_id}": {
+      "delete": {
+        "operationId": "remove_character_reference_image_api_characters__character_id__reference_images__image_id__delete",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "character_id",
+            "required": true,
+            "schema": {
+              "pattern": "^chr-[0-9a-f]{12}$",
+              "title": "Character Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "image_id",
+            "required": true,
+            "schema": {
+              "pattern": "^img-[0-9a-f]{12}$",
+              "title": "Image Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Character"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "404": {
+            "description": "Unknown character or image"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          },
+          "503": {
+            "description": "characters.json cannot be read (it is never overwritten)"
+          }
+        },
+        "summary": "Remove Character Reference Image",
+        "tags": [
+          "characters"
+        ]
+      }
+    },
+    "/api/characters/{character_id}/thumbnail": {
+      "delete": {
+        "operationId": "clear_character_thumbnail_api_characters__character_id__thumbnail_delete",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "character_id",
+            "required": true,
+            "schema": {
+              "pattern": "^chr-[0-9a-f]{12}$",
+              "title": "Character Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Character"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "404": {
+            "description": "Unknown character or image"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          },
+          "503": {
+            "description": "characters.json cannot be read (it is never overwritten)"
+          }
+        },
+        "summary": "Clear Character Thumbnail",
+        "tags": [
+          "characters"
+        ]
+      },
+      "put": {
+        "description": "Replaces the thumbnail with a downscaled copy of the source (e.g. one of the reference images).",
+        "operationId": "set_character_thumbnail_api_characters__character_id__thumbnail_put",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "character_id",
+            "required": true,
+            "schema": {
+              "pattern": "^chr-[0-9a-f]{12}$",
+              "title": "Character Id",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CharacterImageRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Character"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "404": {
+            "description": "Unknown character, or the image source does not exist"
+          },
+          "422": {
+            "description": "The source is not a usable image"
+          },
+          "502": {
+            "description": "The image could not be downloaded"
+          },
+          "503": {
+            "description": "characters.json cannot be read (it is never overwritten)"
+          }
+        },
+        "summary": "Set Character Thumbnail",
+        "tags": [
+          "characters"
         ]
       }
     },
@@ -3538,6 +5033,104 @@
         "summary": "Search Images",
         "tags": [
           "images"
+        ]
+      }
+    },
+    "/api/ip-adapters": {
+      "get": {
+        "description": "Every IP-Adapter variant with its files (on disk, downloading), and the reference support of model_path.",
+        "operationId": "ip_adapter_status_api_ip_adapters_get",
+        "parameters": [
+          {
+            "description": "Model (ModelSpec.path) to report the reference support of (IpAdapterStatus.support).",
+            "in": "query",
+            "name": "model_path",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "Model (ModelSpec.path) to report the reference support of (IpAdapterStatus.support).",
+              "title": "Model Path"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/IpAdapterStatus"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Ip Adapter Status",
+        "tags": [
+          "ip-adapters"
+        ]
+      }
+    },
+    "/api/ip-adapters/{variant_id}/install": {
+      "post": {
+        "description": "Downloads the files of the variant that are not on disk yet (a running download is joined).",
+        "operationId": "install_ip_adapter_api_ip_adapters__variant_id__install_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "variant_id",
+            "required": true,
+            "schema": {
+              "title": "Variant Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/IpAdapterInstallResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "404": {
+            "description": "Unknown variant"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Install Ip Adapter",
+        "tags": [
+          "ip-adapters"
         ]
       }
     },

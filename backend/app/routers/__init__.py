@@ -8,7 +8,20 @@ from __future__ import annotations
 
 from fastapi import APIRouter
 
-from . import bootstrap, downloads, generation, health, images, model_installs, models, outputs, stores, tasks
+from . import (
+    bootstrap,
+    characters,
+    downloads,
+    generation,
+    health,
+    images,
+    ip_adapters,
+    model_installs,
+    models,
+    outputs,
+    stores,
+    tasks,
+)
 
 ROUTERS: tuple[APIRouter, ...] = (
     health.router,
@@ -21,4 +34,6 @@ ROUTERS: tuple[APIRouter, ...] = (
     model_installs.router,
     downloads.router,
     images.router,
+    characters.router,
+    ip_adapters.router,
 )

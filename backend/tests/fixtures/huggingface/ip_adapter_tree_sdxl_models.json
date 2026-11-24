@@ -1,0 +1,24 @@
+[
+  {
+    "type": "file",
+    "oid": "b61b565e315fa0704a5c4e4d37ec8f9f7ac3a1af",
+    "size": 847517512,
+    "lfs": {
+      "oid": "677ad8860204f7d0bfba12d29e6c31ded9beefdf3e4bbd102518357d31a292c1",
+      "size": 847517512,
+      "pointerSize": 134
+    },
+    "path": "sdxl_models/ip-adapter-plus-face_sdxl_vit-h.safetensors"
+  },
+  {
+    "type": "file",
+    "oid": "0c5178c3d50123ed73ccab897d0e0b27ce682050",
+    "size": 847517512,
+    "lfs": {
+      "oid": "3f5062b8400c94b7159665b21ba5c62acdcd7682262743d7f2aefedef00e6581",
+      "size": 847517512,
+      "pointerSize": 134
+    },
+    "path": "sdxl_models/ip-adapter-plus_sdxl_vit-h.safetensors"
+  }
+]

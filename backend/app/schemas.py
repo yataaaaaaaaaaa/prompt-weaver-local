@@ -15,7 +15,7 @@ from __future__ import annotations
 from datetime import datetime
 from typing import Annotated, Any, Literal, TypeVar, Union
 
-from pydantic import BaseModel, ConfigDict, Field, SecretStr, model_validator
+from pydantic import AfterValidator, BaseModel, ConfigDict, Field, SecretStr, StringConstraints, model_validator
 
 # ---------------------------------------------------------------------------
 # Shared literals
@@ -295,6 +295,27 @@ class GenerationSelection(ApiModel):
     induced_lora_ids: list[str] = Field(default_factory=list)
 
 
+class OutputReference(ApiModel):
+    """How the active character's reference images were used for one output (IP-Adapter)."""
+
+    applied: bool
+    variant_id: str | None = Field(description="IpAdapterVariant.id used; null when not applied.")
+    strength: float | None = Field(description="IP-Adapter scale used (Character.reference_strength); null when not applied.")
+    image_ids: list[str] = Field(description="CharacterImage ids used, in order; empty when not applied.")
+    reason: str | None = Field(
+        description="Why the references were not applied (no reference image, model family without IP-Adapter, "
+        "IP-Adapter not installed); null when applied."
+    )
+
+
+class OutputCharacter(ApiModel):
+    """The character active for a generation (snapshot of its id and name when the output was made)."""
+
+    id: str
+    name: str
+    reference: OutputReference
+
+
 class OutputRecord(ApiModel):
     """Metadata of one generated image (the adjacent <output_id>.json file).
 
@@ -321,6 +342,11 @@ class OutputRecord(ApiModel):
         "weights hold `active_lora_ids` instead: they load as weight LORA_WEIGHT_DEFAULTS.weight.",
     )
     selections: list[GenerationSelection] = Field(default_factory=list)
+    character: OutputCharacter | None = Field(
+        default=None,
+        description="The character active for this generation (GenerateRequest.character_id) and how its reference "
+        "images were used; null without a character and in files written before characters existed.",
+    )
 
     @model_validator(mode="before")
     @classmethod
@@ -365,6 +391,13 @@ class GenerateRequest(ApiModel):
     prompt_seed: int | None = None
     seed: int | None = None
     negative_prompt: str = GENERATION_DEFAULTS.negative_prompt
+    character_id: str | None = Field(
+        default=None,
+        description="The active character (Character.id). Its identity/outfit tags, negative tags, LoRAs and seed lock "
+        "are already part of this request (the frontend prompt engine injects them); the backend applies its reference "
+        "images through the IP-Adapter when one is installed for the model's family (services/ip_adapters.py) and "
+        "records OutputRecord.character.",
+    )
 
 
 # ---------------------------------------------------------------------------
@@ -693,6 +726,246 @@ class FavoriteImage(ApiModel):
 
     image: RemoteImage
     saved_at: datetime
+
+
+# ---------------------------------------------------------------------------
+# Characters (services/characters.py, <data dir>/characters/) and their reference images (IP-Adapter,
+# services/ip_adapters.py). The backend owns the character collection and its images; the frontend characters
+# store reads and edits it through /api/characters only, and its prompt engine injects the active character into
+# the prompt (src/domain/characters.ts).
+# ---------------------------------------------------------------------------
+
+# What the reference images should keep: the face (IP-Adapter Plus Face) or the whole subject (IP-Adapter Plus).
+ReferenceFocus = Literal["face", "general"]
+
+# Character ids are "chr-<12 hex>", character image ids "img-<12 hex>" (assigned by the backend).
+CHARACTER_ID_PATTERN = r"^chr-[0-9a-f]{12}$"
+CHARACTER_IMAGE_ID_PATTERN = r"^img-[0-9a-f]{12}$"
+
+
+@export_defaults
+class ReferenceDefaults(ApiModel):
+    """The single definition of character reference settings: IP-Adapter strength (default, range, UI step), the
+    default focus and how many reference images a character holds. Exported to the frontend as REFERENCE_DEFAULTS."""
+
+    strength: float = 0.6
+    min: float = 0.0
+    max: float = 1.0
+    step: float = 0.05
+    focus: ReferenceFocus = "face"
+    max_images: int = 4
+
+
+REFERENCE_DEFAULTS = ReferenceDefaults()
+
+# An IP-Adapter strength (validated against REFERENCE_DEFAULTS.min/max).
+ReferenceStrength = Annotated[float, Field(ge=REFERENCE_DEFAULTS.min, le=REFERENCE_DEFAULTS.max)]
+
+
+def _clean_tags(tags: list[str]) -> list[str]:
+    """Tags trimmed, empty ones dropped (splitting prompt text into tags is the frontend's src/domain/text.ts)."""
+    return [tag.strip() for tag in tags if tag.strip()]
+
+
+CharacterTags = Annotated[list[str], AfterValidator(_clean_tags)]
+CharacterName = Annotated[str, StringConstraints(strip_whitespace=True, min_length=1, max_length=120)]
+
+
+class OutputImageSource(ApiModel):
+    """A generated output's image (its PNG in the output folder)."""
+
+    kind: Literal["output"]
+    output_id: str = Field(pattern=OUTPUT_ID_PATTERN)
+
+
+class FileImageSource(ApiModel):
+    """A local image file (picked with the desktop file dialog): PNG, JPEG, WebP or BMP."""
+
+    kind: Literal["file"]
+    path: str = Field(min_length=1)
+
+
+class UrlImageSource(ApiModel):
+    """An online image (e.g. RemoteImage.url of the image library), downloaded by the backend."""
+
+    kind: Literal["url"]
+    url: str = Field(pattern=r"^https?://")
+
+
+class CharacterImageCopySource(ApiModel):
+    """Another image of the same character (e.g. a reference image used as the thumbnail)."""
+
+    kind: Literal["character_image"]
+    image_id: str = Field(pattern=CHARACTER_IMAGE_ID_PATTERN)
+
+
+CharacterImageSource = Annotated[
+    Union[OutputImageSource, FileImageSource, UrlImageSource, CharacterImageCopySource],
+    Field(discriminator="kind"),
+]
+
+
+class CharacterImage(ApiModel):
+    """An image stored with a character (<data dir>/characters/images/<id>.png), served by
+    GET /api/characters/{character_id}/images/{image_id}."""
+
+    id: str = Field(pattern=CHARACTER_IMAGE_ID_PATTERN)
+    width: int
+    height: int
+    source: CharacterImageSource = Field(description="Where the image was imported from.")
+    added_at: datetime
+
+
+class CharacterDraft(ApiModel):
+    """The editable fields of a character: body of PUT /api/characters/{character_id}, base of the create request
+    and of Character."""
+
+    name: CharacterName
+    identity_tags: CharacterTags = Field(
+        default_factory=list,
+        description="Appearance tags that identify the character (face, hair, eyes, body...): the locked sub-prompt of "
+        "the pinned 'Character' category while the character is active.",
+    )
+    outfit_tags: CharacterTags = Field(
+        default_factory=list,
+        description="Default outfit, kept separate from the identity: the locked sub-prompt of the pinned "
+        "'Character outfit' category (no such category when empty).",
+    )
+    negative_tags: CharacterTags = Field(
+        default_factory=list, description="Appended to the negative prompt while the character is active."
+    )
+    loras: list[LoraWeight] = Field(
+        default_factory=list,
+        description="Character LoRAs (library entry ids) with their weights, applied while the character is active.",
+    )
+    seed: int | None = Field(default=None, description="Image seed of the character (e.g. of the output it was made from).")
+    seed_locked: bool = Field(
+        default=False,
+        description="While the character is active, generate with `seed` (the image seed field is left unchanged). "
+        "Requires a seed.",
+    )
+    reference_strength: ReferenceStrength = Field(
+        default=REFERENCE_DEFAULTS.strength, description="IP-Adapter strength of the reference images."
+    )
+    reference_focus: ReferenceFocus = Field(
+        default=REFERENCE_DEFAULTS.focus, description="IP-Adapter variant used for the reference images."
+    )
+
+    @model_validator(mode="after")
+    def _seed_lock_needs_a_seed(self) -> "CharacterDraft":
+        if self.seed_locked and self.seed is None:
+            raise ValueError("seed_locked requires a seed.")
+        return self
+
+
+class Character(CharacterDraft):
+    """A character: a recognizable subject reused across generations (backend-owned, <data dir>/characters/)."""
+
+    id: str = Field(pattern=CHARACTER_ID_PATTERN)
+    reference_images: list[CharacterImage] = Field(
+        default_factory=list,
+        description="Reference images for the IP-Adapter, in order (at most REFERENCE_DEFAULTS.max_images).",
+    )
+    thumbnail: CharacterImage | None = Field(default=None, description="Gallery picture (a downscaled copy).")
+    created_at: datetime
+    updated_at: datetime
+
+
+class CharacterCreateRequest(CharacterDraft):
+    """Body of POST /api/characters."""
+
+    reference_sources: list[CharacterImageSource] = Field(
+        default_factory=list,
+        max_length=REFERENCE_DEFAULTS.max_images,
+        description="Imported as reference images, in order, all or nothing (nothing is created when one fails); the "
+        "first one also becomes the thumbnail. 'character_image' sources are refused (the character has no image yet).",
+    )
+
+
+class CharacterImageRequest(ApiModel):
+    """Body of POST /api/characters/{character_id}/reference-images and PUT /api/characters/{character_id}/thumbnail."""
+
+    source: CharacterImageSource
+
+
+class ActiveCharacterUpdate(ApiModel):
+    """Body of PUT /api/characters/active."""
+
+    id: str | None = Field(description="Character to activate for generation; null deactivates.")
+
+
+class CharacterCollection(ApiModel):
+    """Every character (in creation order) and the active one."""
+
+    items: list[Character]
+    active_id: str | None = Field(description="The character active for generation; null when none is.")
+
+
+IpAdapterFileRole = Literal["adapter", "image_encoder"]
+
+
+class IpAdapterFile(ApiModel):
+    """One file an IP-Adapter variant needs (services/ip_adapters.py IP_ADAPTER_CATALOG owns the catalog)."""
+
+    id: str
+    role: IpAdapterFileRole
+    name: str = Field(description="Local file name (ComfyUI conventions: models/ipadapter, models/clip_vision).")
+    size_bytes: int
+    local_path: str | None = Field(
+        description="Local copy (same name and size, or a cached hash match in its folder); null when it must be "
+        "downloaded."
+    )
+    task_id: str | None = Field(description="Running download of this file (DownloadTaskEvent on /ws/tasks).")
+
+
+class IpAdapterVariant(ApiModel):
+    """An IP-Adapter usable with one model family and focus (adapter weights + image encoder)."""
+
+    id: str
+    label: str
+    architecture: ModelArchitecture
+    focus: ReferenceFocus
+    files: list[IpAdapterFile]
+    ready: bool = Field(description="Every file is on disk.")
+
+
+class ReferenceSupport(ApiModel):
+    """Whether reference images can be applied with `focus` to the model asked for: the same rule generation uses
+    (services/ip_adapters.py IpAdapterService.resolve)."""
+
+    focus: ReferenceFocus
+    variant_id: str | None = Field(description="Variant used for the model's family and this focus; null when none.")
+    ready: bool
+    reason: str | None = Field(description="Why references cannot be applied now; null when ready.")
+
+
+class IpAdapterFolders(ApiModel):
+    """Where IP-Adapter files live and are downloaded to (settings.py AppPaths)."""
+
+    adapter: str
+    image_encoder: str
+
+
+class IpAdapterStatus(ApiModel):
+    """GET /api/ip-adapters: every variant with its files, and the support for a model when model_path is given."""
+
+    variants: list[IpAdapterVariant]
+    folders: IpAdapterFolders
+    architecture: ModelArchitecture | None = Field(
+        description="Pipeline family of model_path (diffusion_lora_runtime.checkpoint_inspection.pipeline_architecture); "
+        "null without model_path or when it has no IP-Adapter family."
+    )
+    support: list[ReferenceSupport] = Field(description="One entry per ReferenceFocus for model_path; empty without it.")
+
+
+class IpAdapterInstallResponse(ApiModel):
+    """POST /api/ip-adapters/{variant_id}/install."""
+
+    state: InstallState
+    task_ids: list[str] = Field(
+        description="Downloads of the missing files (state 'downloading'; a running download is joined); follow "
+        "them on /ws/tasks, then ask GET /api/ip-adapters again."
+    )
 
 
 # ---------------------------------------------------------------------------

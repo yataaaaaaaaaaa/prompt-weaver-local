@@ -20,6 +20,7 @@ from app.schemas import (
     ImageGenerationParams,
     ImageResource,
     ImageSearchPage,
+    IpAdapterFileRole,
     ModelArchitecture,
     ModelKind,
     ModelProviderInfo,
@@ -35,10 +36,11 @@ from app.services.backend_settings import BackendSettingsStore
 from app.services.container import FILE_HASH_CACHE_NAME
 from app.services.downloads import CompletionCallback, DownloadSpec
 from app.services.file_hashes import FileHashCache
-from app.services.generation import GeneratedImage, StepCallback
+from app.services.generation import GeneratedImage, ReferenceInput, StepCallback
 from app.services.http import USER_AGENT
 from app.services.image_favorites import ImageFavoritesStore
 from app.services.image_library import ImageLibraryService
+from app.services.ip_adapters import IpAdapterCatalog, IpAdapterFileSpec, IpAdapterService, IpAdapterVariantSpec
 from app.services.local_models import LocalModelFiles
 from app.services.model_catalog import ModelCatalogService
 from app.services.model_providers import (
@@ -63,6 +65,7 @@ class GenerateCall:
     request: GenerateRequest
     prompt_lora_dir: Path
     prompt_embedding_dir: Path
+    reference: ReferenceInput | None = None
 
 
 @dataclass
@@ -87,8 +90,9 @@ class FakeGenerator:
         prompt_lora_dir: Path,
         prompt_embedding_dir: Path,
         on_step: StepCallback,
+        reference: ReferenceInput | None = None,
     ) -> GeneratedImage:
-        self.calls.append(GenerateCall(request, prompt_lora_dir, prompt_embedding_dir))
+        self.calls.append(GenerateCall(request, prompt_lora_dir, prompt_embedding_dir, reference))
         for step in range(1, self.reported_steps + 1):
             on_step(step, request.steps)
         if self.on_generate is not None:
@@ -604,3 +608,124 @@ def image_resource(
     kind: ModelKind = "lora",
 ) -> ImageResource:
     return ImageResource(kind=kind, name=name, weight=weight, version_id=version_id, hash=hash)
+
+
+# A valid /api/generate body (test_generation.py, test_generation_characters.py).
+GENERATE_REQUEST: dict[str, Any] = {
+    "model": {
+        "id": "example-model-safetensors",
+        "name": "ExampleModel_v50.safetensors",
+        "path": "C:/models/checkpoints/ExampleModel_v50.safetensors",
+        "default_width": 1024,
+        "default_height": 1024,
+        "torch_dtype": "float16",
+    },
+    "loras": [
+        {"id": "kept-lora", "name": "kept-lora", "path": "C:/models/loras/kept-lora.safetensors", "weight": 0.6},
+        # No weight: LORA_WEIGHT_DEFAULTS.weight (1.0).
+        {"id": "other-lora", "name": "other", "path": "C:/models/loras/other.safetensors"},
+    ],
+    "prompt": "masterpiece, <lora:Dramatic Lighting Slider:2>, 1girl",
+    "selections": [
+        {"category_name": "Main", "prompt_text": "masterpiece", "locked": True, "induced_lora_ids": ["kept-lora"]},
+        {"category_name": "Subject", "prompt_text": "1girl"},
+    ],
+    "width": 128,
+    "height": 192,
+    "steps": 12,
+    "guidance_scale": 3.5,
+    "prompt_seed": 290912999,
+    "seed": 718043937,
+    "negative_prompt": "worst quality",
+}
+
+# The key set of an output metadata file written without a character (the legacy format).
+LEGACY_METADATA_KEYS = {
+    "output_id",
+    "generated_at",
+    "prompt",
+    "negative_prompt",
+    "seed",
+    "prompt_seed",
+    "image_seed",
+    "width",
+    "height",
+    "steps",
+    "guidance_scale",
+    "model_id",
+    "active_loras",
+    "selections",
+    "image_path",
+    "metadata_path",
+}
+
+
+# ---------------------------------------------------------------------------
+# Tiny IP-Adapter catalog (test_ip_adapters.py, test_ip_adapters_api.py): two SDXL variants sharing one encoder, no SD 1.5 variant.
+# Every file has its own size, so only the file itself is ever a same-size hashing candidate.
+# ---------------------------------------------------------------------------
+
+ENCODER_CONTENT = b"tiny image encoder " * 6
+FACE_CONTENT = b"tiny face adapter " * 5
+GENERAL_CONTENT = b"tiny general adapter!" * 4
+
+
+def tiny_file(file_id: str, role: IpAdapterFileRole, content: bytes) -> IpAdapterFileSpec:
+    return IpAdapterFileSpec(
+        id=file_id,
+        role=role,
+        name=f"{file_id}.safetensors",
+        repo_path=f"tiny/{file_id}.safetensors",
+        size_bytes=len(content),
+        sha256=sha256_of(content),
+    )
+
+
+TINY_ENCODER = tiny_file("tiny-encoder", "image_encoder", ENCODER_CONTENT)
+TINY_FACE = tiny_file("tiny-face", "adapter", FACE_CONTENT)
+TINY_GENERAL = tiny_file("tiny-general", "adapter", GENERAL_CONTENT)
+# File id -> content (what a download of that file writes).
+TINY_CONTENTS = {TINY_ENCODER.id: ENCODER_CONTENT, TINY_FACE.id: FACE_CONTENT, TINY_GENERAL.id: GENERAL_CONTENT}
+
+SDXL_FACE = IpAdapterVariantSpec(
+    id="sdxl-face", label="SDXL face", architecture="sdxl", focus="face", adapter=TINY_FACE, image_encoder=TINY_ENCODER
+)
+SDXL_GENERAL = IpAdapterVariantSpec(
+    id="sdxl-general",
+    label="SDXL general",
+    architecture="sdxl",
+    focus="general",
+    adapter=TINY_GENERAL,
+    image_encoder=TINY_ENCODER,
+)
+TINY_CATALOG = IpAdapterCatalog(variants=(SDXL_FACE, SDXL_GENERAL))
+
+SDXL_MODEL = "D:/models/sdxl.safetensors"
+SD15_MODEL = "D:/models/sd15.safetensors"
+FLUX_MODEL = "D:/models/flux.safetensors"
+MODEL_FAMILIES: dict[str, ModelArchitecture] = {SDXL_MODEL: "sdxl", SD15_MODEL: "sd15"}
+
+
+def fake_architecture_of(model_path: str) -> ModelArchitecture | None:
+    """Family detector of the tiny tests: no checkpoint file needed."""
+    return MODEL_FAMILIES.get(model_path)
+
+
+def tiny_service(
+    paths: AppPaths, downloads: FakeDownloadManager, *, local_files: LocalModelFiles | None = None
+) -> IpAdapterService:
+    if local_files is None:
+        local_files = LocalModelFiles(paths=paths, hashes=FileHashCache(paths.cache_dir / FILE_HASH_CACHE_NAME))
+    return IpAdapterService(
+        paths=paths,
+        local_files=local_files,
+        downloads=downloads,  # type: ignore[arg-type]
+        catalog=TINY_CATALOG,
+        architecture_of=fake_architecture_of,
+    )
+
+
+def put_tiny(paths: AppPaths, file: IpAdapterFileSpec, *, name: str | None = None) -> Path:
+    """`file`'s content in its folder (models/ipadapter or models/clip_vision), under its catalog name or `name`."""
+    folder = paths.ip_adapter_dir if file.role == "adapter" else paths.image_encoder_dir
+    return put_file(folder / (name or file.name), TINY_CONTENTS[file.id])

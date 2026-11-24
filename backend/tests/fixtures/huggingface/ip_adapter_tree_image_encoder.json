@@ -1,0 +1,19 @@
+[
+  {
+    "type": "file",
+    "oid": "9c841dd0314e27141ed01a24df1734e407a95c4a",
+    "size": 560,
+    "path": "models/image_encoder/config.json"
+  },
+  {
+    "type": "file",
+    "oid": "590c45d8aba49bfa35bc489af660f732aab16568",
+    "size": 2528373448,
+    "lfs": {
+      "oid": "6ca9667da1ca9e0b0f75e46bb030f7e011f44f86cbfb8d5a36590fcd7507b030",
+      "size": 2528373448,
+      "pointerSize": 135
+    },
+    "path": "models/image_encoder/model.safetensors"
+  }
+]

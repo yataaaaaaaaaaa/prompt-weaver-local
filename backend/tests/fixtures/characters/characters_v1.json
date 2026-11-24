@@ -1,0 +1,77 @@
+{
+  "version": 1,
+  "active_id": "chr-ffffffffffff",
+  "items": [
+    {
+      "name": "Aria",
+      "identity_tags": ["1girl", "long silver hair", "red eyes", "small mole under eye"],
+      "outfit_tags": ["black hoodie", "pleated skirt"],
+      "negative_tags": ["short hair", "blue eyes"],
+      "loras": [
+        {"id": "aria-character-safetensors", "weight": 0.8},
+        {"id": "anime-lineart-safetensors", "weight": 1.0}
+      ],
+      "seed": 718043937,
+      "seed_locked": true,
+      "reference_strength": 0.7,
+      "reference_focus": "face",
+      "id": "chr-1a2b3c4d5e6f",
+      "reference_images": [
+        {
+          "id": "img-0a1b2c3d4e5f",
+          "width": 683,
+          "height": 1024,
+          "source": {"kind": "output", "output_id": "0000000012"},
+          "added_at": "2026-11-20T09:15:02.481233Z"
+        },
+        {
+          "id": "img-9f8e7d6c5b4a",
+          "width": 1024,
+          "height": 1024,
+          "source": {"kind": "url", "url": "https://image.civitai.com/xG1nkqKTMzGDvpLrqFT7WA/0b6d2a1c/original=true/aria.jpeg"},
+          "added_at": "2026-11-20T09:17:40.002114Z"
+        }
+      ],
+      "thumbnail": {
+        "id": "img-5a5a5a5a5a5a",
+        "width": 256,
+        "height": 384,
+        "source": {"kind": "character_image", "image_id": "img-0a1b2c3d4e5f"},
+        "added_at": "2026-11-20T09:15:02.613901Z"
+      },
+      "created_at": "2026-11-20T09:15:02.701233Z",
+      "updated_at": "2026-11-21T18:02:11.090127Z"
+    },
+    {
+      "name": "Broken",
+      "identity_tags": ["1boy"],
+      "seed": null,
+      "seed_locked": true,
+      "id": "chr-ffffffffffff",
+      "created_at": "2026-11-21T10:00:00Z",
+      "updated_at": "2026-11-21T10:00:00Z"
+    },
+    {
+      "name": "Bob the knight",
+      "identity_tags": ["1boy", "short brown hair", "beard"],
+      "outfit_tags": [],
+      "negative_tags": [],
+      "loras": [],
+      "seed": null,
+      "seed_locked": false,
+      "reference_strength": 0.6,
+      "reference_focus": "general",
+      "id": "chr-0f0e0d0c0b0a",
+      "reference_images": [],
+      "thumbnail": {
+        "id": "img-c0ffee00beef",
+        "width": 384,
+        "height": 216,
+        "source": {"kind": "file", "path": "C:\\Users\\me\\Pictures\\bob.webp"},
+        "added_at": "2026-11-22T07:44:19.553012Z"
+      },
+      "created_at": "2026-11-22T07:44:19.600000Z",
+      "updated_at": "2026-11-22T07:44:19.600000Z"
+    }
+  ]
+}

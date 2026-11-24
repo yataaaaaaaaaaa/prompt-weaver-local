@@ -1,0 +1,41 @@
+[
+  {
+    "type": "directory",
+    "oid": "42571842795c5748885eb7bd39079395903798d2",
+    "size": 0,
+    "path": "models/image_encoder"
+  },
+  {
+    "type": "file",
+    "oid": "767025ddb47fe89baa927b8c2eee8fe99a1f6edb",
+    "size": 98183288,
+    "lfs": {
+      "oid": "1c9edc21af6f737dc1d6e0e734190e976cfacf802d6b024b77aa3be922f7569b",
+      "size": 98183288,
+      "pointerSize": 133
+    },
+    "path": "models/ip-adapter-plus-face_sd15.safetensors"
+  },
+  {
+    "type": "file",
+    "oid": "1ab10ab02149141a0111e5ba67c0653008319121",
+    "size": 98183288,
+    "lfs": {
+      "oid": "a1c250be40455cc61a43da1201ec3f1edaea71214865fb47f57927e06cbe4996",
+      "size": 98183288,
+      "pointerSize": 133
+    },
+    "path": "models/ip-adapter-plus_sd15.safetensors"
+  },
+  {
+    "type": "file",
+    "oid": "67788447289e5858c26dbc8fbf0a7ce3fd6c50fb",
+    "size": 44642768,
+    "lfs": {
+      "oid": "289b45f16d043d0bf542e45831f971dcdaabe18b656f11e86d9dfba7e9ee3369",
+      "size": 44642768,
+      "pointerSize": 133
+    },
+    "path": "models/ip-adapter_sd15.safetensors"
+  }
+]

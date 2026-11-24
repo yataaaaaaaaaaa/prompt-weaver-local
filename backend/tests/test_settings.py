@@ -24,6 +24,11 @@ def test_for_root_computes_the_layout_without_io(tmp_path: Path) -> None:
     assert paths.checkpoint_dir == models / "checkpoints"
     assert paths.prompt_lora_dir == models / "loras"
     assert paths.prompt_embedding_dir == models / "embeddings"
+    assert paths.characters_dir == root / "characters"
+    assert paths.characters_file == root / "characters" / "characters.json"
+    assert paths.character_images_dir == root / "characters" / "images"
+    assert paths.ip_adapter_dir == models / "ipadapter"
+    assert paths.image_encoder_dir == models / "clip_vision"
     assert not root.exists()
     assert not models.exists()
 

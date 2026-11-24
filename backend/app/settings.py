@@ -24,6 +24,9 @@ MODEL_KIND_SUBDIRS: dict[ModelKind, str] = {
     "lora": "loras",
     "embedding": "embeddings",
 }
+# IP-Adapter files (character reference images), ComfyUI folders too: the adapters and their CLIP vision encoders.
+IP_ADAPTER_SUBDIR = "ipadapter"
+IMAGE_ENCODER_SUBDIR = "clip_vision"
 
 
 class SharedConfig(BaseModel):
@@ -51,12 +54,19 @@ class AppPaths(BaseModel):
     cache_dir: Path
     # Image library favorites (services/image_favorites.py).
     image_favorites_file: Path
+    # Characters (services/characters.py): characters_file + one PNG per character image in character_images_dir.
+    characters_dir: Path
+    characters_file: Path
+    character_images_dir: Path
     models_root: Path
     checkpoint_dir: Path
     # LoRA folder: download target of LoRAs and the folder inline <lora:name:weight> tags resolve against.
     prompt_lora_dir: Path
     # Embedding folder: download target of embeddings and the folder `embedding:name` resolves against.
     prompt_embedding_dir: Path
+    # IP-Adapter weights and their image encoders (services/ip_adapters.py: found there, downloaded there).
+    ip_adapter_dir: Path
+    image_encoder_dir: Path
 
     @classmethod
     def for_root(cls, root: Path, *, models_root: Path | None = None) -> "AppPaths":
@@ -74,10 +84,15 @@ class AppPaths(BaseModel):
             settings_file=root / "backend_settings.json",
             cache_dir=root / "cache",
             image_favorites_file=root / "image_favorites.json",
+            characters_dir=root / "characters",
+            characters_file=root / "characters" / "characters.json",
+            character_images_dir=root / "characters" / "images",
             models_root=models_root,
             checkpoint_dir=models_root / MODEL_KIND_SUBDIRS["checkpoint"],
             prompt_lora_dir=models_root / MODEL_KIND_SUBDIRS["lora"],
             prompt_embedding_dir=models_root / MODEL_KIND_SUBDIRS["embedding"],
+            ip_adapter_dir=models_root / IP_ADAPTER_SUBDIR,
+            image_encoder_dir=models_root / IMAGE_ENCODER_SUBDIR,
         )
 
     def model_dir(self, kind: ModelKind) -> Path:
@@ -96,7 +111,8 @@ class AppPaths(BaseModel):
         )
 
     def ensure_dirs(self) -> None:
-        """Creates the data directories. The model folders are created on demand by the downloads."""
+        """Creates the data directories. The model folders are created on demand by the downloads, the characters
+        folders by the first character write."""
         for directory in (self.root, self.output_dir, self.trash_dir, self.stores_dir, self.cache_dir):
             directory.mkdir(parents=True, exist_ok=True)
 

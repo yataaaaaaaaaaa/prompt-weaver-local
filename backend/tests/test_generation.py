@@ -14,54 +14,15 @@ from app.services.generation import GenerationCancelledError, GenerationFailed, 
 from app.services.outputs import OutputRepository
 from app.settings import AppPaths
 
-from support import CountingFactory, FakeGenerator, OutputFactory, RecordingTaskHub
+from support import (
+    GENERATE_REQUEST,
+    LEGACY_METADATA_KEYS,
+    CountingFactory,
+    FakeGenerator,
+    OutputFactory,
+    RecordingTaskHub,
+)
 
-REQUEST: dict[str, Any] = {
-    "model": {
-        "id": "example-model-safetensors",
-        "name": "ExampleModel_v50.safetensors",
-        "path": "C:/models/checkpoints/ExampleModel_v50.safetensors",
-        "default_width": 1024,
-        "default_height": 1024,
-        "torch_dtype": "float16",
-    },
-    "loras": [
-        {"id": "kept-lora", "name": "kept-lora", "path": "C:/models/loras/kept-lora.safetensors", "weight": 0.6},
-        # No weight: LORA_WEIGHT_DEFAULTS.weight (1.0).
-        {"id": "other-lora", "name": "other", "path": "C:/models/loras/other.safetensors"},
-    ],
-    "prompt": "masterpiece, <lora:Dramatic Lighting Slider:2>, 1girl",
-    "selections": [
-        {"category_name": "Main", "prompt_text": "masterpiece", "locked": True, "induced_lora_ids": ["kept-lora"]},
-        {"category_name": "Subject", "prompt_text": "1girl"},
-    ],
-    "width": 128,
-    "height": 192,
-    "steps": 12,
-    "guidance_scale": 3.5,
-    "prompt_seed": 290912999,
-    "seed": 718043937,
-    "negative_prompt": "worst quality",
-}
-
-METADATA_KEYS = {
-    "output_id",
-    "generated_at",
-    "prompt",
-    "negative_prompt",
-    "seed",
-    "prompt_seed",
-    "image_seed",
-    "width",
-    "height",
-    "steps",
-    "guidance_scale",
-    "model_id",
-    "active_loras",
-    "selections",
-    "image_path",
-    "metadata_path",
-}
 
 
 @pytest.fixture()
@@ -82,7 +43,7 @@ def service(
 
 
 def request(**overrides: Any) -> GenerateRequest:
-    return GenerateRequest.model_validate({**REQUEST, **overrides})
+    return GenerateRequest.model_validate({**GENERATE_REQUEST, **overrides})
 
 
 # ---------------------------------------------------------------------------
@@ -98,11 +59,11 @@ def test_generate_saves_the_output_with_the_legacy_metadata(
     metadata_path = app_paths.output_dir / "0000000001.json"
     image_path = app_paths.output_dir / "0000000001.png"
     on_disk = json.loads(metadata_path.read_text(encoding="utf-8"))
-    assert set(on_disk) == METADATA_KEYS
+    assert set(on_disk) == LEGACY_METADATA_KEYS
     assert on_disk["output_id"] == "0000000001"
     assert datetime.fromisoformat(on_disk["generated_at"]).utcoffset().total_seconds() == 0
     # prompt / negative prompt are the ones resolved by the runtime.
-    assert on_disk["prompt"] == f"resolved({REQUEST['prompt']})"
+    assert on_disk["prompt"] == f"resolved({GENERATE_REQUEST['prompt']})"
     assert on_disk["negative_prompt"] == "resolved(worst quality)"
     assert on_disk["seed"] == on_disk["image_seed"] == 718043937
     assert on_disk["prompt_seed"] == 290912999
@@ -271,11 +232,14 @@ def test_shutdown_cancels_and_unloads(
 
 
 def test_generate_endpoint_returns_the_saved_record(client: TestClient, app_paths: AppPaths) -> None:
-    response = client.post("/api/generate", json=REQUEST)
+    response = client.post("/api/generate", json=GENERATE_REQUEST)
 
     assert response.status_code == 200
     body = response.json()
-    assert set(body) == METADATA_KEYS
+    # The API answers every OutputRecord field: `character` is null without an active character (the metadata file
+    # on disk keeps the legacy keys, LEGACY_METADATA_KEYS).
+    assert set(body) == LEGACY_METADATA_KEYS | {"character"}
+    assert body["character"] is None
     assert body["output_id"] == "0000000001"
     assert client.get("/api/outputs").json() == {"ids": ["0000000001"]}
     assert client.get("/api/outputs/0000000001").json() == body
@@ -291,7 +255,7 @@ def test_generate_endpoint_task_events(client: TestClient) -> None:
     with client.websocket_connect("/ws/tasks") as websocket:
         assert websocket.receive_json()["stage"] == "idle"
 
-        client.post("/api/generate", json=REQUEST).raise_for_status()
+        client.post("/api/generate", json=GENERATE_REQUEST).raise_for_status()
 
         stages = [websocket.receive_json()["stage"] for _ in range(5)]
     assert stages == ["loading_model", "sampling", "sampling", "saving", "complete"]
@@ -312,7 +276,7 @@ def test_generate_endpoint_failures_are_409(
 ) -> None:
     fake_generator.error = error
 
-    response = client.post("/api/generate", json=REQUEST)
+    response = client.post("/api/generate", json=GENERATE_REQUEST)
 
     assert response.status_code == 409
     assert response.json() == {"detail": str(error)}
@@ -322,7 +286,7 @@ def test_generate_endpoint_failures_are_409(
 
 
 def test_generate_endpoint_validates_the_request(client: TestClient, generator_factory: CountingFactory) -> None:
-    assert client.post("/api/generate", json={"model": REQUEST["model"]}).status_code == 422
+    assert client.post("/api/generate", json={"model": GENERATE_REQUEST["model"]}).status_code == 422
     assert generator_factory.calls == 0
 
 
@@ -333,7 +297,7 @@ def test_unexpected_generation_error_is_500(
     app = create_app(paths=app_paths, generator_factory=generator_factory, install_signal_handlers=False)
 
     with TestClient(app, raise_server_exceptions=False) as client:
-        assert client.post("/api/generate", json=REQUEST).status_code == 500
+        assert client.post("/api/generate", json=GENERATE_REQUEST).status_code == 500
         assert client.get("/api/tasks").json()["events"][0]["stage"] == "error"
 
 
@@ -345,7 +309,7 @@ def test_cancel_endpoint(
     assert generator_factory.calls == 0
     assert client.get("/api/tasks").json()["events"][0]["stage"] == "idle"
 
-    client.post("/api/generate", json=REQUEST).raise_for_status()
+    client.post("/api/generate", json=GENERATE_REQUEST).raise_for_status()
     assert client.post("/api/generate/cancel").json() == {"ok": True}
 
     assert fake_generator.cancel_calls == 1
