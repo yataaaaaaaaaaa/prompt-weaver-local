@@ -1,13 +1,15 @@
 // Electron main process: starts (or reuses) the backend, builds the menu from the shared keymap and
-// opens the app window. The backend URL comes from config/appConfig.cjs (single owner, honors the
-// PROMPT_WEAVER_BACKEND_URL override set by the launcher).
-const { app, BrowserWindow, Menu, dialog, ipcMain, nativeTheme } = require('electron');
+// opens the app window (whose web links open in the user's browser: externalLinks.cjs). The backend URL
+// comes from config/appConfig.cjs (single owner, honors the PROMPT_WEAVER_BACKEND_URL override set by the
+// launcher).
+const { app, BrowserWindow, Menu, dialog, ipcMain, nativeTheme, shell } = require('electron');
 const http = require('node:http');
 const path = require('node:path');
 const { spawn } = require('node:child_process');
 const { backendUrl } = require('../../config/appConfig.cjs');
 const keymap = require('../src/app/keymap.json');
 const channels = require('./ipcChannels.cjs');
+const { installExternalLinkHandler } = require('./externalLinks.cjs');
 const { shortcutMenuItems } = require('./shortcutMenu.cjs');
 const { windowBackgroundColor } = require('./windowTheme.cjs');
 
@@ -140,6 +142,7 @@ function createWindow() {
 			preload: path.join(__dirname, 'preload.cjs'),
 		},
 	});
+	installExternalLinkHandler(window.webContents, shell);
 
 	const devServerUrl = process.env.VITE_DEV_SERVER_URL;
 	if (devServerUrl) {

@@ -1,12 +1,20 @@
 // Pane registry: the ONE place where workspace panes are declared. The workspace shell renders a
-// FloatingPane per entry and the toolbar lists them (show/hide). Future panes (Model library, Image
-// library, Characters) plug in by adding an entry here (their store first, then the view).
+// FloatingPane per entry and the toolbar lists them (show/hide). Future panes (e.g. Characters) plug in by
+// adding an entry here (their store first, then the view).
 import type { FluentIcon } from '@fluentui/react-icons';
-import { ImageMultipleRegular, ImageRegular, LibraryRegular, OptionsRegular, TextBulletListSquareRegular } from '@fluentui/react-icons';
+import {
+	ImageMultipleRegular,
+	ImageRegular,
+	ImageSearchRegular,
+	LibraryRegular,
+	OptionsRegular,
+	TextBulletListSquareRegular,
+} from '@fluentui/react-icons';
 import type { ComponentType } from 'react';
 import type { Rect } from '../domain/layout';
 import { UsedSelectionsPane } from '../features/forbidden/UsedSelectionsPane';
 import { ControlsPane } from '../features/generation/ControlsPane';
+import { ImageLibraryPane } from '../features/images/ImageLibraryPane';
 import { ModelLibraryPane } from '../features/models/ModelLibraryPane';
 import { ImagePane } from '../features/outputs/ImagePane';
 import { OutputBrowserPane } from '../features/outputs/OutputBrowserPane';
@@ -60,5 +68,14 @@ export const PANES: readonly PaneDefinition[] = [
 		minWidth: 360,
 		minHeight: 320,
 		component: ModelLibraryPane,
+	},
+	{
+		id: 'images',
+		title: 'Image library',
+		icon: ImageSearchRegular,
+		defaultLayout: { x: 120, y: 60, width: 960, height: 780 },
+		minWidth: 420,
+		minHeight: 360,
+		component: ImageLibraryPane,
 	},
 ];
