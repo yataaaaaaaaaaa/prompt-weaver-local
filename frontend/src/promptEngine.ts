@@ -176,6 +176,27 @@ function advanceCategorySeedEntry(entry: PromptCategorySeedStateEntry): PromptCa
 	};
 }
 
+
+function advanceCategorySeedEntryForScan(entry: PromptCategorySeedStateEntry): PromptCategorySeedStateEntry {
+	if (entry.prompt_count <= 0) {
+		return entry;
+	}
+
+	if (entry.remaining <= 1) {
+		return {
+			seed: entry.seed + 1,
+			remaining: entry.prompt_count,
+			prompt_count: entry.prompt_count,
+		};
+	}
+
+	return {
+		seed: entry.seed + 1,
+		remaining: entry.remaining - 1,
+		prompt_count: entry.prompt_count,
+	};
+}
+
 function positiveModulo(value: number, divisor: number): number {
 	const remainder = value % divisor;
 	return remainder >= 0 ? remainder : remainder + divisor;
@@ -262,12 +283,9 @@ export function selectPromptsWithCategoryCycle(state: AppState, categorySeedStat
 			continue;
 		}
 
-		if (firstUsedSeed == null) {
-			firstUsedSeed = normalizedEntry.seed;
-		}
-
 		const lockedPrompt = category.prompts.find((prompt) => getStoredPromptState(category, prompt) === 'lock') ?? null;
 		let selectedCandidate: CandidatePrompt | null = null;
+		let nextEntry = normalizedEntry;
 
 		if (lockedPrompt) {
 			const lockedCandidate = { category, prompt: lockedPrompt, locked: true };
@@ -277,24 +295,51 @@ export function selectPromptsWithCategoryCycle(state: AppState, categorySeedStat
 				console.warn(`Category '${category.name}' skipped because its locked prompt is forbidden.`);
 			}
 		} else {
-			const selectedPrompt = category.prompts[positiveModulo(normalizedEntry.seed, promptCount)] ?? null;
-			if (!selectedPrompt) {
-				throw new PromptSelectionError(`Category '${category.name}' has no prompts.`);
+			if (firstUsedSeed == null) {
+				firstUsedSeed = normalizedEntry.seed;
 			}
 
-			if (getStoredPromptState(category, selectedPrompt) === 'skip') {
-				console.warn(`Category '${category.name}' skipped because the seeded prompt is marked as skipped.`);
-			} else {
+			let scanEntry = normalizedEntry;
+			let skippedSeededPrompts = 0;
+			let forbiddenSeededPrompts = 0;
+
+			for (let attempt = 0; attempt < promptCount; attempt += 1) {
+				const selectedPrompt = category.prompts[positiveModulo(scanEntry.seed, promptCount)] ?? null;
+				if (!selectedPrompt) {
+					throw new PromptSelectionError(`Category '${category.name}' has no prompts.`);
+				}
+
+				if (getStoredPromptState(category, selectedPrompt) === 'skip') {
+					skippedSeededPrompts += 1;
+					scanEntry = advanceCategorySeedEntryForScan(scanEntry);
+					continue;
+				}
+
 				const seededCandidate = { category, prompt: selectedPrompt, locked: false };
-				if (!chosen.some((previous) => isForbidden(rules, seededCandidate, previous, state.categories))) {
-					selectedCandidate = seededCandidate;
+				if (chosen.some((previous) => isForbidden(rules, seededCandidate, previous, state.categories))) {
+					forbiddenSeededPrompts += 1;
+					scanEntry = advanceCategorySeedEntryForScan(scanEntry);
+					continue;
+				}
+
+				selectedCandidate = seededCandidate;
+				nextEntry = advanceCategorySeedEntry(scanEntry);
+				break;
+			}
+
+			if (!selectedCandidate) {
+				nextEntry = scanEntry;
+				if (skippedSeededPrompts > 0 && forbiddenSeededPrompts > 0) {
+					console.warn(`Category '${category.name}' skipped because every cycled prompt is skipped or forbidden.`);
+				} else if (skippedSeededPrompts > 0) {
+					console.warn(`Category '${category.name}' skipped because every cycled prompt is marked as skipped.`);
 				} else {
-					console.warn(`Category '${category.name}' skipped because the seeded prompt is forbidden.`);
+					console.warn(`Category '${category.name}' skipped because every cycled prompt is forbidden.`);
 				}
 			}
 		}
 
-		nextCategorySeedState[category.id] = advanceCategorySeedEntry(normalizedEntry);
+		nextCategorySeedState[category.id] = nextEntry;
 		if (selectedCandidate) {
 			chosen.push(selectedCandidate);
 		}

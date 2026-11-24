@@ -129,7 +129,7 @@ test('per-category cycle does not touch skipped category counters because skippe
     assert.equal('beta' in result.nextCategorySeedState, false);
 });
 
-test('LoRA selection resolver derives runtime entries without owning stale id repair', () => {
+test('LoRA selection resolver drops stale ids instead of returning unknown runtime entries', () => {
     const library: LibraryState = {
         models: [],
         loras: [
@@ -146,6 +146,7 @@ test('LoRA selection resolver derives runtime entries without owning stale id re
     assert.deepEqual(resolved.selectedIds, ['portrait']);
     assert.deepEqual(resolved.promptLinkedIds, ['style']);
     assert.deepEqual(resolved.activeIds, ['portrait', 'style']);
+    assert.deepEqual(resolved.missingIds, ['missing-selected-lora', 'missing-prompt-lora']);
     assert.deepEqual(resolved.activeLoras.map((item) => item.id), ['portrait', 'style']);
 });
 
@@ -160,4 +161,72 @@ test('LoRA helpers sanitize persisted and generated selection payloads', () => {
 
     assert.deepEqual(filterKnownLoraIds(['unknown', 'known', 'known'], library), ['known']);
     assert.deepEqual(filterSelectionLoraIds(selections, new Set(['known']))[0].induced_lora_ids, ['known']);
+});
+
+test('per-category cycle walks past skipped sub-prompts and selects the next usable prompt', () => {
+    const alpha = makeCategory('Alpha', ['alpha skipped', 'alpha usable'], { priority: '1' });
+    alpha.prompts[0].state = 'skip';
+    const state = makeState([alpha]);
+
+    const result = withMockedRandom(0.5, () => selectPromptsWithCategoryCycle(state, {
+        alpha: { seed: 0, remaining: 2, prompt_count: 2 },
+    }));
+
+    assert.deepEqual(result.selections.map((item) => item.prompt_text), ['alpha usable']);
+    assert.equal(result.promptSeed, 0);
+    assert.deepEqual(result.nextCategorySeedState.alpha, { seed: 1073741824, remaining: 2, prompt_count: 2 });
+});
+
+test('per-category cycle walks past forbidden sub-prompts and selects the next usable prompt', () => {
+    const alpha = makeCategory('Alpha', ['alpha prompt'], { priority: '1' });
+    const beta = makeCategory('Beta', ['beta forbidden', 'beta usable'], { priority: '2' });
+    const state = makeState([alpha, beta], [
+        {
+            left: { kind: 'specific', category_name: 'Alpha', prompt_text: 'alpha prompt', contains_text: null, tag_text: null },
+            right: { kind: 'specific', category_name: 'Beta', prompt_text: 'beta forbidden', contains_text: null, tag_text: null },
+        },
+    ]);
+
+    const result = withMockedRandom(0.5, () => selectPromptsWithCategoryCycle(state, {
+        alpha: { seed: 4, remaining: 1, prompt_count: 1 },
+        beta: { seed: 0, remaining: 2, prompt_count: 2 },
+    }));
+
+    assert.deepEqual(result.selections.map((item) => item.prompt_text), ['alpha prompt', 'beta usable']);
+    assert.deepEqual(result.nextCategorySeedState.beta, { seed: 1073741824, remaining: 2, prompt_count: 2 });
+});
+
+test('per-category cycle does not increment a category counter when using a valid locked prompt', () => {
+    const alpha = makeCategory('Alpha', ['alpha locked', 'alpha normal'], { priority: '1' });
+    alpha.prompts[0].state = 'lock';
+    const state = makeState([alpha]);
+
+    const result = selectPromptsWithCategoryCycle(state, {
+        alpha: { seed: 10, remaining: 2, prompt_count: 2 },
+    });
+
+    assert.deepEqual(result.selections.map((item) => item.prompt_text), ['alpha locked']);
+    assert.equal(result.selections[0].locked, true);
+    assert.equal(result.promptSeed, null);
+    assert.deepEqual(result.nextCategorySeedState.alpha, { seed: 10, remaining: 2, prompt_count: 2 });
+});
+
+test('per-category cycle skips forbidden locked prompts without incrementing the locked category counter', () => {
+    const alpha = makeCategory('Alpha', ['alpha prompt'], { priority: '1' });
+    const beta = makeCategory('Beta', ['beta locked', 'beta normal'], { priority: '2' });
+    beta.prompts[0].state = 'lock';
+    const state = makeState([alpha, beta], [
+        {
+            left: { kind: 'specific', category_name: 'Alpha', prompt_text: 'alpha prompt', contains_text: null, tag_text: null },
+            right: { kind: 'specific', category_name: 'Beta', prompt_text: 'beta locked', contains_text: null, tag_text: null },
+        },
+    ]);
+
+    const result = withMockedRandom(0.25, () => selectPromptsWithCategoryCycle(state, {
+        alpha: { seed: 7, remaining: 1, prompt_count: 1 },
+        beta: { seed: 12, remaining: 2, prompt_count: 2 },
+    }));
+
+    assert.deepEqual(result.selections.map((item) => item.prompt_text), ['alpha prompt']);
+    assert.deepEqual(result.nextCategorySeedState.beta, { seed: 12, remaining: 2, prompt_count: 2 });
 });
