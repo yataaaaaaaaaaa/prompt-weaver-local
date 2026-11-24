@@ -1,0 +1,1819 @@
+{
+  "components": {
+    "schemas": {
+      "AppState": {
+        "properties": {
+          "categories": {
+            "items": {
+              "$ref": "#/components/schemas/PromptCategory"
+            },
+            "title": "Categories",
+            "type": "array"
+          },
+          "editor": {
+            "$ref": "#/components/schemas/EditorState"
+          },
+          "forbidden_rules": {
+            "items": {
+              "$ref": "#/components/schemas/ForbiddenRule"
+            },
+            "title": "Forbidden Rules",
+            "type": "array"
+          },
+          "guidance_scale": {
+            "default": 7.0,
+            "title": "Guidance Scale",
+            "type": "number"
+          },
+          "height": {
+            "default": 1024,
+            "title": "Height",
+            "type": "integer"
+          },
+          "image_seed_behavior": {
+            "default": "fixed",
+            "enum": [
+              "fixed",
+              "increment",
+              "randomize",
+              "per_category_cycle"
+            ],
+            "title": "Image Seed Behavior",
+            "type": "string"
+          },
+          "last_lora_dir": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Last Lora Dir"
+          },
+          "last_lora_ids": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Last Lora Ids",
+            "type": "array"
+          },
+          "last_model_dir": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Last Model Dir"
+          },
+          "last_model_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Last Model Id"
+          },
+          "last_output_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Last Output Id"
+          },
+          "negative_prompt": {
+            "default": "",
+            "title": "Negative Prompt",
+            "type": "string"
+          },
+          "prompt_seed": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Prompt Seed"
+          },
+          "prompt_seed_behavior": {
+            "default": "fixed",
+            "enum": [
+              "fixed",
+              "increment",
+              "randomize",
+              "per_category_cycle"
+            ],
+            "title": "Prompt Seed Behavior",
+            "type": "string"
+          },
+          "seed": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Seed"
+          },
+          "seed_advance_mode": {
+            "default": "keep",
+            "enum": [
+              "keep",
+              "increment",
+              "randomize"
+            ],
+            "title": "Seed Advance Mode",
+            "type": "string"
+          },
+          "seed_mode": {
+            "default": "manual",
+            "enum": [
+              "random",
+              "manual"
+            ],
+            "title": "Seed Mode",
+            "type": "string"
+          },
+          "steps": {
+            "default": 30,
+            "title": "Steps",
+            "type": "integer"
+          },
+          "width": {
+            "default": 1024,
+            "title": "Width",
+            "type": "integer"
+          },
+          "workspace": {
+            "$ref": "#/components/schemas/WorkspaceLayout"
+          }
+        },
+        "required": [
+          "categories",
+          "forbidden_rules",
+          "last_model_id",
+          "last_lora_ids",
+          "last_model_dir",
+          "last_lora_dir",
+          "width",
+          "height",
+          "steps",
+          "guidance_scale",
+          "prompt_seed",
+          "seed",
+          "seed_mode",
+          "seed_advance_mode",
+          "prompt_seed_behavior",
+          "image_seed_behavior",
+          "negative_prompt",
+          "workspace",
+          "editor",
+          "last_output_id"
+        ],
+        "title": "AppState",
+        "type": "object"
+      },
+      "BootstrapResponse": {
+        "properties": {
+          "current_output_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "legacy_state.last_output_id when that output still exists, else the latest output id.",
+            "title": "Current Output Id"
+          },
+          "data_dir": {
+            "title": "Data Dir",
+            "type": "string"
+          },
+          "legacy_library": {
+            "$ref": "#/components/schemas/LibraryState",
+            "description": "library.json (or defaults)."
+          },
+          "legacy_state": {
+            "$ref": "#/components/schemas/AppState",
+            "description": "app_state.json (or defaults) with LoRA references missing from the library stripped."
+          },
+          "output_ids": {
+            "description": "Complete output ids, ascending.",
+            "items": {
+              "type": "string"
+            },
+            "title": "Output Ids",
+            "type": "array"
+          },
+          "persisted_stores": {
+            "description": "Names of frontend stores that already have persisted data; the others are seeded from legacy_*.",
+            "items": {
+              "type": "string"
+            },
+            "title": "Persisted Stores",
+            "type": "array"
+          }
+        },
+        "required": [
+          "data_dir",
+          "legacy_state",
+          "legacy_library",
+          "persisted_stores",
+          "output_ids",
+          "current_output_id"
+        ],
+        "title": "BootstrapResponse",
+        "type": "object"
+      },
+      "CategoryPosition": {
+        "properties": {
+          "x": {
+            "default": 0,
+            "title": "X",
+            "type": "integer"
+          },
+          "y": {
+            "default": 0,
+            "title": "Y",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "x",
+          "y"
+        ],
+        "title": "CategoryPosition",
+        "type": "object"
+      },
+      "CategorySize": {
+        "properties": {
+          "height": {
+            "default": 360,
+            "title": "Height",
+            "type": "integer"
+          },
+          "width": {
+            "default": 320,
+            "title": "Width",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "width",
+          "height"
+        ],
+        "title": "CategorySize",
+        "type": "object"
+      },
+      "DownloadTaskEvent": {
+        "description": "Progress of a file download. Reserved for the model library batch; nothing publishes it yet.",
+        "properties": {
+          "current": {
+            "default": 0,
+            "title": "Current",
+            "type": "integer"
+          },
+          "message": {
+            "default": "",
+            "title": "Message",
+            "type": "string"
+          },
+          "stage": {
+            "enum": [
+              "queued",
+              "downloading",
+              "complete",
+              "error",
+              "cancelled"
+            ],
+            "title": "Stage",
+            "type": "string"
+          },
+          "task_id": {
+            "title": "Task Id",
+            "type": "string"
+          },
+          "total": {
+            "default": 0,
+            "title": "Total",
+            "type": "integer"
+          },
+          "type": {
+            "const": "download",
+            "default": "download",
+            "title": "Type",
+            "type": "string"
+          }
+        },
+        "required": [
+          "type",
+          "task_id",
+          "stage",
+          "message",
+          "current",
+          "total"
+        ],
+        "title": "DownloadTaskEvent",
+        "type": "object"
+      },
+      "EditorState": {
+        "properties": {
+          "editing_target": {
+            "$ref": "#/components/schemas/EditorTarget"
+          },
+          "overlays_hidden": {
+            "default": false,
+            "title": "Overlays Hidden",
+            "type": "boolean"
+          },
+          "selected_category_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Selected Category Id"
+          },
+          "selected_prompt_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Selected Prompt Id"
+          },
+          "visibility_mode": {
+            "default": "all",
+            "enum": [
+              "all",
+              "categories-only",
+              "panes-only"
+            ],
+            "title": "Visibility Mode",
+            "type": "string"
+          }
+        },
+        "required": [
+          "overlays_hidden",
+          "visibility_mode",
+          "selected_category_id",
+          "selected_prompt_id",
+          "editing_target"
+        ],
+        "title": "EditorState",
+        "type": "object"
+      },
+      "EditorTarget": {
+        "properties": {
+          "category_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Category Id"
+          },
+          "kind": {
+            "default": "none",
+            "enum": [
+              "none",
+              "category-name",
+              "category-condition",
+              "category-priority",
+              "sub-prompt",
+              "category-bulk-prompts"
+            ],
+            "title": "Kind",
+            "type": "string"
+          },
+          "prompt_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Prompt Id"
+          }
+        },
+        "required": [
+          "kind",
+          "category_id",
+          "prompt_id"
+        ],
+        "title": "EditorTarget",
+        "type": "object"
+      },
+      "ForbiddenMatcher": {
+        "description": "One side of a forbidden rule. Also the persisted format of the frontend forbidden-rules store.",
+        "properties": {
+          "category_name": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Category Name"
+          },
+          "contains_text": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Contains Text"
+          },
+          "kind": {
+            "default": "specific",
+            "enum": [
+              "specific",
+              "contains",
+              "tag"
+            ],
+            "title": "Kind",
+            "type": "string"
+          },
+          "prompt_text": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Prompt Text"
+          },
+          "tag_text": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Tag Text"
+          }
+        },
+        "required": [
+          "kind",
+          "category_name",
+          "prompt_text",
+          "contains_text",
+          "tag_text"
+        ],
+        "title": "ForbiddenMatcher",
+        "type": "object"
+      },
+      "ForbiddenRule": {
+        "properties": {
+          "left": {
+            "$ref": "#/components/schemas/ForbiddenMatcher"
+          },
+          "right": {
+            "$ref": "#/components/schemas/ForbiddenMatcher"
+          }
+        },
+        "required": [
+          "left",
+          "right"
+        ],
+        "title": "ForbiddenRule",
+        "type": "object"
+      },
+      "GenerateRequest": {
+        "properties": {
+          "guidance_scale": {
+            "default": 7.0,
+            "title": "Guidance Scale",
+            "type": "number"
+          },
+          "height": {
+            "title": "Height",
+            "type": "integer"
+          },
+          "loras": {
+            "items": {
+              "$ref": "#/components/schemas/LoRASpec"
+            },
+            "title": "Loras",
+            "type": "array"
+          },
+          "model": {
+            "$ref": "#/components/schemas/ModelSpec-Input"
+          },
+          "negative_prompt": {
+            "default": "",
+            "title": "Negative Prompt",
+            "type": "string"
+          },
+          "prompt": {
+            "default": "",
+            "title": "Prompt",
+            "type": "string"
+          },
+          "prompt_seed": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Prompt Seed"
+          },
+          "seed": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Seed"
+          },
+          "selections": {
+            "items": {
+              "$ref": "#/components/schemas/GenerationSelection-Input"
+            },
+            "title": "Selections",
+            "type": "array"
+          },
+          "steps": {
+            "default": 30,
+            "title": "Steps",
+            "type": "integer"
+          },
+          "width": {
+            "title": "Width",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "model",
+          "width",
+          "height"
+        ],
+        "title": "GenerateRequest",
+        "type": "object"
+      },
+      "GenerationSelection-Input": {
+        "description": "One category -> sub-prompt choice used for a generation (stored in output metadata).",
+        "properties": {
+          "category_name": {
+            "title": "Category Name",
+            "type": "string"
+          },
+          "induced_lora_ids": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Induced Lora Ids",
+            "type": "array"
+          },
+          "locked": {
+            "default": false,
+            "title": "Locked",
+            "type": "boolean"
+          },
+          "prompt_text": {
+            "title": "Prompt Text",
+            "type": "string"
+          }
+        },
+        "required": [
+          "category_name",
+          "prompt_text"
+        ],
+        "title": "GenerationSelection",
+        "type": "object"
+      },
+      "GenerationSelection-Output": {
+        "description": "One category -> sub-prompt choice used for a generation (stored in output metadata).",
+        "properties": {
+          "category_name": {
+            "title": "Category Name",
+            "type": "string"
+          },
+          "induced_lora_ids": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Induced Lora Ids",
+            "type": "array"
+          },
+          "locked": {
+            "default": false,
+            "title": "Locked",
+            "type": "boolean"
+          },
+          "prompt_text": {
+            "title": "Prompt Text",
+            "type": "string"
+          }
+        },
+        "required": [
+          "category_name",
+          "prompt_text",
+          "locked",
+          "induced_lora_ids"
+        ],
+        "title": "GenerationSelection",
+        "type": "object"
+      },
+      "GenerationTaskEvent": {
+        "description": "Progress of the image generation task (a singleton task with task_id 'generation').",
+        "properties": {
+          "current": {
+            "default": 0,
+            "title": "Current",
+            "type": "integer"
+          },
+          "message": {
+            "default": "",
+            "title": "Message",
+            "type": "string"
+          },
+          "stage": {
+            "enum": [
+              "idle",
+              "loading_model",
+              "loading_loras",
+              "sampling",
+              "saving",
+              "complete",
+              "error",
+              "cancelled"
+            ],
+            "title": "Stage",
+            "type": "string"
+          },
+          "task_id": {
+            "default": "generation",
+            "title": "Task Id",
+            "type": "string"
+          },
+          "total": {
+            "default": 0,
+            "title": "Total",
+            "type": "integer"
+          },
+          "type": {
+            "const": "generation",
+            "default": "generation",
+            "title": "Type",
+            "type": "string"
+          }
+        },
+        "required": [
+          "type",
+          "task_id",
+          "stage",
+          "message",
+          "current",
+          "total"
+        ],
+        "title": "GenerationTaskEvent",
+        "type": "object"
+      },
+      "HTTPValidationError": {
+        "properties": {
+          "detail": {
+            "items": {
+              "$ref": "#/components/schemas/ValidationError"
+            },
+            "title": "Detail",
+            "type": "array"
+          }
+        },
+        "title": "HTTPValidationError",
+        "type": "object"
+      },
+      "HealthResponse": {
+        "properties": {
+          "status": {
+            "const": "ok",
+            "default": "ok",
+            "title": "Status",
+            "type": "string"
+          }
+        },
+        "required": [
+          "status"
+        ],
+        "title": "HealthResponse",
+        "type": "object"
+      },
+      "LibraryState": {
+        "description": "Legacy library.json format (read at bootstrap to seed the frontend library store).",
+        "properties": {
+          "loras": {
+            "items": {
+              "$ref": "#/components/schemas/LoRASpec"
+            },
+            "title": "Loras",
+            "type": "array"
+          },
+          "models": {
+            "items": {
+              "$ref": "#/components/schemas/ModelSpec-Output"
+            },
+            "title": "Models",
+            "type": "array"
+          }
+        },
+        "required": [
+          "models",
+          "loras"
+        ],
+        "title": "LibraryState",
+        "type": "object"
+      },
+      "LoRASpec": {
+        "properties": {
+          "id": {
+            "title": "Id",
+            "type": "string"
+          },
+          "name": {
+            "title": "Name",
+            "type": "string"
+          },
+          "path": {
+            "title": "Path",
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "name",
+          "path"
+        ],
+        "title": "LoRASpec",
+        "type": "object"
+      },
+      "ModelSpec-Input": {
+        "properties": {
+          "default_height": {
+            "default": 1024,
+            "title": "Default Height",
+            "type": "integer"
+          },
+          "default_width": {
+            "default": 1024,
+            "title": "Default Width",
+            "type": "integer"
+          },
+          "id": {
+            "title": "Id",
+            "type": "string"
+          },
+          "name": {
+            "title": "Name",
+            "type": "string"
+          },
+          "path": {
+            "title": "Path",
+            "type": "string"
+          },
+          "torch_dtype": {
+            "default": "float16",
+            "enum": [
+              "float16",
+              "bfloat16",
+              "float32"
+            ],
+            "title": "Torch Dtype",
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "name",
+          "path"
+        ],
+        "title": "ModelSpec",
+        "type": "object"
+      },
+      "ModelSpec-Output": {
+        "properties": {
+          "default_height": {
+            "default": 1024,
+            "title": "Default Height",
+            "type": "integer"
+          },
+          "default_width": {
+            "default": 1024,
+            "title": "Default Width",
+            "type": "integer"
+          },
+          "id": {
+            "title": "Id",
+            "type": "string"
+          },
+          "name": {
+            "title": "Name",
+            "type": "string"
+          },
+          "path": {
+            "title": "Path",
+            "type": "string"
+          },
+          "torch_dtype": {
+            "default": "float16",
+            "enum": [
+              "float16",
+              "bfloat16",
+              "float32"
+            ],
+            "title": "Torch Dtype",
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "name",
+          "path",
+          "default_width",
+          "default_height",
+          "torch_dtype"
+        ],
+        "title": "ModelSpec",
+        "type": "object"
+      },
+      "OkResponse": {
+        "properties": {
+          "ok": {
+            "default": true,
+            "title": "Ok",
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "ok"
+        ],
+        "title": "OkResponse",
+        "type": "object"
+      },
+      "OutputIndex": {
+        "description": "Ids of every complete output (both .png and .json present), ascending.",
+        "properties": {
+          "ids": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Ids",
+            "type": "array"
+          }
+        },
+        "required": [
+          "ids"
+        ],
+        "title": "OutputIndex",
+        "type": "object"
+      },
+      "OutputRecord": {
+        "description": "Metadata of one generated image (the adjacent <output_id>.json file).\n\nThe image itself is served by GET /api/outputs/{output_id}/image.",
+        "properties": {
+          "active_lora_ids": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Active Lora Ids",
+            "type": "array"
+          },
+          "generated_at": {
+            "format": "date-time",
+            "title": "Generated At",
+            "type": "string"
+          },
+          "guidance_scale": {
+            "default": 7.0,
+            "title": "Guidance Scale",
+            "type": "number"
+          },
+          "height": {
+            "title": "Height",
+            "type": "integer"
+          },
+          "image_path": {
+            "title": "Image Path",
+            "type": "string"
+          },
+          "image_seed": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Image Seed"
+          },
+          "metadata_path": {
+            "title": "Metadata Path",
+            "type": "string"
+          },
+          "model_id": {
+            "title": "Model Id",
+            "type": "string"
+          },
+          "negative_prompt": {
+            "default": "",
+            "title": "Negative Prompt",
+            "type": "string"
+          },
+          "output_id": {
+            "title": "Output Id",
+            "type": "string"
+          },
+          "prompt": {
+            "title": "Prompt",
+            "type": "string"
+          },
+          "prompt_seed": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Prompt Seed"
+          },
+          "seed": {
+            "title": "Seed",
+            "type": "integer"
+          },
+          "selections": {
+            "items": {
+              "$ref": "#/components/schemas/GenerationSelection-Output"
+            },
+            "title": "Selections",
+            "type": "array"
+          },
+          "steps": {
+            "default": 30,
+            "title": "Steps",
+            "type": "integer"
+          },
+          "width": {
+            "title": "Width",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "output_id",
+          "image_path",
+          "metadata_path",
+          "generated_at",
+          "prompt",
+          "seed",
+          "width",
+          "height",
+          "negative_prompt",
+          "steps",
+          "guidance_scale",
+          "model_id",
+          "prompt_seed",
+          "image_seed",
+          "active_lora_ids",
+          "selections"
+        ],
+        "title": "OutputRecord",
+        "type": "object"
+      },
+      "PaneLayout": {
+        "properties": {
+          "height": {
+            "title": "Height",
+            "type": "integer"
+          },
+          "width": {
+            "title": "Width",
+            "type": "integer"
+          },
+          "x": {
+            "title": "X",
+            "type": "integer"
+          },
+          "y": {
+            "title": "Y",
+            "type": "integer"
+          },
+          "z_index": {
+            "default": 1,
+            "title": "Z Index",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "x",
+          "y",
+          "width",
+          "height",
+          "z_index"
+        ],
+        "title": "PaneLayout",
+        "type": "object"
+      },
+      "PersistedStoreEnvelope-Input": {
+        "description": "zustand persist envelope: the partialized store state plus its schema version.",
+        "properties": {
+          "state": {
+            "additionalProperties": true,
+            "title": "State",
+            "type": "object"
+          },
+          "version": {
+            "default": 0,
+            "title": "Version",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "state"
+        ],
+        "title": "PersistedStoreEnvelope",
+        "type": "object"
+      },
+      "PersistedStoreEnvelope-Output": {
+        "description": "zustand persist envelope: the partialized store state plus its schema version.",
+        "properties": {
+          "state": {
+            "additionalProperties": true,
+            "title": "State",
+            "type": "object"
+          },
+          "version": {
+            "default": 0,
+            "title": "Version",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "state",
+          "version"
+        ],
+        "title": "PersistedStoreEnvelope",
+        "type": "object"
+      },
+      "PersistedStoreRead": {
+        "properties": {
+          "envelope": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/PersistedStoreEnvelope-Output"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "name": {
+            "title": "Name",
+            "type": "string"
+          }
+        },
+        "required": [
+          "name",
+          "envelope"
+        ],
+        "title": "PersistedStoreRead",
+        "type": "object"
+      },
+      "PromptCategory": {
+        "properties": {
+          "activation_text": {
+            "default": "",
+            "title": "Activation Text",
+            "type": "string"
+          },
+          "id": {
+            "title": "Id",
+            "type": "string"
+          },
+          "locked_prompt_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Locked Prompt Id"
+          },
+          "locked_prompt_text": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Locked Prompt Text"
+          },
+          "muted": {
+            "default": false,
+            "title": "Muted",
+            "type": "boolean"
+          },
+          "name": {
+            "title": "Name",
+            "type": "string"
+          },
+          "position": {
+            "$ref": "#/components/schemas/CategoryPosition"
+          },
+          "priority": {
+            "default": "1",
+            "title": "Priority",
+            "type": "string"
+          },
+          "prompts": {
+            "items": {
+              "$ref": "#/components/schemas/PromptEntry"
+            },
+            "title": "Prompts",
+            "type": "array"
+          },
+          "size": {
+            "$ref": "#/components/schemas/CategorySize"
+          },
+          "z_index": {
+            "default": 50,
+            "title": "Z Index",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "id",
+          "name",
+          "muted",
+          "priority",
+          "activation_text",
+          "locked_prompt_id",
+          "locked_prompt_text",
+          "position",
+          "size",
+          "z_index",
+          "prompts"
+        ],
+        "title": "PromptCategory",
+        "type": "object"
+      },
+      "PromptEntry": {
+        "properties": {
+          "extra_lora_ids": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Extra Lora Ids",
+            "type": "array"
+          },
+          "id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Id"
+          },
+          "skipped": {
+            "default": false,
+            "title": "Skipped",
+            "type": "boolean"
+          },
+          "text": {
+            "title": "Text",
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "text",
+          "skipped",
+          "extra_lora_ids"
+        ],
+        "title": "PromptEntry",
+        "type": "object"
+      },
+      "TaskSnapshot": {
+        "description": "Latest event of every known task. The WebSocket sends these events on connect.",
+        "properties": {
+          "events": {
+            "items": {
+              "discriminator": {
+                "mapping": {
+                  "download": "#/components/schemas/DownloadTaskEvent",
+                  "generation": "#/components/schemas/GenerationTaskEvent"
+                },
+                "propertyName": "type"
+              },
+              "oneOf": [
+                {
+                  "$ref": "#/components/schemas/GenerationTaskEvent"
+                },
+                {
+                  "$ref": "#/components/schemas/DownloadTaskEvent"
+                }
+              ]
+            },
+            "title": "Events",
+            "type": "array"
+          }
+        },
+        "required": [
+          "events"
+        ],
+        "title": "TaskSnapshot",
+        "type": "object"
+      },
+      "ValidationError": {
+        "properties": {
+          "ctx": {
+            "title": "Context",
+            "type": "object"
+          },
+          "input": {
+            "title": "Input"
+          },
+          "loc": {
+            "items": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "integer"
+                }
+              ]
+            },
+            "title": "Location",
+            "type": "array"
+          },
+          "msg": {
+            "title": "Message",
+            "type": "string"
+          },
+          "type": {
+            "title": "Error Type",
+            "type": "string"
+          }
+        },
+        "required": [
+          "loc",
+          "msg",
+          "type"
+        ],
+        "title": "ValidationError",
+        "type": "object"
+      },
+      "WorkspaceLayout": {
+        "properties": {
+          "controls": {
+            "$ref": "#/components/schemas/PaneLayout"
+          },
+          "details": {
+            "$ref": "#/components/schemas/PaneLayout"
+          },
+          "image": {
+            "$ref": "#/components/schemas/PaneLayout"
+          },
+          "used": {
+            "$ref": "#/components/schemas/PaneLayout"
+          }
+        },
+        "required": [
+          "image",
+          "controls",
+          "details",
+          "used"
+        ],
+        "title": "WorkspaceLayout",
+        "type": "object"
+      }
+    }
+  },
+  "info": {
+    "title": "Prompt Weaver Local",
+    "version": "0.1.0"
+  },
+  "openapi": "3.1.0",
+  "paths": {
+    "/api/bootstrap": {
+      "get": {
+        "description": "Everything the frontend needs at startup (see BootstrapResponse field docs).",
+        "operationId": "bootstrap_api_bootstrap_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BootstrapResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "summary": "Bootstrap",
+        "tags": [
+          "bootstrap"
+        ]
+      }
+    },
+    "/api/generate": {
+      "post": {
+        "description": "Generate one image, save it as the next output and return its metadata.\nProgress is published as GenerationTaskEvent on /ws/tasks.",
+        "operationId": "generate_api_generate_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/GenerateRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/OutputRecord"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "409": {
+            "description": "Generation failed or was cancelled"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Generate",
+        "tags": [
+          "generation"
+        ]
+      }
+    },
+    "/api/generate/cancel": {
+      "post": {
+        "operationId": "cancel_generate_api_generate_cancel_post",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/OkResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "summary": "Cancel Generate",
+        "tags": [
+          "generation"
+        ]
+      }
+    },
+    "/api/health": {
+      "get": {
+        "operationId": "health_api_health_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HealthResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "summary": "Health",
+        "tags": [
+          "health"
+        ]
+      }
+    },
+    "/api/outputs": {
+      "get": {
+        "operationId": "list_outputs_api_outputs_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/OutputIndex"
+                }
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "summary": "List Outputs",
+        "tags": [
+          "outputs"
+        ]
+      }
+    },
+    "/api/outputs/{output_id}": {
+      "get": {
+        "operationId": "get_output_api_outputs__output_id__get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "output_id",
+            "required": true,
+            "schema": {
+              "pattern": "^\\d{10}$",
+              "title": "Output Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/OutputRecord"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "404": {
+            "description": "Unknown output"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Get Output",
+        "tags": [
+          "outputs"
+        ]
+      }
+    },
+    "/api/outputs/{output_id}/image": {
+      "get": {
+        "operationId": "get_output_image_api_outputs__output_id__image_get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "output_id",
+            "required": true,
+            "schema": {
+              "pattern": "^\\d{10}$",
+              "title": "Output Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "image/png": {}
+            },
+            "description": "Successful Response"
+          },
+          "404": {
+            "description": "Unknown output"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Get Output Image",
+        "tags": [
+          "outputs"
+        ]
+      }
+    },
+    "/api/outputs/{output_id}/trash": {
+      "post": {
+        "description": "Move the output (png + json) into the app-managed trash.",
+        "operationId": "trash_output_api_outputs__output_id__trash_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "output_id",
+            "required": true,
+            "schema": {
+              "pattern": "^\\d{10}$",
+              "title": "Output Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/OkResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "404": {
+            "description": "Unknown output"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Trash Output",
+        "tags": [
+          "outputs"
+        ]
+      }
+    },
+    "/api/stores/{name}": {
+      "delete": {
+        "operationId": "delete_store_api_stores__name__delete",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "name",
+            "required": true,
+            "schema": {
+              "pattern": "^[a-z0-9][a-z0-9-]{0,63}$",
+              "title": "Name",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/OkResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Delete Store",
+        "tags": [
+          "stores"
+        ]
+      },
+      "get": {
+        "description": "Persisted state of one frontend store (envelope is null when nothing was persisted yet).",
+        "operationId": "read_store_api_stores__name__get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "name",
+            "required": true,
+            "schema": {
+              "pattern": "^[a-z0-9][a-z0-9-]{0,63}$",
+              "title": "Name",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PersistedStoreRead"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Read Store",
+        "tags": [
+          "stores"
+        ]
+      },
+      "put": {
+        "operationId": "write_store_api_stores__name__put",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "name",
+            "required": true,
+            "schema": {
+              "pattern": "^[a-z0-9][a-z0-9-]{0,63}$",
+              "title": "Name",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/PersistedStoreEnvelope-Input"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/OkResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Write Store",
+        "tags": [
+          "stores"
+        ]
+      }
+    },
+    "/api/tasks": {
+      "get": {
+        "description": "Latest event of every known background task.",
+        "operationId": "get_tasks_api_tasks_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TaskSnapshot"
+                }
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "summary": "Get Tasks",
+        "tags": [
+          "tasks"
+        ]
+      }
+    },
+    "/api/trash/{output_id}/restore": {
+      "post": {
+        "description": "Move a trashed output back into the output folder (undo of delete).",
+        "operationId": "restore_output_api_trash__output_id__restore_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "output_id",
+            "required": true,
+            "schema": {
+              "pattern": "^\\d{10}$",
+              "title": "Output Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/OkResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "404": {
+            "description": "Not in trash"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Restore Output",
+        "tags": [
+          "outputs"
+        ]
+      }
+    }
+  }
+}

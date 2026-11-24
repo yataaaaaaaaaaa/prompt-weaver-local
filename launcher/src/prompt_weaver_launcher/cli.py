@@ -1,17 +1,27 @@
 from __future__ import annotations
 
+import json
+from pathlib import Path
+
 from devlauncher import LauncherApp, http_ready, open_browser, repo_root, require, service
 
-BACKEND_HEALTH_URL = "http://{host}:{backend_port}/api/health"
+REPO_ROOT = Path(__file__).resolve().parents[3]
+# Single source of the dev host/ports (also read by backend/run_backend.py and config/appConfig.cjs).
+SHARED_CONFIG = json.loads((REPO_ROOT / "config" / "defaults.json").read_text(encoding="utf-8"))
+
+BACKEND_URL = "http://{host}:{backend_port}"
+BACKEND_HEALTH_URL = BACKEND_URL + "/api/health"
 FRONTEND_URL = "http://{host}:{frontend_port}"
+# Read by config/appConfig.cjs (Vite define + Electron) so --host/--backend-port reach the UI.
+BACKEND_URL_ENV = {"PROMPT_WEAVER_BACKEND_URL": BACKEND_URL}
 
 app = LauncherApp(
     name="prompt-weaver-local",
-    root=repo_root(markers=["backend/pyproject.toml", "frontend/package.json"]),
+    root=repo_root(markers=["backend/pyproject.toml", "frontend/package.json"], start=REPO_ROOT),
     defaults={
-        "host": "127.0.0.1",
-        "backend_port": 8000,
-        "frontend_port": 5173,
+        "host": SHARED_CONFIG["host"],
+        "backend_port": SHARED_CONFIG["backendPort"],
+        "frontend_port": SHARED_CONFIG["frontendPort"],
     },
     services=(
         service(
@@ -38,6 +48,7 @@ app = LauncherApp(
                 "{frontend_port}",
             ],
             cwd="frontend",
+            env=BACKEND_URL_ENV,
             requires=(
                 require.tool("npm"),
                 require.file("frontend/package.json"),
@@ -51,7 +62,7 @@ app = LauncherApp(
             "electron",
             cmd=["npm", "run", "electron:start"],
             cwd="frontend",
-            env={"VITE_DEV_SERVER_URL": FRONTEND_URL},
+            env={"VITE_DEV_SERVER_URL": FRONTEND_URL, **BACKEND_URL_ENV},
             requires=(
                 require.tool("npm"),
                 require.file("frontend/package.json"),

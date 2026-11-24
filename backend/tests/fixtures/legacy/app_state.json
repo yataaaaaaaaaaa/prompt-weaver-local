@@ -1,0 +1,67 @@
+{
+  "categories": [
+    {
+      "id": "style",
+      "name": "Main",
+      "muted": false,
+      "priority": "1",
+      "activation_text": "",
+      "locked_prompt_id": "style-1",
+      "position": {"x": 24, "y": 24},
+      "size": {"width": 760, "height": 190},
+      "z_index": 210,
+      "prompts": [
+        {"id": "style-1", "text": "masterpiece, best quality, 1girl, \n", "skipped": false, "extra_lora_ids": ["kept-lora", "deleted-lora"]},
+        {"id": "style-2", "text": "<lora:Dramatic Lighting Slider:2>, dramatic lighting", "skipped": true, "extra_lora_ids": []}
+      ]
+    },
+    {
+      "id": "day-moment",
+      "name": "day_moment",
+      "muted": true,
+      "priority": "2",
+      "activation_text": "sunrise",
+      "locked_prompt_id": null,
+      "position": {"x": 400, "y": 860},
+      "size": {"width": 320, "height": 360},
+      "z_index": 51,
+      "prompts": [
+        {"id": "day-moment-1", "text": "sunrise, golden, warm glow", "skipped": false, "extra_lora_ids": ["deleted-lora"]}
+      ]
+    }
+  ],
+  "forbidden_rules": [
+    {
+      "left": {"kind": "specific", "category_name": "Main", "prompt_text": "masterpiece, best quality, 1girl,", "contains_text": null},
+      "right": {"kind": "contains", "category_name": null, "prompt_text": null, "contains_text": "sunrise"}
+    }
+  ],
+  "last_model_id": "example-model-safetensors",
+  "last_lora_ids": ["deleted-lora", "kept-lora"],
+  "last_model_dir": "C:\\models\\checkpoints",
+  "last_lora_dir": "C:\\models\\loras",
+  "width": 896,
+  "height": 1344,
+  "steps": 30,
+  "guidance_scale": 7.0,
+  "prompt_seed": 290912999,
+  "seed": 718043937,
+  "seed_mode": "manual",
+  "seed_advance_mode": "keep",
+  "prompt_seed_behavior": "randomize",
+  "image_seed_behavior": "increment",
+  "negative_prompt": "worst quality, low quality",
+  "workspace": {
+    "image": {"x": 420, "y": 8, "width": 542, "height": 928, "z_index": 228},
+    "controls": {"x": 43, "y": 34, "width": 359, "height": 752, "z_index": 230},
+    "details": {"x": 1068, "y": 47, "width": 607, "height": 775, "z_index": 217}
+  },
+  "editor": {
+    "overlays_hidden": false,
+    "visibility_mode": "all",
+    "selected_category_id": null,
+    "selected_prompt_id": null,
+    "editing_target": {"kind": "none", "category_id": null, "prompt_id": null}
+  },
+  "last_output_id": "0000000002"
+}

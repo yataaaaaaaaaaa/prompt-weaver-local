@@ -68,3 +68,5 @@ desktop.ini
 backend/data/
 output/
 trash/
+# pytest temp dirs
+.pytest-tmp/

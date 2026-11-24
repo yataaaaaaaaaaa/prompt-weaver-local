@@ -1,0 +1,15 @@
+{
+  "models": [
+    {
+      "id": "example-model-safetensors",
+      "name": "ExampleModel_v50.safetensors",
+      "path": "C:\\models\\checkpoints\\ExampleModel_v50.safetensors",
+      "default_width": 1024,
+      "default_height": 1024,
+      "torch_dtype": "float16"
+    }
+  ],
+  "loras": [
+    {"id": "kept-lora", "name": "kept-lora", "path": "C:\\models\\loras\\kept-lora.safetensors"}
+  ]
+}

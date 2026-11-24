@@ -5,11 +5,14 @@ from typing import Sequence
 
 import uvicorn
 
+from app.settings import load_shared_config
+
 
 def parse_args(argv: Sequence[str] | None = None) -> argparse.Namespace:
+    shared = load_shared_config()
     parser = argparse.ArgumentParser(description="Run the Prompt Weaver Local backend.")
-    parser.add_argument("--host", default="127.0.0.1")
-    parser.add_argument("--port", type=int, default=8000)
+    parser.add_argument("--host", default=shared.host)
+    parser.add_argument("--port", type=int, default=shared.backendPort)
     return parser.parse_args(argv)
 
 
