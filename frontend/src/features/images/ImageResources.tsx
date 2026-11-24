@@ -19,38 +19,21 @@ import {
 	Spinner,
 	tokens,
 	Tooltip,
-	type BadgeProps,
 } from '@fluentui/react-components';
-import {
-	ArrowClockwiseRegular,
-	ArrowDownloadRegular,
-	ArrowSyncRegular,
-	CheckmarkCircleRegular,
-	CloudArrowDownRegular,
-	ErrorCircleRegular,
-	HardDriveRegular,
-	QuestionCircleRegular,
-	WarningRegular,
-	type FluentIcon,
-} from '@fluentui/react-icons';
+import { ArrowClockwiseRegular, ArrowSyncRegular, CheckmarkCircleRegular, QuestionCircleRegular } from '@fluentui/react-icons';
 import type { ImageResourceRow, ImageResourceStatusKind } from '../../domain/imageLibrary';
-import { formatLoraWeight } from '../../domain/loraSelection';
+import { formatWeight } from '../../domain/text';
 import { useImageCheckpointRow, useImageLibraryStore, useImageLoraRows } from '../../stores/imageLibraryStore';
 import { useModelCatalogStore } from '../../stores/modelCatalogStore';
 import { useDownloadProgress } from '../../stores/tasksStore';
 import { PaneSection } from '../../ui/PaneLayout';
 import { InstallProgress } from '../models/InstallProgress';
+import { StatusBadge, VERSION_STATUS_BADGES, type StatusBadgeLook } from '../models/VersionStatusBadge';
 
-type StatusBadge = { label: string; color: NonNullable<BadgeProps['color']>; icon: FluentIcon };
-
-/** Badge of every resource status (exhaustive: the type-check fails when a status is added). */
-const STATUS_BADGES: Record<ImageResourceStatusKind, StatusBadge> = {
-	in_library: { label: 'In library', color: 'success', icon: CheckmarkCircleRegular },
-	on_disk: { label: 'On disk', color: 'success', icon: HardDriveRegular },
-	remote: { label: 'Available to download', color: 'informative', icon: CloudArrowDownRegular },
-	installing: { label: 'Downloading', color: 'brand', icon: ArrowDownloadRegular },
-	failed: { label: 'Failed', color: 'danger', icon: ErrorCircleRegular },
-	unavailable: { label: 'Not supported', color: 'warning', icon: WarningRegular },
+/** Badge of every resource status (exhaustive: the type-check fails when a status is added): the shared version
+ *  statuses (VERSION_STATUS_BADGES) plus the resolution states of the image library. */
+const STATUS_BADGES: Record<ImageResourceStatusKind, StatusBadgeLook> = {
+	...VERSION_STATUS_BADGES,
 	unresolved: { label: 'Not identified', color: 'subtle', icon: QuestionCircleRegular },
 	resolving: { label: 'Resolving', color: 'informative', icon: ArrowSyncRegular },
 };
@@ -113,18 +96,13 @@ const useStyles = makeStyles({
 
 function ResourceStatus({ row }: { row: ImageResourceRow }): JSX.Element {
 	const styles = useStyles();
-	const { label, color, icon: Icon } = STATUS_BADGES[row.status];
 	const badge = (
-		<Badge
-			appearance="tint"
-			color={color}
-			icon={<Icon />}
+		<StatusBadge
+			look={STATUS_BADGES[row.status]}
 			// Focusable when it has a reason, so the tooltip also opens from the keyboard.
 			tabIndex={row.reason ? 0 : undefined}
 			className={row.reason ? styles.focusableBadge : undefined}
-		>
-			{label}
-		</Badge>
+		/>
 	);
 	return row.reason ? (
 		<Tooltip content={row.reason} relationship="description">
@@ -165,7 +143,7 @@ function LoraRow({ row }: { row: ImageResourceRow }): JSX.Element {
 				<span className={styles.badges}>
 					{row.weight !== null ? (
 						<Badge appearance="outline" color={row.weightPublished ? 'brand' : 'subtle'}>
-							{row.weightPublished ? `Weight ${formatLoraWeight(row.weight)}` : `Weight ${formatLoraWeight(row.weight)} (unpublished, default)`}
+							{row.weightPublished ? `Weight ${formatWeight(row.weight)}` : `Weight ${formatWeight(row.weight)} (unpublished, default)`}
 						</Badge>
 					) : null}
 					<ResourceStatus row={row} />

@@ -1,5 +1,6 @@
 // Output browser: first/previous/next/last/delete, generation progress and the metadata of the output
-// being viewed. Thin view over the outputs store.
+// being viewed (with its character), Copy prompt and Create character (prefilled from the output). Thin view over the
+// outputs store and the characters store.
 import {
 	Body1,
 	Button,
@@ -11,11 +12,21 @@ import {
 	tokens,
 	Tooltip,
 } from '@fluentui/react-components';
-import { ArrowNextRegular, ArrowPreviousRegular, ChevronLeftRegular, ChevronRightRegular, CopyRegular, DeleteRegular } from '@fluentui/react-icons';
+import {
+	ArrowNextRegular,
+	ArrowPreviousRegular,
+	ChevronLeftRegular,
+	ChevronRightRegular,
+	CopyRegular,
+	DeleteRegular,
+	PersonAddRegular,
+} from '@fluentui/react-icons';
 import type { ReactElement } from 'react';
 import { useShallow } from 'zustand/react/shallow';
 import type { AppCommand } from '../../app/commands';
 import { weightedLorasText } from '../../domain/loraSelection';
+import { outputCharacterText } from '../../domain/outputs';
+import { useCharactersStore } from '../../stores/charactersStore';
 import { selectNavigation, useCurrentOutputDetails, useOutputsStore, type CurrentOutputDetails } from '../../stores/outputsStore';
 import { ariaKeyShortcuts, withShortcut } from '../../ui/keyboard';
 import { PaneContent } from '../../ui/PaneLayout';
@@ -78,6 +89,8 @@ const useStyles = makeStyles({
 	},
 	actions: {
 		display: 'flex',
+		flexWrap: 'wrap',
+		gap: tokens.spacingHorizontalS,
 	},
 });
 
@@ -117,6 +130,9 @@ function DetailsList({ details, position }: { details: CurrentOutputDetails; pos
 		['Model', details.modelName || '—'],
 		['LoRAs', details.loras.length > 0 ? weightedLorasText(details.loras) : 'None'],
 	];
+	if (details.character) {
+		rows.push(['Character', outputCharacterText(details.character)]);
+	}
 	return (
 		<dl className={styles.details} aria-label="Output details">
 			{rows.map(([term, value]) => (
@@ -139,6 +155,7 @@ export function OutputBrowserPane(): JSX.Element {
 	const last = useOutputsStore((state) => state.last);
 	const deleteCurrent = useOutputsStore((state) => state.deleteCurrent);
 	const copyCurrentPrompt = useOutputsStore((state) => state.copyCurrentPrompt);
+	const startCreateFromOutput = useCharactersStore((state) => state.startCreateFromOutput);
 	const details = useCurrentOutputDetails();
 	const hasCurrent = navigation.index >= 0;
 	const position = hasCurrent ? `${navigation.index + 1} / ${navigation.count}` : `— / ${navigation.count}`;
@@ -182,6 +199,11 @@ export function OutputBrowserPane(): JSX.Element {
 				<Button icon={<CopyRegular />} disabled={!details?.prompt} onClick={() => void copyCurrentPrompt()}>
 					Copy prompt
 				</Button>
+				<Tooltip content="New character prefilled with this output's tags, LoRAs and seed; its image becomes the reference" relationship="description">
+					<Button icon={<PersonAddRegular />} disabled={!details} onClick={() => startCreateFromOutput()}>
+						Create character
+					</Button>
+				</Tooltip>
 			</div>
 		</PaneContent>
 	);

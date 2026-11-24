@@ -1,13 +1,11 @@
 // LoRA library list: default selection checkboxes with the weight of each selected LoRA, prompt links (sub-prompt
 // extraLoraIds), removal. Rows and summary are derived by the library store (useLoraRows / useLoraSummary).
-import { Badge, Body1, Button, Caption1, Checkbox, makeStyles, SpinButton, tokens, Tooltip } from '@fluentui/react-components';
+import { Badge, Body1, Button, Caption1, Checkbox, makeStyles, tokens, Tooltip } from '@fluentui/react-components';
 import { Delete20Regular, DocumentAdd20Regular, Eraser20Regular, FolderAdd20Regular, LinkDismiss20Regular } from '@fluentui/react-icons';
-import { LORA_WEIGHT_DEFAULTS } from '../../api/defaults.gen';
-import { formatLoraWeight } from '../../domain/loraSelection';
 import { useCategoriesStore } from '../../stores/categoriesStore';
 import { selectSelectedLoras, useLibraryStore, useLoraRows, useLoraSummary, type LoraRow } from '../../stores/libraryStore';
 import { PaneSection } from '../../ui/PaneLayout';
-import { spinButtonValue } from '../../ui/spinButtonValue';
+import { LoraWeightField } from './LoraWeightField';
 
 const useStyles = makeStyles({
 	list: {
@@ -33,49 +31,16 @@ const useStyles = makeStyles({
 		minWidth: 0,
 		overflowWrap: 'anywhere',
 	},
-	weight: {
-		flexShrink: 0,
-	},
 	muted: {
 		color: tokens.colorNeutralForeground3,
 	},
 });
 
-/** Characters shown by the weight field (e.g. '-9.95'): sizes the input without a hard-coded width. */
-const WEIGHT_INPUT_CHARS = 5;
-
-type LoraWeightInputProps = { loraId: string; loraName: string; weight: number };
-
-/** Weight of a selected LoRA: steppers/arrow keys move by LORA_WEIGHT_DEFAULTS.step, typed values are committed on
- *  Enter/blur; the store clamps to the accepted range. */
-function LoraWeightInput({ loraId, loraName, weight }: LoraWeightInputProps): JSX.Element {
-	const styles = useStyles();
-	const setLoraWeight = useLibraryStore((state) => state.setLoraWeight);
-	return (
-		<SpinButton
-			className={styles.weight}
-			size="small"
-			value={weight}
-			displayValue={formatLoraWeight(weight)}
-			min={LORA_WEIGHT_DEFAULTS.min}
-			max={LORA_WEIGHT_DEFAULTS.max}
-			step={LORA_WEIGHT_DEFAULTS.step}
-			aria-label={`Weight of ${loraName}`}
-			input={{ size: WEIGHT_INPUT_CHARS }}
-			onChange={(_event, data) => {
-				const next = spinButtonValue(data);
-				if (next !== null) {
-					setLoraWeight(loraId, next);
-				}
-			}}
-		/>
-	);
-}
-
 function LoraListRow({ row }: { row: LoraRow }): JSX.Element {
 	const styles = useStyles();
 	const setLoraSelected = useLibraryStore((state) => state.setLoraSelected);
 	const removeLora = useLibraryStore((state) => state.removeLora);
+	const setLoraWeight = useLibraryStore((state) => state.setLoraWeight);
 	const unlinkLora = useCategoriesStore((state) => state.unlinkLora);
 	const { lora, selected, weight, promptLinked } = row;
 	const unlinkLabel = `Remove prompt links to ${lora.name}`;
@@ -99,7 +64,7 @@ function LoraListRow({ row }: { row: LoraRow }): JSX.Element {
 					</Tooltip>
 				</>
 			) : null}
-			{weight !== null ? <LoraWeightInput loraId={lora.id} loraName={lora.name} weight={weight} /> : null}
+			{weight !== null ? <LoraWeightField value={weight} name={lora.name} onCommit={(next) => setLoraWeight(lora.id, next)} /> : null}
 			<Tooltip content={removeLabel} relationship="label">
 				<Button appearance="subtle" size="small" icon={<Delete20Regular />} aria-label={removeLabel} onClick={() => removeLora(lora.id)} />
 			</Tooltip>

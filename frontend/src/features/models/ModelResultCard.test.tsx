@@ -66,19 +66,21 @@ describe('ModelResultCard', () => {
 		const actions = seedActions();
 		const { user } = renderWithProviders(<ModelResultCard model={MODEL} />);
 
-		expect(screen.queryByText('Local')).not.toBeInTheDocument();
+		// No status badge for a remote version: the card offers 'Download and use'.
+		expect(screen.queryByText('On disk')).not.toBeInTheDocument();
+		expect(screen.queryByText('Available to download')).not.toBeInTheDocument();
 		await user.click(screen.getByRole('button', { name: 'Download and use' }));
 
 		expect(actions.install).toHaveBeenCalledWith(MODEL, VERSION);
 		expect(vi.mocked(useVersionStatus)).toHaveBeenLastCalledWith(MODEL, VERSION);
 	});
 
-	it('on_disk: shows Local and uses the local copy', async () => {
+	it('on_disk: shows On disk (the shared status label) and uses the local copy', async () => {
 		const actions = seedActions();
 		withStatus(() => ({ kind: 'on_disk' }));
 		const { user } = renderWithProviders(<ModelResultCard model={MODEL} />);
 
-		expect(screen.getByText('Local')).toBeInTheDocument();
+		expect(screen.getByText('On disk')).toBeInTheDocument();
 		expect(screen.queryByRole('button', { name: 'Download and use' })).not.toBeInTheDocument();
 		await user.click(screen.getByRole('button', { name: 'Use' }));
 

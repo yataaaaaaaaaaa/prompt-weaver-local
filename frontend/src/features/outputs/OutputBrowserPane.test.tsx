@@ -1,6 +1,8 @@
 import { screen, within } from '@testing-library/react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { useCharactersStore } from '../../stores/charactersStore';
 import { useCurrentOutputDetails, useOutputsStore, type CurrentOutputDetails } from '../../stores/outputsStore';
+import { outputCharacter } from '../../test/characterData';
 import { renderWithProviders } from '../../test/render';
 import { OutputBrowserPane } from './OutputBrowserPane';
 
@@ -28,6 +30,7 @@ const DETAILS: CurrentOutputDetails = {
 	],
 	prompt: '1girl, red hair',
 	negativePrompt: 'lowres',
+	character: null,
 };
 
 function stubActions() {
@@ -141,5 +144,40 @@ describe('OutputBrowserPane details', () => {
 		useOutputsStore.setState({ ids: ['0000000002'], currentId: '0000000002', loadingRecord: true });
 		renderWithProviders(<OutputBrowserPane />);
 		expect(screen.getByText('Loading output details…')).toBeInTheDocument();
+	});
+});
+
+describe('OutputBrowserPane characters', () => {
+	it('creates a character from the current output', async () => {
+		const startCreateFromOutput = vi.fn();
+		useCharactersStore.setState({ startCreateFromOutput });
+		useOutputsStore.setState({ ids: ['0000000002'], currentId: '0000000002' });
+		vi.mocked(useCurrentOutputDetails).mockReturnValue(DETAILS);
+		const { user } = renderWithProviders(<OutputBrowserPane />);
+
+		await user.click(button('Create character'));
+
+		expect(startCreateFromOutput).toHaveBeenCalledTimes(1);
+	});
+
+	it('disables Create character without an output', () => {
+		useOutputsStore.setState({ ids: [], currentId: null });
+		renderWithProviders(<OutputBrowserPane />);
+
+		expect(button('Create character')).toBeDisabled();
+	});
+
+	it("shows the output's character and how its references were used", () => {
+		useOutputsStore.setState({ ids: ['0000000002'], currentId: '0000000002' });
+		vi.mocked(useCurrentOutputDetails).mockReturnValue({ ...DETAILS, character: outputCharacter() });
+		const { unmount } = renderWithProviders(<OutputBrowserPane />);
+
+		const list = within(screen.getByLabelText('Output details'));
+		expect(list.getByText('Character').nextElementSibling).toHaveTextContent('Alice · references applied (strength 0.6, 1 image)');
+		unmount();
+
+		vi.mocked(useCurrentOutputDetails).mockReturnValue(DETAILS);
+		renderWithProviders(<OutputBrowserPane />);
+		expect(within(screen.getByLabelText('Output details')).queryByText('Character')).not.toBeInTheDocument();
 	});
 });

@@ -4,6 +4,7 @@ import { categoryKeyOf, makeCategory } from '../../domain/categories';
 import { imageKey, type ImageResourceRow } from '../../domain/imageLibrary';
 import { installKey } from '../../domain/modelCatalog';
 import { useCategoriesStore } from '../../stores/categoriesStore';
+import { useCharactersStore } from '../../stores/charactersStore';
 import { useImageCheckpointRow, useImageLibraryStore, useImageLoraRows, useImageTags } from '../../stores/imageLibraryStore';
 import { useModelCatalogStore } from '../../stores/modelCatalogStore';
 import { useDownloadProgress } from '../../stores/tasksStore';
@@ -181,6 +182,32 @@ describe('ImageDetail overview', () => {
 		useImageLibraryStore.setState({ results: [bare] });
 		renderDetail(imageKey(bare));
 		expect(screen.getByRole('button', { name: 'Copy prompt' })).toBeDisabled();
+	});
+
+	it('creates a character from the image', async () => {
+		seedActions();
+		const startCreateFromImage = vi.fn(async () => undefined);
+		useCharactersStore.setState({ startCreateFromImage });
+		const { user } = renderDetail();
+
+		await user.click(screen.getByRole('button', { name: 'Create character' }));
+
+		expect(startCreateFromImage).toHaveBeenCalledWith(KEY);
+	});
+
+	it('disables Create character while this image prepares it', () => {
+		seedActions();
+		useCharactersStore.setState({ preparingImageKey: KEY });
+		const { unmount } = renderDetail();
+
+		const create = screen.getByRole('button', { name: 'Create character' });
+		expect(create).toBeDisabled();
+		expect(within(create).getByRole('progressbar')).toBeInTheDocument();
+		unmount();
+
+		useCharactersStore.setState({ preparingImageKey: 'civitai:other' });
+		renderDetail();
+		expect(screen.getByRole('button', { name: 'Create character' })).toBeEnabled();
 	});
 
 	it('links to the image page in a new browser window', () => {

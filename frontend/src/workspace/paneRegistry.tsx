@@ -1,6 +1,6 @@
 // Pane registry: the ONE place where workspace panes are declared. The workspace shell renders a
-// FloatingPane per entry and the toolbar lists them (show/hide). Future panes (e.g. Characters) plug in by
-// adding an entry here (their store first, then the view).
+// FloatingPane per entry and the toolbar lists them (show/hide). New panes plug in by adding an entry here (their
+// store first, then the view).
 import type { FluentIcon } from '@fluentui/react-icons';
 import {
 	ImageMultipleRegular,
@@ -8,16 +8,19 @@ import {
 	ImageSearchRegular,
 	LibraryRegular,
 	OptionsRegular,
+	PeopleRegular,
 	TextBulletListSquareRegular,
 } from '@fluentui/react-icons';
 import type { ComponentType } from 'react';
 import type { Rect } from '../domain/layout';
+import { CharactersPane } from '../features/characters/CharactersPane';
 import { UsedSelectionsPane } from '../features/forbidden/UsedSelectionsPane';
 import { ControlsPane } from '../features/generation/ControlsPane';
 import { ImageLibraryPane } from '../features/images/ImageLibraryPane';
 import { ModelLibraryPane } from '../features/models/ModelLibraryPane';
 import { ImagePane } from '../features/outputs/ImagePane';
 import { OutputBrowserPane } from '../features/outputs/OutputBrowserPane';
+import { CHARACTERS_PANE_ID } from '../stores/charactersStore';
 
 export type PaneDefinition = {
 	/** Stable id; the window key is paneWindowKey(id) ('pane:<id>'). Never rename: layouts are persisted. */
@@ -77,5 +80,14 @@ export const PANES: readonly PaneDefinition[] = [
 		minWidth: 420,
 		minHeight: 360,
 		component: ImageLibraryPane,
+	},
+	{
+		id: CHARACTERS_PANE_ID,
+		title: 'Characters',
+		icon: PeopleRegular,
+		defaultLayout: { x: 300, y: 80, width: 760, height: 780 },
+		minWidth: 420,
+		minHeight: 360,
+		component: CharactersPane,
 	},
 ];

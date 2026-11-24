@@ -1,7 +1,8 @@
 // Detail view of the image picked in the image library (selectImage of the store): Back (also Escape), large
-// preview, author and base model, Favorite / Copy prompt / provider page link, then its tags, LoRAs, checkpoint and
-// generation parameters. Thin view: every action is an image library store action. The pane renders it keyed by
-// the image, and moves the focus to Back when it opens.
+// preview, author and base model, Favorite / Copy prompt / Create character / provider page link, then its tags, LoRAs,
+// checkpoint and generation parameters. Thin view: every action is an image library store action, except Create
+// character (characters store startCreateFromImage). The pane renders it keyed by the image, and moves the focus to
+// Back when it opens.
 import {
 	Badge,
 	Body1,
@@ -12,14 +13,17 @@ import {
 	Link,
 	makeStyles,
 	mergeClasses,
+	Spinner,
 	Subtitle2,
 	tokens,
 	ToggleButton,
+	Tooltip,
 	useId,
 } from '@fluentui/react-components';
-import { ArrowLeftRegular, CopyRegular, OpenRegular, StarFilled, StarRegular } from '@fluentui/react-icons';
+import { ArrowLeftRegular, CopyRegular, OpenRegular, PersonAddRegular, StarFilled, StarRegular } from '@fluentui/react-icons';
 import { useEffect, useRef, type KeyboardEvent } from 'react';
 import type { ImageGenerationParams, RemoteImage } from '../../api/types';
+import { useCharactersStore } from '../../stores/charactersStore';
 import { selectImage, selectIsFavorite, useImageLibraryStore } from '../../stores/imageLibraryStore';
 import { PaneGrid, PaneSection } from '../../ui/PaneLayout';
 import { imageLabel, siteName } from './imageLabels';
@@ -133,6 +137,23 @@ function FavoriteButton({ imageKey }: { imageKey: string }): JSX.Element {
 	);
 }
 
+/** "Create character" from this image (tags, LoRAs, seed, the image as reference); busy while its LoRAs are collected. */
+function CreateCharacterButton({ imageKey }: { imageKey: string }): JSX.Element {
+	const preparing = useCharactersStore((state) => state.preparingImageKey === imageKey);
+	const startCreateFromImage = useCharactersStore((state) => state.startCreateFromImage);
+	return (
+		<Tooltip content="New character prefilled with this image's tags, LoRAs and seed; the image becomes its reference" relationship="description">
+			<Button
+				icon={preparing ? <Spinner size="tiny" /> : <PersonAddRegular />}
+				disabled={preparing}
+				onClick={() => void startCreateFromImage(imageKey)}
+			>
+				Create character
+			</Button>
+		</Tooltip>
+	);
+}
+
 function Overview({ image, imageKey }: { image: RemoteImage; imageKey: string }): JSX.Element {
 	const styles = useStyles();
 	const copyPrompt = useImageLibraryStore((state) => state.copyPrompt);
@@ -172,6 +193,7 @@ function Overview({ image, imageKey }: { image: RemoteImage; imageKey: string })
 					<Button icon={<CopyRegular />} disabled={!image.params?.prompt} onClick={() => void copyPrompt(imageKey)}>
 						Copy prompt
 					</Button>
+					<CreateCharacterButton imageKey={imageKey} />
 				</div>
 				<Link className={styles.link} href={image.page_url} target="_blank" rel="noopener noreferrer">
 					Open on {siteName(image.page_url)}

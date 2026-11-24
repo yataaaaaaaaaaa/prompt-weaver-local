@@ -2,12 +2,15 @@ import { act, screen, within } from '@testing-library/react';
 import { describe, expect, it, vi } from 'vitest';
 import type { ModelSpec, OutputRecord } from '../../api/types';
 import { useCategoriesStore } from '../../stores/categoriesStore';
+import { useCharactersStore } from '../../stores/charactersStore';
 import { useGenerationSettingsStore, type GenerationSettingsState } from '../../stores/generationSettingsStore';
 import { useGenerationStore } from '../../stores/generationStore';
 import { useLibraryStore } from '../../stores/libraryStore';
 import { useOutputsStore } from '../../stores/outputsStore';
 import { useSessionStore } from '../../stores/sessionStore';
+import { ALICE_ID, BOB, character } from '../../test/characterData';
 import { renderWithProviders } from '../../test/render';
+import { seedCharacterActions, seedIpAdapterActions } from '../../test/characterStores';
 import { ControlsPane } from './ControlsPane';
 
 const MODEL: ModelSpec = { id: 'm1', name: 'Model One', path: 'C:/models/one.safetensors', default_width: 1024, default_height: 1024, torch_dtype: 'float16', source: null };
@@ -240,6 +243,36 @@ describe('ControlsPane - settings', () => {
 	});
 });
 
+describe('ControlsPane - character', () => {
+	it('offers to activate or create a character when none is active', async () => {
+		seedGeneration();
+		const actions = seedCharacterActions();
+		useCharactersStore.setState({ loadStatus: 'ready', characters: [character(), BOB] });
+		const { user } = renderWithProviders(<ControlsPane />);
+
+		const headings = screen.getAllByRole('heading').map((heading) => heading.textContent);
+		expect(headings.indexOf('Character')).toBe(1);
+		await user.click(screen.getByRole('combobox', { name: 'Active character' }));
+		await user.click(screen.getByRole('option', { name: 'Alice' }));
+		expect(actions.setActive).toHaveBeenCalledWith(ALICE_ID);
+		await user.click(screen.getByRole('button', { name: 'New character' }));
+		expect(actions.startCreate).toHaveBeenCalledTimes(1);
+	});
+
+	it('shows the active character with Deactivate and its reference strength', async () => {
+		seedGeneration();
+		const actions = seedCharacterActions();
+		seedIpAdapterActions();
+		useCharactersStore.setState({ loadStatus: 'ready', characters: [character(), BOB], activeId: ALICE_ID });
+		const { user } = renderWithProviders(<ControlsPane />);
+
+		expect(screen.getByText('Alice')).toBeInTheDocument();
+		expect(screen.getByRole('slider', { name: 'Reference strength' })).toBeInTheDocument();
+		await user.click(screen.getByRole('button', { name: 'Deactivate' }));
+		expect(actions.toggleActive).toHaveBeenCalledWith(ALICE_ID);
+	});
+});
+
 describe('ControlsPane - accessibility', () => {
 	it('names every button and labels every field', () => {
 		seedGeneration();
@@ -252,5 +285,6 @@ describe('ControlsPane - accessibility', () => {
 		}
 		expect(screen.getByRole('heading', { name: 'Model' })).toBeInTheDocument();
 		expect(screen.getByRole('heading', { name: 'LoRAs' })).toBeInTheDocument();
+		expect(screen.getByRole('heading', { name: 'Character' })).toBeInTheDocument();
 	});
 });

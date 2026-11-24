@@ -3,6 +3,7 @@
 // Thin view over the catalog store (usePickedVersion, useVersionStatus, pickVersion) and the library store
 // (selection state of the matching library entry).
 import { Badge, Caption1, Dropdown, Field, makeStyles, Option, tokens } from '@fluentui/react-components';
+import { CheckmarkCircleRegular } from '@fluentui/react-icons';
 import type { RemoteModel, RemoteModelVersion } from '../../api/types';
 import { MODEL_KIND_LABELS, modelKey } from '../../domain/modelCatalog';
 import { selectIsEntrySelected, useLibraryStore } from '../../stores/libraryStore';
@@ -11,6 +12,7 @@ import { formatBytes } from './format';
 import { InstallAction } from './InstallAction';
 import { ModelEntryCard } from './ModelEntryCard';
 import { TriggerWords } from './TriggerWords';
+import { VersionStatusBadge } from './VersionStatusBadge';
 
 const useStyles = makeStyles({
 	versionRow: {
@@ -42,42 +44,21 @@ function creatorText(model: RemoteModel): string | null {
 	return model.creator ? `by ${model.creator}` : null;
 }
 
-function StatusBadge({ model, status }: { model: RemoteModel; status: VersionStatus }): JSX.Element | null {
+/** The shared VersionStatusBadge, except: no badge for 'remote' (the card offers 'Download and use'), and 'Selected'
+ *  for a library entry selected for generation. */
+function ResultStatusBadge({ model, status }: { model: RemoteModel; status: VersionStatus }): JSX.Element | null {
 	const selected = useLibraryStore(selectIsEntrySelected(model.kind, status.libraryEntryId));
-	switch (status.kind) {
-		case 'remote':
-			return null;
-		case 'on_disk':
-			return (
-				<Badge appearance="tint" color="success">
-					Local
-				</Badge>
-			);
-		case 'in_library':
-			return (
-				<Badge appearance={selected ? 'filled' : 'tint'} color={selected ? 'brand' : 'success'}>
-					{selected ? 'Selected' : 'In library'}
-				</Badge>
-			);
-		case 'installing':
-			return (
-				<Badge appearance="tint" color="informative">
-					Downloading
-				</Badge>
-			);
-		case 'failed':
-			return (
-				<Badge appearance="tint" color="danger">
-					Failed
-				</Badge>
-			);
-		case 'unavailable':
-			return (
-				<Badge appearance="tint" color="warning">
-					Not supported
-				</Badge>
-			);
+	if (status.kind === 'remote') {
+		return null;
 	}
+	if (status.kind === 'in_library' && selected) {
+		return (
+			<Badge appearance="filled" color="brand" icon={<CheckmarkCircleRegular />}>
+				Selected
+			</Badge>
+		);
+	}
+	return <VersionStatusBadge kind={status.kind} />;
 }
 
 function VersionPicker({ model, version }: { model: RemoteModel; version: RemoteModelVersion }): JSX.Element {
@@ -124,7 +105,7 @@ function VersionCard({ model, version }: { model: RemoteModel; version: RemoteMo
 							{version.base_model}
 						</Badge>
 					) : null}
-					<StatusBadge model={model} status={status} />
+					<ResultStatusBadge model={model} status={status} />
 				</>
 			}
 		>
