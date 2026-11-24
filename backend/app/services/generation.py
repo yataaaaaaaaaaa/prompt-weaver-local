@@ -83,8 +83,7 @@ class GenerationService:
         """Publish generation task events (loading_model, sampling steps, saving, complete | error | cancelled),
         save the output and return its record. Raises GenerationFailed / GenerationCancelledError."""
         model = request.model
-        requested_lora_ids = [spec.id for spec in request.loras]
-        _log_preflight(request, requested_lora_ids)
+        _log_preflight(request)
 
         self._publish("loading_model", f"Loading model and LoRAs for {model.name}")
         try:
@@ -128,7 +127,7 @@ class GenerationService:
                         "steps": request.steps,
                         "guidance_scale": request.guidance_scale,
                         "model_id": model.id,
-                        "active_lora_ids": requested_lora_ids,
+                        "active_loras": [{"id": spec.id, "weight": spec.weight} for spec in request.loras],
                         "selections": [selection.model_dump(mode="json") for selection in request.selections],
                     },
                 )
@@ -172,12 +171,13 @@ class GenerationService:
         self._tasks.publish(GenerationTaskEvent(stage=stage, message=message, current=current, total=total))
 
 
-def _log_preflight(request: GenerateRequest, requested_lora_ids: list[str]) -> None:
+def _log_preflight(request: GenerateRequest) -> None:
+    """Prints and logs what is about to be generated (LoRAs as (id, weight) pairs)."""
     message = (
         "[Prompt Weaver Local] Generation preflight\n"
         f"  prompt={request.prompt!r}\n"
         f"  negative_prompt={request.negative_prompt!r}\n"
-        f"  selected_loras={requested_lora_ids}\n"
+        f"  selected_loras={[(spec.id, spec.weight) for spec in request.loras]}\n"
         f"  model_path={request.model.path!r}\n"
         f"  ksample=width={request.width} height={request.height} steps={request.steps} "
         f"cfg={request.guidance_scale} seed={request.seed}"

@@ -15,7 +15,7 @@ from __future__ import annotations
 from datetime import datetime
 from typing import Annotated, Any, Literal, TypeVar, Union
 
-from pydantic import BaseModel, ConfigDict, Field, SecretStr
+from pydantic import BaseModel, ConfigDict, Field, SecretStr, model_validator
 
 # ---------------------------------------------------------------------------
 # Shared literals
@@ -80,6 +80,24 @@ class GenerationDefaults(ApiModel):
 GENERATION_DEFAULTS = GenerationDefaults()
 
 
+@export_defaults
+class LoraWeightDefaults(ApiModel):
+    """The single definition of per-LoRA weights: the default weight (also used for LoRAs requested without one:
+    selections persisted before weights existed, prompt-linked LoRAs, images that publish no weight), the
+    accepted range and the UI step. Exported to the frontend as LORA_WEIGHT_DEFAULTS."""
+
+    weight: float = 1.0
+    min: float = -10.0
+    max: float = 10.0
+    step: float = 0.05
+
+
+LORA_WEIGHT_DEFAULTS = LoraWeightDefaults()
+
+# A per-LoRA weight (validated against LORA_WEIGHT_DEFAULTS.min/max).
+LoraWeightValue = Annotated[float, Field(ge=LORA_WEIGHT_DEFAULTS.min, le=LORA_WEIGHT_DEFAULTS.max)]
+
+
 # ---------------------------------------------------------------------------
 # Model / LoRA library
 # ---------------------------------------------------------------------------
@@ -106,10 +124,26 @@ class ModelSource(ApiModel):
 
 
 class LoRASpec(ApiModel):
+    """A LoRA library entry (the frontend library store owns the library)."""
+
     id: str
     name: str
     path: str
     source: ModelSource | None = None
+
+
+class LoraWeight(ApiModel):
+    """A LoRA applied with a weight: THE representation of per-LoRA weights, end to end. The frontend library
+    store's selection ('library-store' selectedLoras) holds these, GenerateRequest.loras carries them with the
+    library entry (GenerationLoRA), OutputRecord.active_loras records them, and services/runtime_adapter.py passes
+    the weight to the runtime LoRASpec."""
+
+    id: str = Field(description="LoRA library entry id (LoRASpec.id).")
+    weight: LoraWeightValue = LORA_WEIGHT_DEFAULTS.weight
+
+
+class GenerationLoRA(LoRASpec, LoraWeight):
+    """A library LoRA requested for a generation with its weight (LoRASpec fields + LoraWeight.weight)."""
 
 
 class ModelSpec(ApiModel):
@@ -281,8 +315,29 @@ class OutputRecord(ApiModel):
     model_id: str
     prompt_seed: int | None = None
     image_seed: int | None = None
-    active_lora_ids: list[str] = Field(default_factory=list)
+    active_loras: list[LoraWeight] = Field(
+        default_factory=list,
+        description="LoRAs applied (selected + prompt-linked) with their weights. Files written before per-LoRA "
+        "weights hold `active_lora_ids` instead: they load as weight LORA_WEIGHT_DEFAULTS.weight.",
+    )
     selections: list[GenerationSelection] = Field(default_factory=list)
+
+    @model_validator(mode="before")
+    @classmethod
+    def _migrate_active_lora_ids(cls, data: Any) -> Any:
+        """Legacy output metadata (`active_lora_ids: [id, ...]`, every LoRA applied with the default weight) ->
+        `active_loras`. The legacy key is ignored when `active_loras` is present."""
+        if isinstance(data, dict) and "active_loras" not in data and "active_lora_ids" in data:
+            legacy_ids = data["active_lora_ids"] if isinstance(data["active_lora_ids"], list) else []
+            data = {
+                **data,
+                "active_loras": [
+                    {"id": lora_id, "weight": LORA_WEIGHT_DEFAULTS.weight}
+                    for lora_id in legacy_ids
+                    if isinstance(lora_id, str)
+                ],
+            }
+        return data
 
 
 class OutputIndex(ApiModel):
@@ -298,7 +353,9 @@ class OutputIndex(ApiModel):
 
 class GenerateRequest(ApiModel):
     model: ModelSpec
-    loras: list[LoRASpec] = Field(default_factory=list)
+    loras: list[GenerationLoRA] = Field(
+        default_factory=list, description="Active LoRAs (selected + prompt-linked, unique) with their weights."
+    )
     prompt: str = ""
     selections: list[GenerationSelection] = Field(default_factory=list)
     width: int
@@ -519,6 +576,123 @@ class InstallJob(ApiModel):
     file_id: str
     kind: ModelKind
     title: str = Field(description="Same display name as InstalledModel.name and the download task title.")
+
+
+# ---------------------------------------------------------------------------
+# Image library: online images with their generation data (services/image_library.py)
+# ---------------------------------------------------------------------------
+
+ImageSort = Literal["most_reactions", "most_comments", "most_collected", "newest"]
+ImagePeriod = Literal["day", "week", "month", "year", "all_time"]
+
+
+@export_defaults
+class ImageSearchQuery(ApiModel):
+    """Query parameters of GET /api/images/search.
+
+    Civitai's image API has no free-text filter (it ignores a `query` parameter), so a non-empty `query` is a
+    keyword search through the model catalog: services/image_library.py searches the LoRAs and checkpoints
+    matching the keyword and pages through their image galleries. `period` only applies to the unfiltered feed
+    (an empty `query`): Civitai answers empty or partial pages for a gallery + period."""
+
+    provider: str = "civitai"
+    query: str = ""
+    sort: ImageSort = "most_reactions"
+    period: ImagePeriod = "week"
+    nsfw: bool = Field(default=False, description="False: only images rated safe (Civitai nsfwLevel <= 2).")
+    usable_only: bool = Field(
+        default=True,
+        description="Only images made with a base model the local runtime can load (BaseModelOption.architecture).",
+    )
+    limit: int = Field(default=20, ge=1, le=100)
+    cursor: str | None = Field(default=None, description="ImageSearchPage.next_cursor of the previous page (opaque).")
+
+
+class ImageResource(ApiModel):
+    """A model an image was generated with, as its metadata publishes it (the provider merges its resource lists
+    and the inline <lora:name:weight> tags of the prompt into one entry per model)."""
+
+    kind: ModelKind
+    name: str | None = Field(description="Name written in the image metadata (often the file name without extension).")
+    weight: float | None = Field(description="Published weight (LoRAs); null when the image publishes none.")
+    version_id: str | None = Field(description="Provider model version id, when published.")
+    hash: str | None = Field(
+        description="Published file hash, lowercase hex: a SHA-256 (64) or a short provider hash (Civitai AutoV2 "
+        "10 / AutoV3 12); resolvable with the provider's find_by_hash."
+    )
+
+
+class ImageGenerationParams(ApiModel):
+    """Generation data published with an image (every field null when absent)."""
+
+    prompt: str | None = Field(description="Prompt as published (inline <lora:...> tags included).")
+    clean_prompt: str | None = Field(
+        description="prompt without its inline LoRA tags (diffusion_lora_runtime.prompt_lora.strip_prompt_lora_tags):"
+        " the text the frontend splits into tags."
+    )
+    negative_prompt: str | None
+    sampler: str | None
+    steps: int | None
+    cfg_scale: float | None
+    seed: int | None
+    width: int | None
+    height: int | None
+    clip_skip: int | None
+
+
+class RemoteImage(ApiModel):
+    provider: str
+    id: str
+    url: str = Field(description="Full-size image URL.")
+    thumbnail_url: str = Field(description="Grid-sized image URL.")
+    width: int | None
+    height: int | None
+    nsfw: bool = Field(description="Rated above the safe level (Civitai nsfwLevel > 2).")
+    base_model: str | None
+    architecture: ModelArchitecture | None = Field(
+        description="Local runtime family of base_model; null when it cannot be loaded locally or is unknown."
+    )
+    username: str | None
+    created_at: datetime | None
+    reaction_count: int
+    page_url: str
+    params: ImageGenerationParams | None = Field(description="null when the image publishes no generation data.")
+    resources: list[ImageResource]
+
+
+class ImageSearchPage(ApiModel):
+    items: list[RemoteImage]
+    next_cursor: str | None
+
+
+class ResolveImageResourcesRequest(ApiModel):
+    """Look up the models of an image (RemoteImage.resources) at their provider."""
+
+    provider: str
+    resources: list[ImageResource]
+
+
+class ResolvedImageResource(ApiModel):
+    """One ImageResource looked up at its provider (by version id, else by hash), in request order."""
+
+    resource: ImageResource
+    model: RemoteModel | None = Field(
+        description="The model with versions == [the resolved version] (files carry local_path); null when unresolved."
+    )
+    sha256: str | None = Field(
+        description="SHA-256 of the file the image used when known: the published SHA-256, else the resolved "
+        "version's default file hash."
+    )
+    error: str | None = Field(
+        description="Why it is unresolved: no version id or hash published, unknown at the provider, provider error."
+    )
+
+
+class FavoriteImage(ApiModel):
+    """An image saved to the local favorites collection (<data dir>/image_favorites.json, backend-owned)."""
+
+    image: RemoteImage
+    saved_at: datetime
 
 
 # ---------------------------------------------------------------------------

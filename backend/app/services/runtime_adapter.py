@@ -27,9 +27,6 @@ from .generation import (
     StepCallback,
 )
 
-# Every LoRA gets this weight until the app's LoRASpec carries its own (a later batch owns per-LoRA weights).
-DEFAULT_LORA_WEIGHT = 1.0
-
 _FAILURES = (
     RuntimeError,
     ValueError,
@@ -62,7 +59,7 @@ class RuntimeGenerator:
                 model_id=model.id,
                 model_name=model.name,
                 loras=[
-                    RuntimeLoRASpec(id=spec.id, name=spec.name, path=spec.path, weight=DEFAULT_LORA_WEIGHT)
+                    RuntimeLoRASpec(id=spec.id, name=spec.name, path=spec.path, weight=spec.weight)
                     for spec in request.loras
                 ],
                 ksample=KSampleConfig(
@@ -101,5 +98,5 @@ class RuntimeGenerator:
 
 def create_runtime_generator() -> GeneratorPort:
     """Build the real DiffusionGenerator-backed GeneratorPort (maps runtime exceptions to
-    GenerationFailed / GenerationCancelledError; LoRAs get weight 1.0 for now)."""
+    GenerationFailed / GenerationCancelledError; each LoRA keeps its GenerateRequest weight)."""
     return RuntimeGenerator(DiffusionGenerator())

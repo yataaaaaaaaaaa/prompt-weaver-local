@@ -1,0 +1,82 @@
+{
+  "items": [
+    {
+      "id": 141517526,
+      "url": "https://image.civitai.com/xG1nkqKTMzGDvpLrqFT7WA/fbb2788f-f385-44d9-9f12-84bace341fb6/original=true/fbb2788f-f385-44d9-9f12-84bace341fb6.jpeg",
+      "hash": "UFHKhH000f%M8w?b0yM{00%M?aIU~WIUoz-:",
+      "width": 512,
+      "height": 512,
+      "nsfwLevel": "None",
+      "type": "image",
+      "nsfw": false,
+      "browsingLevel": 1,
+      "createdAt": "2026-09-01T17:08:19.370Z",
+      "postId": 30765343,
+      "thumbnail": null,
+      "stats": {
+        "cryCount": 0,
+        "laughCount": 0,
+        "likeCount": 1,
+        "dislikeCount": 0,
+        "heartCount": 0,
+        "commentCount": 0
+      },
+      "meta": {
+        "id": 141517526,
+        "meta": {
+          "seed": 1714549446,
+          "extra": {},
+          "steps": 30,
+          "width": 512,
+          "height": 512,
+          "prompt": "castlevania style, 1girl, solo, red eyes, long hair, blush, red hair, lips, parody, fur trim, pointy ears, brown hair, looking to the side, looking away , ((masterpiece)) <lora:castlevania_style_offset:1>",
+          "sampler": "Euler a",
+          "cfgScale": 7,
+          "clipSkip": 2,
+          "priority": "low",
+          "quantity": 4,
+          "workflow": "txt2img",
+          "ecosystem": "SD1",
+          "resources": [
+            {
+              "name": "castlevania_style_offset",
+              "type": "lora",
+              "weight": 1
+            }
+          ],
+          "aspectRatio": {
+            "value": "1:1",
+            "width": 512,
+            "height": 512
+          },
+          "Created Date": "2026-09-01T1703:19.9731479Z",
+          "outputFormat": "jpeg",
+          "negativePrompt": "(painting by bad-artist-anime:0.9), (painting by bad-artist:0.9), watermark, text, error, blurry, jpeg artifacts, cropped, worst quality, low quality, normal quality, jpeg artifacts, signature, watermark, username, artist name, (worst quality, low quality:1.4), bad anatomy",
+          "civitaiResources": [
+            {
+              "type": "checkpoint",
+              "weight": 1,
+              "modelVersionId": 2305821
+            },
+            {
+              "type": "lora",
+              "weight": 1,
+              "modelVersionId": 65537
+            }
+          ],
+          "enhancedCompatibility": false
+        }
+      },
+      "username": "blblbl5411",
+      "baseModel": "SD 1.5",
+      "modelVersionIds": [
+        65537,
+        2305821
+      ]
+    }
+  ],
+  "metadata": {
+    "nextCursor": 141517523,
+    "nextPage": "https://civitai.com/api/v1/images?limit=3&nsfw=None&sort=Most%20Reactions&withMeta=true&modelId=61066&cursor=141517523"
+  }
+}

@@ -1,0 +1,24 @@
+{
+  "output_id": "0000000002",
+  "generated_at": "2026-11-24T09:41:07.204518+00:00",
+  "prompt": "masterpiece, best quality, 1girl, film grain",
+  "negative_prompt": "worst quality, low quality",
+  "seed": 718043938,
+  "prompt_seed": 290912999,
+  "image_seed": 718043938,
+  "width": 896,
+  "height": 1344,
+  "steps": 30,
+  "guidance_scale": 7.0,
+  "model_id": "example-model-safetensors",
+  "active_loras": [
+    {"id": "add-detail", "weight": 0.6},
+    {"id": "film-grain", "weight": -1.25}
+  ],
+  "selections": [
+    {"category_name": "Main", "prompt_text": "masterpiece, best quality, 1girl,", "locked": true, "induced_lora_ids": ["film-grain"]},
+    {"category_name": "Style", "prompt_text": "film grain", "locked": false, "induced_lora_ids": []}
+  ],
+  "image_path": "C:\\storage\\output\\0000000002.png",
+  "metadata_path": "C:\\storage\\output\\0000000002.json"
+}

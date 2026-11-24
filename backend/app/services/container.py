@@ -10,12 +10,15 @@ from .downloads import DownloadManager
 from .file_hashes import FileHashCache
 from .generation import GenerationService, GeneratorFactory
 from .http import HttpClientFactory
+from .image_favorites import ImageFavoritesStore
+from .image_library import ImageLibraryService
 from .legacy_state import LegacyStateService
 from .local_models import LocalModelFiles
 from .model_catalog import ModelCatalogService
 from .model_installs import ModelInstallService
-from .model_providers import ModelProviderRegistry
+from .model_providers import ImageProviderRegistry, ModelProviderRegistry
 from .model_providers.civitai import CivitaiProvider
+from .model_providers.civitai_images import CivitaiImageProvider
 from .outputs import OutputRepository
 from .persisted_stores import PersistedStoreRepository
 from .task_hub import TaskHub
@@ -35,6 +38,7 @@ class AppServices:
     downloads: DownloadManager
     catalog: ModelCatalogService
     installs: ModelInstallService
+    images: ImageLibraryService
 
 
 def build_services(
@@ -46,9 +50,12 @@ def build_services(
     outputs = OutputRepository(paths)
     tasks = TaskHub()
     settings = BackendSettingsStore(paths.settings_file)
-    providers = ModelProviderRegistry([CivitaiProvider(client_factory=http_client_factory, settings=settings)])
+    civitai = CivitaiProvider(client_factory=http_client_factory, settings=settings)
+    providers = ModelProviderRegistry([civitai])
+    image_providers = ImageProviderRegistry([CivitaiImageProvider(api=civitai)])
     local_files = LocalModelFiles(paths=paths, hashes=FileHashCache(paths.cache_dir / FILE_HASH_CACHE_NAME))
     downloads = DownloadManager(tasks=tasks, client_factory=http_client_factory)
+    catalog = ModelCatalogService(paths=paths, providers=providers, local_files=local_files, settings=settings)
     return AppServices(
         paths=paths,
         legacy=LegacyStateService(paths),
@@ -63,6 +70,12 @@ def build_services(
         ),
         settings=settings,
         downloads=downloads,
-        catalog=ModelCatalogService(paths=paths, providers=providers, local_files=local_files, settings=settings),
+        catalog=catalog,
         installs=ModelInstallService(providers=providers, local_files=local_files, downloads=downloads),
+        images=ImageLibraryService(
+            model_providers=providers,
+            image_providers=image_providers,
+            catalog=catalog,
+            favorites=ImageFavoritesStore(paths.image_favorites_file),
+        ),
     )

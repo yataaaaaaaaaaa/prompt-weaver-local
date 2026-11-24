@@ -20,6 +20,16 @@ from app.services.model_providers.civitai import (
     CIVITAI_KIND_TYPES,
     CIVITAI_SORTS,
     CivitaiProvider,
+    MalformedPayload,
+    image_page_url,
+    is_nsfw_level,
+    optional_float,
+    optional_id,
+    optional_int,
+    optional_positive_int,
+    page_items,
+    stat_count,
+    thumbnail_url,
 )
 from app.settings import AppPaths
 from support import FakeHttp, load_fixture
@@ -436,6 +446,77 @@ def test_find_by_hash(provider: CivitaiProvider, fake_http: FakeHttp) -> None:
     assert (model.id, model.kind, model.versions[0].id) == ("58390", "lora", "62833")
 
 
+@pytest.mark.parametrize(
+    ("file_hash", "fixture", "expected"),
+    [
+        # AutoV3 of add_detail.safetensors, published by images (resources[].hash, hashes["lora:..."]).
+        ("7c6bad76eb54", "model_version.json", ("58390", "lora", "62833", ADD_DETAIL_SHA256)),
+        # AutoV2 of the ChilloutMix checkpoint ("Model hash").
+        (
+            "fc2511737a",
+            "model_version_checkpoint.json",
+            ("6424", "checkpoint", "11745", "fc2511737a54c5e80b89ab03e0ab4b98d051ab187f92860f3cd664dc9d08b271"),
+        ),
+        ("2dae719f", "model_version.json", ("58390", "lora", "62833", ADD_DETAIL_SHA256)),  # AutoV1
+    ],
+)
+def test_find_by_hash_accepts_short_hashes(
+    provider: CivitaiProvider, fake_http: FakeHttp, file_hash: str, fixture: str, expected: tuple[str, ...]
+) -> None:
+    url = f"{CIVITAI_API_URL}/model-versions/by-hash/{file_hash}"
+    fake_http.add("GET", url, json=load_fixture(f"civitai/{fixture}"))
+
+    model = provider.find_by_hash(file_hash)
+
+    assert len(fake_http.requests_to(url)) == 1
+    (version,) = model.versions
+    assert (model.id, model.kind, version.id, version.files[0].sha256) == expected
+    assert (version.architecture, version.unavailable_reason) == ("sd15", None)
+
+
+def test_find_by_hash_of_a_version_the_runtime_cannot_load(provider: CivitaiProvider, fake_http: FakeHttp) -> None:
+    sha256 = "63f06786527b716e82a7b3a2b8d425548b72d907739087ff36e5e127d906c94f"  # "dfd1 v1" of images_feed.json
+    payload = load_fixture("civitai/model_version_unsupported.json")
+    fake_http.add("GET", f"{CIVITAI_API_URL}/model-versions/by-hash/{sha256}", json=payload)
+
+    model = provider.find_by_hash(sha256)
+
+    (version,) = model.versions
+    assert (model.name, model.kind, version.base_model, version.architecture) == (
+        "df Darkpaint v1",
+        "lora",
+        "Krea 2",
+        None,
+    )
+    assert version.unavailable_reason == "Base model 'Krea 2' is not supported by the local runtime."
+
+
+@pytest.mark.parametrize(
+    "file_hash",
+    ["7C6BAD76EB54", " 7c6bad76eb54", "7c6bad76eb5", "7c6bad76eb54a", "g" * 12, ADD_DETAIL_SHA256 + "0", "../by-hash"],
+)
+def test_find_by_hash_never_requests_an_invalid_hash(
+    provider: CivitaiProvider, fake_http: FakeHttp, file_hash: str
+) -> None:
+    with pytest.raises(ProviderNotFoundError) as raised:
+        provider.find_by_hash(file_hash)
+
+    assert str(raised.value) == f"No Civitai model version has a file with hash {file_hash}."
+    assert fake_http.requests == []
+
+
+def test_unknown_hash_is_not_found(provider: CivitaiProvider, fake_http: FakeHttp) -> None:
+    fake_http.add(
+        "GET",
+        f"{CIVITAI_API_URL}/model-versions/by-hash/1921d0925550",
+        status=404,
+        json=load_fixture("civitai/error_not_found.json"),
+    )
+
+    with pytest.raises(ProviderNotFoundError, match="^No Civitai model version has a file with hash 1921d0925550.$"):
+        provider.find_by_hash("1921d0925550")
+
+
 def test_version_of_an_unsupported_type_is_not_found(provider: CivitaiProvider, fake_http: FakeHttp) -> None:
     payload = load_fixture("civitai/model_version.json")
     payload["model"]["type"] = "VAE"
@@ -598,3 +679,93 @@ def test_repr_never_contains_the_token(provider: CivitaiProvider, settings: Back
     settings.set_token("civitai", TOKEN)
 
     assert TOKEN not in repr(provider)
+
+
+# ---------------------------------------------------------------------------
+# Rules and payload helpers shared with the image gallery (civitai_images.py, civitai_image_meta.py)
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.parametrize(
+    ("level", "nsfw"),
+    [
+        (1, False),  # PG
+        (2, False),  # PG-13
+        (4, True),  # R
+        (8, True),  # X
+        (16, True),  # XXX
+        (0, True),  # unrated
+        (-1, True),
+        (None, True),
+        ("None", True),  # the item's string nsfwLevel is not a level
+        (2.0, True),
+        (True, True),
+    ],
+)
+def test_is_nsfw_level(level: Any, nsfw: bool) -> None:
+    assert is_nsfw_level(level) is nsfw
+
+
+def test_url_builders() -> None:
+    assert image_page_url("149496085") == "https://civitai.com/images/149496085"
+    assert thumbnail_url(f"{IMAGE_HOST}/abc/original=true/1.jpeg") == f"{IMAGE_HOST}/abc/width=450/1.jpeg"
+
+
+REACTIONS = ("likeCount", "heartCount", "laughCount", "cryCount")
+
+
+def test_scalar_helpers() -> None:
+    assert [optional_id(value) for value in (62833, "62833", 0, "", "12a", -1, True, 1.0, None, "1" * 19)] == [
+        "62833",
+        "62833",
+        "0",
+        None,
+        None,
+        None,
+        None,
+        None,
+        None,
+        None,
+    ]
+    assert [optional_int(value) for value in (3, 3.0, 3.5, "3", True, None, float("nan"), 10**400)] == [
+        3,
+        3,
+        None,
+        None,
+        None,
+        None,
+        None,
+        10**400,
+    ]
+    assert [optional_float(value) for value in (3, 0.5, "0.5", False, float("inf"), 10**400)] == [
+        3.0,
+        0.5,
+        None,
+        None,
+        None,
+        None,
+    ]
+    assert [optional_positive_int(value) for value in (512, 512.0, 0, -8, "512")] == [512, 512, None, None, None]
+    assert stat_count({"likeCount": 3, "heartCount": 2.0, "laughCount": "9", "cryCount": -4}, *REACTIONS) == 5
+    assert stat_count("not stats", *REACTIONS) == 0
+
+
+@pytest.mark.parametrize(
+    ("raw", "expected"),
+    [
+        ({"items": [1], "metadata": {"nextCursor": "a|b"}}, ([1], "a|b")),
+        ({"items": [], "metadata": {"nextCursor": 148224054}}, ([], "148224054")),
+        ({"items": [], "metadata": {}}, ([], None)),
+        ({"items": [], "metadata": {"nextCursor": ""}}, ([], None)),
+        ({"items": []}, ([], None)),
+        ({"items": [], "metadata": "nope"}, ([], None)),
+    ],
+)
+def test_page_items(raw: Any, expected: tuple[list[Any], str | None]) -> None:
+    assert page_items(raw, "page") == expected
+
+
+@pytest.mark.parametrize("raw", [[], {"metadata": {}}, {"items": None}, {"items": {}}])
+def test_page_items_requires_an_items_list(raw: Any) -> None:
+    with pytest.raises(MalformedPayload):
+        page_items(raw, "page")

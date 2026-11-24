@@ -7,8 +7,10 @@ real network is unreachable: the `app` fixture routes every outgoing request to 
 (loopback stays allowed for in-process test servers).
 
 Rules: never import app.main (it builds the app on the real data dir) and never import
-app.services.runtime_adapter / diffusion_lora_runtime (loads torch). Use the `client` fixture, which runs
-create_app() on the temp data dir with a FakeGenerator and FakeHttp.
+app.services.runtime_adapter / the diffusion_lora_runtime package API (loads torch). The one exception is
+diffusion_lora_runtime.prompt_lora (inline <lora:name:weight> syntax), which is torch-free and imported by
+model_providers/civitai_image_meta.py (test_civitai_image_meta.py checks that torch stays unloaded). Use the
+`client` fixture, which runs create_app() on the temp data dir with a FakeGenerator and FakeHttp.
 """
 
 from __future__ import annotations

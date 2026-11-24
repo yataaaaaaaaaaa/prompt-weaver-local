@@ -493,6 +493,25 @@
         "title": "EditorTarget",
         "type": "object"
       },
+      "FavoriteImage": {
+        "description": "An image saved to the local favorites collection (<data dir>/image_favorites.json, backend-owned).",
+        "properties": {
+          "image": {
+            "$ref": "#/components/schemas/RemoteImage"
+          },
+          "saved_at": {
+            "format": "date-time",
+            "title": "Saved At",
+            "type": "string"
+          }
+        },
+        "required": [
+          "image",
+          "saved_at"
+        ],
+        "title": "FavoriteImage",
+        "type": "object"
+      },
       "ForbiddenMatcher": {
         "description": "One side of a forbidden rule. Also the persisted format of the frontend forbidden-rules store.",
         "properties": {
@@ -589,8 +608,9 @@
             "type": "integer"
           },
           "loras": {
+            "description": "Active LoRAs (selected + prompt-linked, unique) with their weights.",
             "items": {
-              "$ref": "#/components/schemas/LoRASpec-Input"
+              "$ref": "#/components/schemas/GenerationLoRA"
             },
             "title": "Loras",
             "type": "array"
@@ -756,6 +776,47 @@
         "type": "object",
         "x-export-defaults": true
       },
+      "GenerationLoRA": {
+        "description": "A library LoRA requested for a generation with its weight (LoRASpec fields + LoraWeight.weight).",
+        "properties": {
+          "id": {
+            "title": "Id",
+            "type": "string"
+          },
+          "name": {
+            "title": "Name",
+            "type": "string"
+          },
+          "path": {
+            "title": "Path",
+            "type": "string"
+          },
+          "source": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/ModelSource"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "weight": {
+            "default": 1.0,
+            "maximum": 10.0,
+            "minimum": -10.0,
+            "title": "Weight",
+            "type": "number"
+          }
+        },
+        "required": [
+          "id",
+          "name",
+          "path"
+        ],
+        "title": "GenerationLoRA",
+        "type": "object"
+      },
       "GenerationSelection-Input": {
         "description": "One category -> sub-prompt choice used for a generation (stored in output metadata).",
         "properties": {
@@ -902,6 +963,319 @@
         ],
         "title": "HealthResponse",
         "type": "object"
+      },
+      "ImageGenerationParams": {
+        "description": "Generation data published with an image (every field null when absent).",
+        "properties": {
+          "cfg_scale": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Cfg Scale"
+          },
+          "clean_prompt": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "prompt without its inline LoRA tags (diffusion_lora_runtime.prompt_lora.strip_prompt_lora_tags): the text the frontend splits into tags.",
+            "title": "Clean Prompt"
+          },
+          "clip_skip": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Clip Skip"
+          },
+          "height": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Height"
+          },
+          "negative_prompt": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Negative Prompt"
+          },
+          "prompt": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Prompt as published (inline <lora:...> tags included).",
+            "title": "Prompt"
+          },
+          "sampler": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Sampler"
+          },
+          "seed": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Seed"
+          },
+          "steps": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Steps"
+          },
+          "width": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Width"
+          }
+        },
+        "required": [
+          "prompt",
+          "clean_prompt",
+          "negative_prompt",
+          "sampler",
+          "steps",
+          "cfg_scale",
+          "seed",
+          "width",
+          "height",
+          "clip_skip"
+        ],
+        "title": "ImageGenerationParams",
+        "type": "object"
+      },
+      "ImageResource": {
+        "description": "A model an image was generated with, as its metadata publishes it (the provider merges its resource lists\nand the inline <lora:name:weight> tags of the prompt into one entry per model).",
+        "properties": {
+          "hash": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Published file hash, lowercase hex: a SHA-256 (64) or a short provider hash (Civitai AutoV2 10 / AutoV3 12); resolvable with the provider's find_by_hash.",
+            "title": "Hash"
+          },
+          "kind": {
+            "enum": [
+              "checkpoint",
+              "lora",
+              "embedding"
+            ],
+            "title": "Kind",
+            "type": "string"
+          },
+          "name": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Name written in the image metadata (often the file name without extension).",
+            "title": "Name"
+          },
+          "version_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Provider model version id, when published.",
+            "title": "Version Id"
+          },
+          "weight": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Published weight (LoRAs); null when the image publishes none.",
+            "title": "Weight"
+          }
+        },
+        "required": [
+          "kind",
+          "name",
+          "weight",
+          "version_id",
+          "hash"
+        ],
+        "title": "ImageResource",
+        "type": "object"
+      },
+      "ImageSearchPage": {
+        "properties": {
+          "items": {
+            "items": {
+              "$ref": "#/components/schemas/RemoteImage"
+            },
+            "title": "Items",
+            "type": "array"
+          },
+          "next_cursor": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Next Cursor"
+          }
+        },
+        "required": [
+          "items",
+          "next_cursor"
+        ],
+        "title": "ImageSearchPage",
+        "type": "object"
+      },
+      "ImageSearchQuery": {
+        "description": "Query parameters of GET /api/images/search.\n\nCivitai's image API has no free-text filter (it ignores a `query` parameter), so a non-empty `query` is a\nkeyword search through the model catalog: services/image_library.py searches the LoRAs and checkpoints\nmatching the keyword and pages through their image galleries. `period` only applies to the unfiltered feed\n(an empty `query`): Civitai answers empty or partial pages for a gallery + period.",
+        "properties": {
+          "cursor": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "description": "ImageSearchPage.next_cursor of the previous page (opaque).",
+            "title": "Cursor"
+          },
+          "limit": {
+            "default": 20,
+            "maximum": 100,
+            "minimum": 1,
+            "title": "Limit",
+            "type": "integer"
+          },
+          "nsfw": {
+            "default": false,
+            "description": "False: only images rated safe (Civitai nsfwLevel <= 2).",
+            "title": "Nsfw",
+            "type": "boolean"
+          },
+          "period": {
+            "default": "week",
+            "enum": [
+              "day",
+              "week",
+              "month",
+              "year",
+              "all_time"
+            ],
+            "title": "Period",
+            "type": "string"
+          },
+          "provider": {
+            "default": "civitai",
+            "title": "Provider",
+            "type": "string"
+          },
+          "query": {
+            "default": "",
+            "title": "Query",
+            "type": "string"
+          },
+          "sort": {
+            "default": "most_reactions",
+            "enum": [
+              "most_reactions",
+              "most_comments",
+              "most_collected",
+              "newest"
+            ],
+            "title": "Sort",
+            "type": "string"
+          },
+          "usable_only": {
+            "default": true,
+            "description": "Only images made with a base model the local runtime can load (BaseModelOption.architecture).",
+            "title": "Usable Only",
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "provider",
+          "query",
+          "sort",
+          "period",
+          "nsfw",
+          "usable_only",
+          "limit",
+          "cursor"
+        ],
+        "title": "ImageSearchQuery",
+        "type": "object",
+        "x-export-defaults": true
       },
       "InstallJob": {
         "description": "An install whose download is still running (lets the frontend resume tracking after a reload).",
@@ -1065,7 +1439,7 @@
         "properties": {
           "loras": {
             "items": {
-              "$ref": "#/components/schemas/LoRASpec-Output"
+              "$ref": "#/components/schemas/LoRASpec"
             },
             "title": "Loras",
             "type": "array"
@@ -1085,40 +1459,8 @@
         "title": "LibraryState",
         "type": "object"
       },
-      "LoRASpec-Input": {
-        "properties": {
-          "id": {
-            "title": "Id",
-            "type": "string"
-          },
-          "name": {
-            "title": "Name",
-            "type": "string"
-          },
-          "path": {
-            "title": "Path",
-            "type": "string"
-          },
-          "source": {
-            "anyOf": [
-              {
-                "$ref": "#/components/schemas/ModelSource"
-              },
-              {
-                "type": "null"
-              }
-            ]
-          }
-        },
-        "required": [
-          "id",
-          "name",
-          "path"
-        ],
-        "title": "LoRASpec",
-        "type": "object"
-      },
-      "LoRASpec-Output": {
+      "LoRASpec": {
+        "description": "A LoRA library entry (the frontend library store owns the library).",
         "properties": {
           "id": {
             "title": "Id",
@@ -1151,6 +1493,63 @@
         ],
         "title": "LoRASpec",
         "type": "object"
+      },
+      "LoraWeight": {
+        "description": "A LoRA applied with a weight: THE representation of per-LoRA weights, end to end. The frontend library\nstore's selection ('library-store' selectedLoras) holds these, GenerateRequest.loras carries them with the\nlibrary entry (GenerationLoRA), OutputRecord.active_loras records them, and services/runtime_adapter.py passes\nthe weight to the runtime LoRASpec.",
+        "properties": {
+          "id": {
+            "description": "LoRA library entry id (LoRASpec.id).",
+            "title": "Id",
+            "type": "string"
+          },
+          "weight": {
+            "default": 1.0,
+            "maximum": 10.0,
+            "minimum": -10.0,
+            "title": "Weight",
+            "type": "number"
+          }
+        },
+        "required": [
+          "id",
+          "weight"
+        ],
+        "title": "LoraWeight",
+        "type": "object"
+      },
+      "LoraWeightDefaults": {
+        "description": "The single definition of per-LoRA weights: the default weight (also used for LoRAs requested without one:\nselections persisted before weights existed, prompt-linked LoRAs, images that publish no weight), the\naccepted range and the UI step. Exported to the frontend as LORA_WEIGHT_DEFAULTS.",
+        "properties": {
+          "max": {
+            "default": 10.0,
+            "title": "Max",
+            "type": "number"
+          },
+          "min": {
+            "default": -10.0,
+            "title": "Min",
+            "type": "number"
+          },
+          "step": {
+            "default": 0.05,
+            "title": "Step",
+            "type": "number"
+          },
+          "weight": {
+            "default": 1.0,
+            "title": "Weight",
+            "type": "number"
+          }
+        },
+        "required": [
+          "weight",
+          "min",
+          "max",
+          "step"
+        ],
+        "title": "LoraWeightDefaults",
+        "type": "object",
+        "x-export-defaults": true
       },
       "ModelDirs": {
         "description": "Local folder of every model kind (settings.py owns them; downloads land there).",
@@ -1606,11 +2005,12 @@
       "OutputRecord": {
         "description": "Metadata of one generated image (the adjacent <output_id>.json file).\n\nThe image itself is served by GET /api/outputs/{output_id}/image.",
         "properties": {
-          "active_lora_ids": {
+          "active_loras": {
+            "description": "LoRAs applied (selected + prompt-linked) with their weights. Files written before per-LoRA weights hold `active_lora_ids` instead: they load as weight LORA_WEIGHT_DEFAULTS.weight.",
             "items": {
-              "type": "string"
+              "$ref": "#/components/schemas/LoraWeight"
             },
-            "title": "Active Lora Ids",
+            "title": "Active Loras",
             "type": "array"
           },
           "generated_at": {
@@ -1710,7 +2110,7 @@
           "model_id",
           "prompt_seed",
           "image_seed",
-          "active_lora_ids",
+          "active_loras",
           "selections"
         ],
         "title": "OutputRecord",
@@ -2129,6 +2529,150 @@
         "title": "RemoteFile",
         "type": "object"
       },
+      "RemoteImage": {
+        "properties": {
+          "architecture": {
+            "anyOf": [
+              {
+                "enum": [
+                  "sd15",
+                  "sdxl"
+                ],
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Local runtime family of base_model; null when it cannot be loaded locally or is unknown.",
+            "title": "Architecture"
+          },
+          "base_model": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Base Model"
+          },
+          "created_at": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Created At"
+          },
+          "height": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Height"
+          },
+          "id": {
+            "title": "Id",
+            "type": "string"
+          },
+          "nsfw": {
+            "description": "Rated above the safe level (Civitai nsfwLevel > 2).",
+            "title": "Nsfw",
+            "type": "boolean"
+          },
+          "page_url": {
+            "title": "Page Url",
+            "type": "string"
+          },
+          "params": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/ImageGenerationParams"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "null when the image publishes no generation data."
+          },
+          "provider": {
+            "title": "Provider",
+            "type": "string"
+          },
+          "reaction_count": {
+            "title": "Reaction Count",
+            "type": "integer"
+          },
+          "resources": {
+            "items": {
+              "$ref": "#/components/schemas/ImageResource"
+            },
+            "title": "Resources",
+            "type": "array"
+          },
+          "thumbnail_url": {
+            "description": "Grid-sized image URL.",
+            "title": "Thumbnail Url",
+            "type": "string"
+          },
+          "url": {
+            "description": "Full-size image URL.",
+            "title": "Url",
+            "type": "string"
+          },
+          "username": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Username"
+          },
+          "width": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Width"
+          }
+        },
+        "required": [
+          "provider",
+          "id",
+          "url",
+          "thumbnail_url",
+          "width",
+          "height",
+          "nsfw",
+          "base_model",
+          "architecture",
+          "username",
+          "created_at",
+          "reaction_count",
+          "page_url",
+          "params",
+          "resources"
+        ],
+        "title": "RemoteImage",
+        "type": "object"
+      },
       "RemoteModel": {
         "properties": {
           "creator": {
@@ -2324,6 +2868,79 @@
           "unavailable_reason"
         ],
         "title": "RemoteModelVersion",
+        "type": "object"
+      },
+      "ResolveImageResourcesRequest": {
+        "description": "Look up the models of an image (RemoteImage.resources) at their provider.",
+        "properties": {
+          "provider": {
+            "title": "Provider",
+            "type": "string"
+          },
+          "resources": {
+            "items": {
+              "$ref": "#/components/schemas/ImageResource"
+            },
+            "title": "Resources",
+            "type": "array"
+          }
+        },
+        "required": [
+          "provider",
+          "resources"
+        ],
+        "title": "ResolveImageResourcesRequest",
+        "type": "object"
+      },
+      "ResolvedImageResource": {
+        "description": "One ImageResource looked up at its provider (by version id, else by hash), in request order.",
+        "properties": {
+          "error": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Why it is unresolved: no version id or hash published, unknown at the provider, provider error.",
+            "title": "Error"
+          },
+          "model": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/RemoteModel"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "The model with versions == [the resolved version] (files carry local_path); null when unresolved."
+          },
+          "resource": {
+            "$ref": "#/components/schemas/ImageResource"
+          },
+          "sha256": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "SHA-256 of the file the image used when known: the published SHA-256, else the resolved version's default file hash.",
+            "title": "Sha256"
+          }
+        },
+        "required": [
+          "resource",
+          "model",
+          "sha256",
+          "error"
+        ],
+        "title": "ResolvedImageResource",
         "type": "object"
       },
       "TaskSnapshot": {
@@ -2609,6 +3226,318 @@
         "summary": "Health",
         "tags": [
           "health"
+        ]
+      }
+    },
+    "/api/images/favorites": {
+      "get": {
+        "description": "The local favorites collection, newest first.",
+        "operationId": "list_favorite_images_api_images_favorites_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "items": {
+                    "$ref": "#/components/schemas/FavoriteImage"
+                  },
+                  "title": "Response List Favorite Images Api Images Favorites Get",
+                  "type": "array"
+                }
+              }
+            },
+            "description": "Successful Response"
+          }
+        },
+        "summary": "List Favorite Images",
+        "tags": [
+          "images"
+        ]
+      },
+      "put": {
+        "description": "Saves (or refreshes and moves to the front) an image in the favorites.",
+        "operationId": "add_favorite_image_api_images_favorites_put",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/RemoteImage"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/FavoriteImage"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Add Favorite Image",
+        "tags": [
+          "images"
+        ]
+      }
+    },
+    "/api/images/favorites/{provider}/{image_id}": {
+      "delete": {
+        "operationId": "remove_favorite_image_api_images_favorites__provider___image_id__delete",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "provider",
+            "required": true,
+            "schema": {
+              "title": "Provider",
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "image_id",
+            "required": true,
+            "schema": {
+              "title": "Image Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/OkResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "404": {
+            "description": "No such favorite"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Remove Favorite Image",
+        "tags": [
+          "images"
+        ]
+      }
+    },
+    "/api/images/resolve": {
+      "post": {
+        "description": "The provider model version of each resource (files carry local_path), in order; a resource that cannot\nbe resolved carries an error instead of failing the request.",
+        "operationId": "resolve_image_resources_api_images_resolve_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ResolveImageResourcesRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "items": {
+                    "$ref": "#/components/schemas/ResolvedImageResource"
+                  },
+                  "title": "Response Resolve Image Resources Api Images Resolve Post",
+                  "type": "array"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "404": {
+            "description": "Unknown provider, model, version or hash"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Resolve Image Resources",
+        "tags": [
+          "images"
+        ]
+      }
+    },
+    "/api/images/search": {
+      "get": {
+        "description": "One page of online images with their generation data and resources (keyword search: see\nservices/image_library.py).",
+        "operationId": "search_images_api_images_search_get",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "provider",
+            "required": false,
+            "schema": {
+              "default": "civitai",
+              "title": "Provider",
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "query",
+            "required": false,
+            "schema": {
+              "default": "",
+              "title": "Query",
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "sort",
+            "required": false,
+            "schema": {
+              "default": "most_reactions",
+              "enum": [
+                "most_reactions",
+                "most_comments",
+                "most_collected",
+                "newest"
+              ],
+              "title": "Sort",
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "period",
+            "required": false,
+            "schema": {
+              "default": "week",
+              "enum": [
+                "day",
+                "week",
+                "month",
+                "year",
+                "all_time"
+              ],
+              "title": "Period",
+              "type": "string"
+            }
+          },
+          {
+            "description": "False: only images rated safe (Civitai nsfwLevel <= 2).",
+            "in": "query",
+            "name": "nsfw",
+            "required": false,
+            "schema": {
+              "default": false,
+              "description": "False: only images rated safe (Civitai nsfwLevel <= 2).",
+              "title": "Nsfw",
+              "type": "boolean"
+            }
+          },
+          {
+            "description": "Only images made with a base model the local runtime can load (BaseModelOption.architecture).",
+            "in": "query",
+            "name": "usable_only",
+            "required": false,
+            "schema": {
+              "default": true,
+              "description": "Only images made with a base model the local runtime can load (BaseModelOption.architecture).",
+              "title": "Usable Only",
+              "type": "boolean"
+            }
+          },
+          {
+            "in": "query",
+            "name": "limit",
+            "required": false,
+            "schema": {
+              "default": 20,
+              "maximum": 100,
+              "minimum": 1,
+              "title": "Limit",
+              "type": "integer"
+            }
+          },
+          {
+            "description": "ImageSearchPage.next_cursor of the previous page (opaque).",
+            "in": "query",
+            "name": "cursor",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "ImageSearchPage.next_cursor of the previous page (opaque).",
+              "title": "Cursor"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ImageSearchPage"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "403": {
+            "description": "The provider requires an API token, or rejected the stored one"
+          },
+          "404": {
+            "description": "Unknown provider, model, version or hash"
+          },
+          "422": {
+            "description": "Invalid parameters or cursor"
+          },
+          "502": {
+            "description": "The provider could not be reached or answered an error"
+          }
+        },
+        "summary": "Search Images",
+        "tags": [
+          "images"
         ]
       }
     },

@@ -6,7 +6,7 @@ import hashlib
 import json
 import threading
 import time
-from collections.abc import Callable, Iterable
+from collections.abc import Callable, Iterable, Sequence
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
@@ -17,17 +17,40 @@ from PIL import Image
 from app.schemas import (
     BaseModelOption,
     GenerateRequest,
+    ImageGenerationParams,
+    ImageResource,
+    ImageSearchPage,
+    ModelArchitecture,
+    ModelKind,
     ModelProviderInfo,
     ModelSearchPage,
     ModelSearchQuery,
+    PreviewImage,
     RemoteFile,
+    RemoteImage,
     RemoteModel,
+    RemoteModelVersion,
 )
+from app.services.backend_settings import BackendSettingsStore
+from app.services.container import FILE_HASH_CACHE_NAME
 from app.services.downloads import CompletionCallback, DownloadSpec
+from app.services.file_hashes import FileHashCache
 from app.services.generation import GeneratedImage, StepCallback
 from app.services.http import USER_AGENT
-from app.services.model_providers import DownloadSource, ProviderNotFoundError
+from app.services.image_favorites import ImageFavoritesStore
+from app.services.image_library import ImageLibraryService
+from app.services.local_models import LocalModelFiles
+from app.services.model_catalog import ModelCatalogService
+from app.services.model_providers import (
+    DownloadSource,
+    ImageFeedRequest,
+    ImageProviderRegistry,
+    ModelProviderRegistry,
+    ProviderNotFoundError,
+)
+from app.services.model_providers.base import complete_version
 from app.services.task_hub import TaskEventModel, TaskHub
+from app.settings import AppPaths
 
 FIXTURES_DIR = Path(__file__).resolve().parent / "fixtures"
 
@@ -249,6 +272,56 @@ def remote_file(
 
 
 STUB_PROVIDER_ID = "stub"
+
+
+def remote_model(
+    model_id: str,
+    version_id: str,
+    *,
+    name: str | None = None,
+    version_name: str = "v1",
+    kind: ModelKind = "lora",
+    files: list[RemoteFile] | None = None,
+    base_model: str = "Illustrious",
+    architecture: ModelArchitecture | None = "sdxl",
+    trigger_words: Sequence[str] = (),
+    images: Sequence[PreviewImage] = (),
+    page_url: str | None = None,
+    version_page_url: str | None = None,
+    creator: str | None = None,
+    tags: Sequence[str] = (),
+    download_count: int = 0,
+) -> RemoteModel:
+    """A provider answer of get_version(): the model with only the requested version, completed by the shared
+    install rules (base.complete_version) like every real provider does. Default name 'Model <model_id>'; default
+    files: one primary SafeTensors file of MODEL_CONTENT with id '<version_id>1'."""
+    version = RemoteModelVersion(
+        id=version_id,
+        name=version_name,
+        base_model=base_model,
+        architecture=architecture,
+        trigger_words=list(trigger_words),
+        published_at=None,
+        images=list(images),
+        files=files if files is not None else [remote_file(file_id=f"{version_id}1")],
+        page_url=version_page_url,
+        default_file_id=None,
+        unavailable_reason=None,
+    )
+    return RemoteModel(
+        provider=STUB_PROVIDER_ID,
+        id=model_id,
+        name=name if name is not None else f"Model {model_id}",
+        kind=kind,
+        creator=creator,
+        nsfw=False,
+        tags=list(tags),
+        download_count=download_count,
+        page_url=page_url,
+        versions=[complete_version(version)],
+    )
+
+
 STUB_DOWNLOAD_HEADERS = {"Authorization": "Bearer stub-secret-token"}
 STUB_AUTH_HINT = "Add a Stub API token in the model library settings."
 
@@ -345,3 +418,189 @@ class FakeDownloadManager:
             on_complete(spec.dest, sha256_of(content))
         self.end(f"download-{index + 1}")
         return spec.dest
+
+
+# ---------------------------------------------------------------------------
+# Image library doubles
+# ---------------------------------------------------------------------------
+
+
+def remote_image(
+    image_id: str = "1",
+    *,
+    provider: str = STUB_PROVIDER_ID,
+    resources: Iterable[ImageResource] = (),
+    prompt: str | None = "castle, sky <lora:pixel_style:0.8>",
+    nsfw: bool = False,
+) -> RemoteImage:
+    """An image with neutral defaults (params from `prompt`; None = no generation data)."""
+    params = (
+        ImageGenerationParams(
+            prompt=prompt,
+            clean_prompt=prompt,
+            negative_prompt=None,
+            sampler=None,
+            steps=None,
+            cfg_scale=None,
+            seed=None,
+            width=None,
+            height=None,
+            clip_skip=None,
+        )
+        if prompt is not None
+        else None
+    )
+    return RemoteImage(
+        provider=provider,
+        id=image_id,
+        url=f"https://images.example/{image_id}/original.jpeg",
+        thumbnail_url=f"https://images.example/{image_id}/thumb.jpeg",
+        width=512,
+        height=768,
+        nsfw=nsfw,
+        base_model="Illustrious",
+        architecture="sdxl",
+        username="alice",
+        created_at=None,
+        reaction_count=0,
+        page_url=f"https://images.example/{image_id}",
+        params=params,
+        resources=list(resources),
+    )
+
+
+class StubImageProvider:
+    """base.ImageProvider over canned pages: pages[(model_id, cursor)] answers the request for that gallery
+    (model_id None = the unfiltered feed) and cursor (None = the first page). A request without a canned page
+    answers an empty last page. Records every ImageFeedRequest; raises `error` when set."""
+
+    def __init__(
+        self,
+        pages: dict[tuple[str | None, str | None], ImageSearchPage] | None = None,
+        *,
+        provider_id: str = STUB_PROVIDER_ID,
+    ) -> None:
+        self.id = provider_id
+        self.pages = dict(pages or {})
+        self.requests: list[ImageFeedRequest] = []
+        self.error: Exception | None = None
+        self._lock = threading.Lock()
+
+    def search_images(self, request: ImageFeedRequest) -> ImageSearchPage:
+        with self._lock:  # the service may query galleries concurrently
+            self.requests.append(request)
+        if self.error is not None:
+            raise self.error
+        return self.pages.get((request.model_id, request.cursor), ImageSearchPage(items=[], next_cursor=None))
+
+
+# ---------------------------------------------------------------------------
+# Image library catalog doubles and data (test_image_library.py, test_images_api.py)
+# ---------------------------------------------------------------------------
+
+BASE_MODELS = [
+    BaseModelOption(id="Illustrious", architecture="sdxl"),
+    BaseModelOption(id="Flux.1 D", architecture=None),
+    BaseModelOption(id="SD 1.5", architecture="sd15"),
+]
+USABLE_BASE_MODELS = ("Illustrious", "SD 1.5")
+
+
+PIXEL_FILE = remote_file(MODEL_CONTENT, name="pixel_style.safetensors", file_id="11")
+PIXEL = remote_model(
+    "100",
+    "200",
+    files=[remote_file(OTHER_MODEL_CONTENT, name="pixel_fp32.safetensors", file_id="12", primary=False), PIXEL_FILE],
+)
+CHECKPOINT = remote_model(
+    "300", "400", kind="checkpoint", files=[remote_file(OTHER_MODEL_CONTENT, name="chill.safetensors", file_id="41")]
+)
+NO_HASH = remote_model("500", "600", files=[remote_file(name="nohash.safetensors", file_id="61", with_sha256=False)])
+PICKLE_ONLY = remote_model("700", "800", files=[remote_file(name="old.ckpt", file_id="81", downloadable=False)])
+
+PIXEL_AUTOV3 = "7c6bad76eb54"
+CHECKPOINT_AUTOV2 = "fc2511737a"
+PIXEL_SHA256 = sha256_of(MODEL_CONTENT)
+
+
+class CatalogStub(StubProvider):
+    """StubProvider with base models of several architectures, a paged model search (search_pages: model search
+    cursor -> page, None = the first page; recorded in `queries`), hash lookups (hashes: hash -> version id) and
+    per-key lookup errors (lookup_errors: version id or hash -> exception)."""
+
+    def __init__(
+        self,
+        *models: RemoteModel,
+        search_pages: dict[str | None, ModelSearchPage] | None = None,
+        hashes: dict[str, str] | None = None,
+    ) -> None:
+        super().__init__(*models)
+        self.search_pages = dict(search_pages or {})
+        self.hashes = dict(hashes or {})
+        self.lookup_errors: dict[str, Exception] = {}
+        self.search_error: Exception | None = None
+        self.queries: list[ModelSearchQuery] = []
+
+    def info(self) -> ModelProviderInfo:
+        return super().info().model_copy(update={"base_models": BASE_MODELS})
+
+    def search(self, query: ModelSearchQuery) -> ModelSearchPage:
+        self.queries.append(query)
+        if self.search_error is not None:
+            raise self.search_error
+        return self.search_pages.get(query.cursor, ModelSearchPage(items=[], next_cursor=None))
+
+    def get_version(self, version_id: str) -> RemoteModel:
+        if version_id in self.lookup_errors:
+            self.calls.append(("get_version", version_id))
+            raise self.lookup_errors[version_id]
+        return super().get_version(version_id)
+
+    def find_by_hash(self, sha256: str) -> RemoteModel:
+        self.calls.append(("find_by_hash", sha256))
+        if self.error is not None:
+            raise self.error
+        if sha256 in self.lookup_errors:
+            raise self.lookup_errors[sha256]
+        if sha256 not in self.hashes:
+            raise ProviderNotFoundError(f"No version with hash {sha256}.")
+        return self.models[self.hashes[sha256]]
+
+
+def image_library_service(paths: AppPaths, models: StubProvider, images: StubImageProvider) -> ImageLibraryService:
+    """The service over the stub providers, the real catalog (local files on the temp model folders) and real
+    favorites on the temp data dir."""
+    registry = ModelProviderRegistry([models])
+    catalog = ModelCatalogService(
+        paths=paths,
+        providers=registry,
+        local_files=LocalModelFiles(paths=paths, hashes=FileHashCache(paths.cache_dir / FILE_HASH_CACHE_NAME)),
+        settings=BackendSettingsStore(paths.settings_file),
+    )
+    return ImageLibraryService(
+        model_providers=registry,
+        image_providers=ImageProviderRegistry([images]),
+        catalog=catalog,
+        favorites=ImageFavoritesStore(paths.image_favorites_file),
+    )
+
+
+def image_page(*image_ids: str, next_cursor: str | None = None) -> ImageSearchPage:
+    return ImageSearchPage(items=[remote_image(image_id) for image_id in image_ids], next_cursor=next_cursor)
+
+
+def models_page(*model_ids: str, next_cursor: str | None = None) -> ModelSearchPage:
+    return ModelSearchPage(
+        items=[remote_model(model_id, f"{model_id}0") for model_id in model_ids], next_cursor=next_cursor
+    )
+
+
+def image_resource(
+    *,
+    name: str | None = None,
+    version_id: str | None = None,
+    hash: str | None = None,
+    weight: float | None = None,
+    kind: ModelKind = "lora",
+) -> ImageResource:
+    return ImageResource(kind=kind, name=name, weight=weight, version_id=version_id, hash=hash)

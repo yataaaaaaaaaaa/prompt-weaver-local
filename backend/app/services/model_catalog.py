@@ -3,7 +3,8 @@ the local copies LocalModelFiles already knows about), and provider API tokens.
 
 - info(): every registered provider's ModelProviderInfo + the model folders (AppPaths.model_dirs()).
 - search / get_version / find_by_hash: delegate to the provider, then set RemoteFile.local_path with
-  LocalModelFiles.known_path(model.kind, file) (cheap: never hashes, so searching stays fast).
+  LocalModelFiles.known_path(model.kind, file) (cheap: never hashes, so searching stays fast). find_by_hash accepts
+  short provider hashes too (normalize_file_hash): the image library resolves the AutoV2 / AutoV3 hashes of images.
 - set_token: BackendSettingsStore.set_token(provider.id, token) (validates the provider first, and that it
   supports tokens) and returns the provider's refreshed info. The token is never returned nor logged.
 Errors: UnknownProviderError / Provider* exceptions from services/model_providers propagate to the router.
@@ -21,7 +22,7 @@ from ..schemas import (
 )
 from ..settings import AppPaths
 from .backend_settings import BackendSettingsStore
-from .file_hashes import normalize_sha256
+from .file_hashes import normalize_file_hash
 from .local_models import LocalModelFiles
 from .model_providers import ModelProviderRegistry
 
@@ -58,9 +59,11 @@ class ModelCatalogService:
         return self._with_local_paths(self._providers.get(provider_id).get_version(version_id))
 
     def find_by_hash(self, provider_id: str, sha256: str) -> RemoteModel:
-        """`sha256` in any case (normalized to lowercase before the provider call)."""
+        """`sha256`: a file hash in any case, a SHA-256 or a short provider hash (e.g. the Civitai AutoV2 / AutoV3
+        hashes online images publish); normalized with normalize_file_hash before the provider call. Anything else
+        is passed as is: the provider answers ProviderNotFoundError without a request."""
         provider = self._providers.get(provider_id)
-        return self._with_local_paths(provider.find_by_hash(normalize_sha256(sha256) or sha256))
+        return self._with_local_paths(provider.find_by_hash(normalize_file_hash(sha256) or sha256))
 
     def set_token(self, provider_id: str, token: str | None) -> ModelProviderInfo:
         provider = self._providers.get(provider_id)

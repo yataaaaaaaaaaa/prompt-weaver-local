@@ -1,0 +1,83 @@
+{
+  "id": 11745,
+  "modelId": 6424,
+  "name": "Chilloutmix-Ni-pruned-fp32-fix",
+  "nsfwLevel": 60,
+  "createdAt": "2023-02-17T14:51:36.929Z",
+  "updatedAt": "2025-02-14T21:40:40.316Z",
+  "status": "Published",
+  "publishedAt": "2023-03-01T17:13:02.996Z",
+  "trainedWords": [],
+  "trainingStatus": null,
+  "trainingDetails": null,
+  "baseModel": "SD 1.5",
+  "baseModelType": "Standard",
+  "uploadType": "Created",
+  "usageControl": "Download",
+  "licensingFee": null,
+  "licensingFeeType": "PerImageBuzz",
+  "paidAccess": null,
+  "air": "urn:air:sd1:checkpoint:civitai:6424@11745",
+  "stats": {
+    "downloadCount": 924944,
+    "thumbsUpCount": 73735
+  },
+  "model": {
+    "name": "ChilloutMix",
+    "type": "Checkpoint",
+    "nsfw": true,
+    "poi": false
+  },
+  "files": [
+    {
+      "id": 103584,
+      "sizeKB": 4165133.963867188,
+      "name": "Chilloutmix-Ni-pruned-fp32-fix.safetensors",
+      "overrideName": null,
+      "type": "Model",
+      "pickleScanResult": "Success",
+      "pickleScanMessage": "No Pickle imports",
+      "virusScanResult": "Success",
+      "virusScanMessage": null,
+      "scannedAt": "2023-02-17T15:00:16.906Z",
+      "metadata": {
+        "format": "SafeTensor",
+        "size": "full",
+        "fp": "fp16"
+      },
+      "hashes": {
+        "AutoV1": "95F8D0A7",
+        "AutoV2": "FC2511737A",
+        "SHA256": "FC2511737A54C5E80B89AB03E0AB4B98D051AB187F92860F3CD664DC9D08B271",
+        "CRC32": "78CA5DFC",
+        "BLAKE3": "63593952F3B3DA9345E9DBEA2B0E98EDD4D899DFD303C4CECF8DAB0BE71775D0",
+        "SHA256_12": "FC2511737A54"
+      },
+      "primary": true,
+      "downloadUrl": "https://civitai.com/api/download/models/11745?fileId=103584"
+    }
+  ],
+  "images": [
+    {
+      "url": "https://image.civitai.com/xG1nkqKTMzGDvpLrqFT7WA/2c0ede51-3213-4f2c-0c7b-c32bc59a6f00/original=true/112157.jpeg",
+      "nsfwLevel": 1,
+      "width": 512,
+      "height": 512,
+      "hash": "U9IE@E00*C,{PL#FS@9G0c00Hq_3_MxZMy-;",
+      "type": "image",
+      "metadata": {
+        "hash": "U9IE@E00*C,{PL#FS@9G0c00Hq_3_MxZMy-;",
+        "width": 512,
+        "height": 512
+      },
+      "minor": false,
+      "poi": false,
+      "availability": "Public",
+      "hasMeta": false,
+      "hasPositivePrompt": false,
+      "onSite": false,
+      "remixOfId": null
+    }
+  ],
+  "downloadUrl": "https://civitai.com/api/download/models/11745"
+}

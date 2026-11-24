@@ -11,7 +11,14 @@ from pathlib import Path
 import pytest
 
 from app.services import file_hashes
-from app.services.file_hashes import CACHE_FORMAT_VERSION, FileHashCache, normalize_sha256, path_key, sha256_file
+from app.services.file_hashes import (
+    CACHE_FORMAT_VERSION,
+    FileHashCache,
+    normalize_file_hash,
+    normalize_sha256,
+    path_key,
+    sha256_file,
+)
 from app.settings import AppPaths
 from support import sha256_of
 
@@ -264,3 +271,31 @@ def test_normalize_sha256_is_the_one_hash_normalization() -> None:
     assert normalize_sha256(HELLO_SHA256) == HELLO_SHA256
     for unusable in (None, "", "   ", "abc", HELLO_SHA256 + "0", "g" * 64):
         assert normalize_sha256(unusable) is None
+    # Short provider hashes are not SHA-256 digests.
+    for short in ("2dae719f", "47aaaf0d29", "7c6bad76eb54"):
+        assert normalize_sha256(short) is None
+
+
+@pytest.mark.parametrize(
+    ("value", "expected"),
+    [
+        ("2DAE719F", "2dae719f"),  # AutoV1 / CRC32
+        (" 47AAAF0D29 ", "47aaaf0d29"),  # AutoV2
+        ("7C6BAD76EB54\n", "7c6bad76eb54"),  # AutoV3
+        (HELLO_SHA256.upper(), HELLO_SHA256),  # SHA-256 / BLAKE3
+        (None, None),
+        ("", None),
+        ("   ", None),
+        ("abc", None),
+        ("47aaaf0d2", None),  # 9
+        ("47aaaf0d294", None),  # 11
+        ("47aaaf0d2945c", None),  # 13
+        (HELLO_SHA256[:63], None),
+        (HELLO_SHA256 + "0", None),
+        ("g" * 10, None),
+        ("7c6bad76-eb54", None),
+        ("0x6bad76eb54", None),
+    ],
+)
+def test_normalize_file_hash_accepts_short_provider_hashes(value: str | None, expected: str | None) -> None:
+    assert normalize_file_hash(value) == expected

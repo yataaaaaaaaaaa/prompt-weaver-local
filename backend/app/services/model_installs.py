@@ -42,6 +42,7 @@ from ..schemas import (
 from .downloads import DownloadManager, DownloadSpec
 from .local_models import LocalModelFiles
 from .model_providers import ModelProvider, ModelProviderRegistry, ProviderError
+from .model_providers.base import version_file
 
 
 def install_title(model_name: str, version_name: str) -> str:
@@ -85,7 +86,7 @@ def _requested_file(version: RemoteModelVersion, file_id: str | None) -> RemoteF
     wanted = file_id or version.default_file_id
     if wanted is None:
         raise InstallRejected(f"Version '{version.name}' has no file to install.")
-    file = next((candidate for candidate in version.files if candidate.id == wanted), None)
+    file = version_file(version, wanted)
     if file is None:
         raise InstallRejected(f"Version '{version.name}' has no file '{wanted}'.")
     if not file.downloadable:

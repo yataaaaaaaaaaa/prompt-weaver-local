@@ -60,6 +60,28 @@ def test_load_returns_the_metadata(app_paths: AppPaths, make_output: OutputFacto
     assert record.selections[0].locked is True
 
 
+def test_load_migrates_the_legacy_lora_ids_of_real_output_files(app_paths: AppPaths, make_output: OutputFactory) -> None:
+    # make_output writes the real pre-weights format (`active_lora_ids: []`).
+    assert make_output("0000000001")["active_lora_ids"] == []
+
+    record = OutputRepository(app_paths).load("0000000001")
+
+    assert record.active_loras == []
+    assert "active_lora_ids" not in record.model_dump()
+
+
+def test_save_and_load_keep_the_lora_weights(app_paths: AppPaths) -> None:
+    metadata = load_fixture("outputs/metadata_lora_weights.json")
+    del metadata["image_path"], metadata["metadata_path"]
+    repository = OutputRepository(app_paths)
+
+    saved = repository.save(Image.new("RGB", (3, 2)), metadata)
+
+    expected = [("add-detail", 0.6), ("film-grain", -1.25)]
+    assert [(item.id, item.weight) for item in saved.active_loras] == expected
+    assert [(item.id, item.weight) for item in repository.load("0000000002").active_loras] == expected
+
+
 def test_load_and_image_path_raise_output_not_found(app_paths: AppPaths, make_output: OutputFactory) -> None:
     make_output("0000000001", png=False)
     repository = OutputRepository(app_paths)

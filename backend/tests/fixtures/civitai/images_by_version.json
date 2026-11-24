@@ -1,0 +1,179 @@
+{
+  "items": [
+    {
+      "id": 47793744,
+      "url": "https://image.civitai.com/xG1nkqKTMzGDvpLrqFT7WA/fb1641c0-3b06-4f1e-ab98-fcef452dac77/original=true/fb1641c0-3b06-4f1e-ab98-fcef452dac77.jpeg",
+      "hash": "U36t{}9E00?b_39F9F_N%MxuD%Ri~qM{D%t7",
+      "width": 1024,
+      "height": 1536,
+      "nsfwLevel": "None",
+      "type": "image",
+      "nsfw": false,
+      "browsingLevel": 1,
+      "createdAt": "2024-12-26T21:53:45.018Z",
+      "postId": 10785086,
+      "thumbnail": null,
+      "stats": {
+        "cryCount": 139,
+        "laughCount": 231,
+        "likeCount": 1987,
+        "dislikeCount": 0,
+        "heartCount": 726,
+        "commentCount": 0
+      },
+      "meta": null,
+      "username": "gadzetmix944",
+      "baseModel": "SD 1.5",
+      "modelVersionIds": [
+        62833,
+        128713,
+        1041413
+      ]
+    },
+    {
+      "id": 22452542,
+      "url": "https://image.civitai.com/xG1nkqKTMzGDvpLrqFT7WA/5db2ee10-dbf1-44c6-8db2-1c7354c828f2/original=true/5db2ee10-dbf1-44c6-8db2-1c7354c828f2.jpeg",
+      "hash": "U38EYf4T03tm6BMJo#NdS*_1IoD*_N01sS.7",
+      "width": 1024,
+      "height": 1536,
+      "nsfwLevel": "None",
+      "type": "image",
+      "nsfw": false,
+      "browsingLevel": 1,
+      "createdAt": "2024-08-02T16:42:26.408Z",
+      "postId": 5002450,
+      "thumbnail": null,
+      "stats": {
+        "cryCount": 101,
+        "laughCount": 301,
+        "likeCount": 1907,
+        "dislikeCount": 0,
+        "heartCount": 566,
+        "commentCount": 0
+      },
+      "meta": {
+        "VAE": "çå®ædifConsistency RAW VAE (Pack)_v1.0 LOW (safestensor).safetensors",
+        "Size": "512x768",
+        "seed": 2695550572,
+        "Model": "EpAlCh_NFW0.3.fp16",
+        "steps": 35,
+        "hashes": {
+          "vae": "21ee2acc78",
+          "model": "de5612ec57",
+          "embed:BadDream": "758aac4435",
+          "lora:add_detail": "7c6bad76eb54",
+          "embed:bad-hands-5": "aa7651be15",
+          "embed:UnrealisticDream": "a77451e7ea",
+          "lora:20240612-1718186883137": "a77abe5dd2d7"
+        },
+        "prompt": "FRESHIDEAS Fantasy cool creatures, 3d, action, blurry background, blurry foreground, bokeh, depth of field, energy explosion focused, looking at viewer, turtle, bird, big eyes, detailed eyes, horror, motion blur, no humans, open mouth, wings, full body, photorealistic, rainbow, realistic\n<lora:add_detail:1>, <lora:20240612-1718186883137:0.8>",
+        "sampler": "DPM++ 2M",
+        "cfgScale": 7,
+        "resources": [
+          {
+            "hash": "7c6bad76eb54",
+            "name": "add_detail",
+            "type": "lora",
+            "weight": 1
+          },
+          {
+            "hash": "a77abe5dd2d7",
+            "name": "20240612-1718186883137",
+            "type": "lora",
+            "weight": 0.8
+          },
+          {
+            "hash": "de5612ec57",
+            "name": "EpAlCh_NFW0.3.fp16",
+            "type": "model"
+          }
+        ],
+        "Model hash": "de5612ec57",
+        "negativePrompt": "(1eg, foot):2, NSFW, (worst quality:2), (low quality:2), (normal quality:2), (logo:1.3), (text:1.3), (signature:1.2), lowres, watermark, EasyNegativeV2, BadDream, UnrealisticDream, (extra fingers, deformed hands, polydactyl:1.5), (grayscale, monochrome:1.5), (worst quality, low quality:1.3), (depth of field, blurry:1.2), bad-hands-5, (0.9:1)"
+      },
+      "username": "pagain510436",
+      "baseModel": null,
+      "modelVersionIds": [
+        62833,
+        77169,
+        77173,
+        125849,
+        569915
+      ]
+    },
+    {
+      "id": 10993445,
+      "url": "https://image.civitai.com/xG1nkqKTMzGDvpLrqFT7WA/0d8b2151-1efe-4324-b247-1ef1ebff6635/original=true/0d8b2151-1efe-4324-b247-1ef1ebff6635.jpeg",
+      "hash": "UCAmC]%2DjjGxsWB0LNG~9oeI[ae-ns:E2Rk",
+      "width": 1024,
+      "height": 1536,
+      "nsfwLevel": "None",
+      "type": "image",
+      "nsfw": false,
+      "browsingLevel": 1,
+      "createdAt": "2024-04-28T14:50:23.073Z",
+      "postId": 2410789,
+      "thumbnail": null,
+      "stats": {
+        "cryCount": 81,
+        "laughCount": 312,
+        "likeCount": 1327,
+        "dislikeCount": 0,
+        "heartCount": 594,
+        "commentCount": 0
+      },
+      "meta": {
+        "VAE": "vae-ft-mse-840000-ema-pruned.safetensors",
+        "Size": "512x768",
+        "seed": 3142190795,
+        "Model": "comicmixNSFWByMrMonster_v325",
+        "steps": 30,
+        "hashes": {
+          "vae": "235745af8d",
+          "model": "f8cd338212",
+          "lora:add_detail": "7c6bad76eb54",
+          "lora:backlight_slider_v10": "bce77b76fba3"
+        },
+        "prompt": "masterpiece, best quality, a woman in a futuristic suit, a sword on her back,  in the dark night sky with stars in the background and a full moon in the sky, cybernetic, cyberpunk art, fantasy art   <lora:backlight_slider_v10:-1>   <lora:add_detail:0.5>, hooded cloak,",
+        "sampler": "DPM++ SDE Karras",
+        "cfgScale": 6,
+        "clipSkip": 2,
+        "TI hashes": {
+          "bad-hands-5": "aa7651be154c",
+          "FastNegativeV2": "a7465e7cc2a2"
+        },
+        "resources": [
+          {
+            "hash": "7c6bad76eb54",
+            "name": "add_detail",
+            "type": "lora",
+            "weight": 0.5
+          },
+          {
+            "hash": "bce77b76fba3",
+            "name": "backlight_slider_v10",
+            "type": "lora"
+          },
+          {
+            "hash": "f8cd338212",
+            "name": "comicmixNSFWByMrMonster_v325",
+            "type": "model"
+          }
+        ],
+        "Model hash": "f8cd338212",
+        "negativePrompt": "FastNegativeV2 bad-hands-5, worst quality, low quality, greyscale, monochrome,"
+      },
+      "username": "salammy",
+      "baseModel": "SD 1.5",
+      "modelVersionIds": [
+        169496,
+        62833,
+        334734
+      ]
+    }
+  ],
+  "metadata": {
+    "nextCursor": "feed:2315:10993445",
+    "nextPage": "https://civitai.com/api/v1/images?limit=3&sort=Most%20Reactions&nsfw=Soft&modelVersionId=62833&withMeta=true&type=image&cursor=feed%3A2315%3A10993445"
+  }
+}

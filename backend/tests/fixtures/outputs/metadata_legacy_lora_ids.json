@@ -1,0 +1,21 @@
+{
+  "output_id": "0000000003",
+  "generated_at": "2026-08-02T18:20:11.004113+00:00",
+  "prompt": "masterpiece, best quality, 1girl, sunset",
+  "negative_prompt": "worst quality, low quality",
+  "seed": 718043939,
+  "prompt_seed": 290913000,
+  "image_seed": 718043939,
+  "width": 896,
+  "height": 1344,
+  "steps": 30,
+  "guidance_scale": 7.0,
+  "model_id": "example-model-safetensors",
+  "active_lora_ids": ["a", "b"],
+  "selections": [
+    {"category_name": "Main", "prompt_text": "masterpiece, best quality, 1girl,", "locked": true, "induced_lora_ids": ["b"]},
+    {"category_name": "day_moment", "prompt_text": "sunset", "locked": false, "induced_lora_ids": []}
+  ],
+  "image_path": "C:\\storage\\output\\0000000003.png",
+  "metadata_path": "C:\\storage\\output\\0000000003.json"
+}

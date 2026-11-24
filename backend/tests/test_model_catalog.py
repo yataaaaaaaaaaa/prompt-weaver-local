@@ -17,7 +17,7 @@ from app.services.backend_settings import BackendSettingsStore
 from app.services.file_hashes import FileHashCache
 from app.services.local_models import LocalModelFiles
 from app.services.model_catalog import ModelCatalogService, TokenNotSupportedError
-from app.services.model_providers import ModelProviderRegistry, UnknownProviderError
+from app.services.model_providers import ModelProviderRegistry, ProviderNotFoundError, UnknownProviderError
 from app.services.model_providers.civitai import CIVITAI_API_URL, CivitaiProvider
 from app.settings import AppPaths
 from support import FakeHttp, load_fixture
@@ -345,6 +345,51 @@ def test_service_lowercases_hashes(
     fake_http.add("GET", BY_HASH_URL, json=load_fixture("civitai/model_version.json"))
 
     assert catalog.find_by_hash("civitai", ADD_DETAIL_SHA256.upper()).id == "58390"
+
+
+@pytest.mark.parametrize(
+    ("published", "fixture", "expected"),
+    [
+        ("7C6BAD76EB54", "model_version.json", ("58390", "62833")),  # AutoV3 of add_detail, uppercase
+        (" FC2511737A ", "model_version_checkpoint.json", ("6424", "11745")),  # AutoV2 of ChilloutMix
+    ],
+)
+def test_service_finds_short_hashes_in_any_case(
+    catalog: ModelCatalogService,
+    fake_http: FakeHttp,
+    known_files: dict[str, Path],
+    tmp_path: Path,
+    published: str,
+    fixture: str,
+    expected: tuple[str, str],
+) -> None:
+    url = f"{CIVITAI_API_URL}/model-versions/by-hash/{published.strip().lower()}"
+    fake_http.add("GET", url, json=load_fixture(f"civitai/{fixture}"))
+    file_id = load_fixture(f"civitai/{fixture}")["files"][0]["id"]
+    known_files[str(file_id)] = tmp_path / "local.safetensors"
+
+    model = catalog.find_by_hash("civitai", published)
+
+    assert (model.id, model.versions[0].id) == expected
+    assert model.versions[0].files[0].local_path == str(tmp_path / "local.safetensors")
+    assert len(fake_http.requests_to(url)) == 1
+
+
+@pytest.mark.parametrize("bad_hash", ["7c6bad76eb5", "not-a-hash", ""])
+def test_service_never_requests_an_invalid_hash(
+    catalog: ModelCatalogService, fake_http: FakeHttp, bad_hash: str
+) -> None:
+    with pytest.raises(ProviderNotFoundError):
+        catalog.find_by_hash("civitai", bad_hash)
+
+    assert fake_http.requests == []
+
+
+def test_the_by_hash_route_still_takes_sha256_only(client: TestClient, fake_http: FakeHttp) -> None:
+    response = client.get("/api/models/providers/civitai/by-hash/7c6bad76eb54")
+
+    assert response.status_code == 422
+    assert fake_http.requests == []
 
 
 def test_service_rejects_unknown_providers_and_unsupported_tokens(

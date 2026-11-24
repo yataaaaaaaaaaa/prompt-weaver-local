@@ -35,6 +35,11 @@ HASH_CHUNK_SIZE = 4 * 1024 * 1024
 CACHE_FORMAT_VERSION = 1
 
 _SHA256_RE = re.compile(SHA256_PATTERN)
+_HEX_RE = re.compile(r"[0-9a-f]+")
+
+# Lengths (hex digits) of the file hashes providers publish: AutoV1 / CRC32 (8), AutoV2 (10: the first 10 hex
+# digits of the SHA-256), AutoV3 (12) and full digests (64: SHA-256, BLAKE3).
+FILE_HASH_LENGTHS = frozenset({8, 10, 12, 64})
 
 
 def normalize_sha256(value: str | None) -> str | None:
@@ -44,6 +49,16 @@ def normalize_sha256(value: str | None) -> str | None:
         return None
     normalized = value.strip().lower()
     return normalized if _SHA256_RE.fullmatch(normalized) else None
+
+
+def normalize_file_hash(value: str | None) -> str | None:
+    """`value` as a lowercase hex file hash of one of the FILE_HASH_LENGTHS (surrounding whitespace ignored): a full
+    digest or a short provider hash (e.g. Civitai AutoV2 / AutoV3 published by online images); None otherwise.
+    Use normalize_sha256 where only a SHA-256 is acceptable (local files, downloads)."""
+    if not value:
+        return None
+    normalized = value.strip().lower()
+    return normalized if len(normalized) in FILE_HASH_LENGTHS and _HEX_RE.fullmatch(normalized) else None
 
 
 def sha256_file(path: Path, *, chunk_size: int = HASH_CHUNK_SIZE) -> str:

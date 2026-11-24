@@ -1,0 +1,86 @@
+{
+  "id": 3462754,
+  "modelId": 3045906,
+  "name": "dfd1 v1",
+  "nsfwLevel": 15,
+  "createdAt": "2026-11-10T22:06:49.112Z",
+  "updatedAt": "2026-11-10T22:27:21.283Z",
+  "status": "Published",
+  "publishedAt": "2026-11-10T22:27:21.266Z",
+  "trainedWords": [
+    "dfd1,"
+  ],
+  "trainingStatus": null,
+  "trainingDetails": null,
+  "baseModel": "Krea 2",
+  "baseModelType": "Standard",
+  "uploadType": "Created",
+  "usageControl": "Download",
+  "licensingFee": null,
+  "licensingFeeType": null,
+  "paidAccess": null,
+  "air": "urn:air:krea2:lora:civitai:3045906@3462754",
+  "stats": {
+    "downloadCount": 143,
+    "thumbsUpCount": 31
+  },
+  "model": {
+    "name": "df Darkpaint v1",
+    "type": "LORA",
+    "nsfw": false,
+    "poi": false
+  },
+  "files": [
+    {
+      "id": 3365233,
+      "sizeKB": 57400.390625,
+      "name": "dfd1 v1.safetensors",
+      "overrideName": null,
+      "type": "Model",
+      "pickleScanResult": "Success",
+      "pickleScanMessage": null,
+      "virusScanResult": "Success",
+      "virusScanMessage": null,
+      "scannedAt": "2026-11-10T22:43:32.359Z",
+      "metadata": {
+        "format": "SafeTensor",
+        "fp": "bf16"
+      },
+      "hashes": {
+        "AutoV1": "C235B2BC",
+        "AutoV2": "63F0678652",
+        "SHA256": "63F06786527B716E82A7B3A2B8D425548B72D907739087FF36E5E127D906C94F",
+        "CRC32": "AE852381",
+        "BLAKE3": "C73454D16FE3B2469E25BAC9D8C662E82B6AA60BDFCC16484912A8E860B50AAD",
+        "AutoV3": "74B403FA1DD2",
+        "SHA256_12": "63F06786527B"
+      },
+      "primary": true,
+      "downloadUrl": "https://civitai.com/api/download/models/3462754?fileId=3365233"
+    }
+  ],
+  "images": [
+    {
+      "url": "https://image.civitai.com/xG1nkqKTMzGDvpLrqFT7WA/7328c45e-ab80-461a-9b44-ade607659e95/original=true/148587836.jpeg",
+      "nsfwLevel": 1,
+      "width": 1184,
+      "height": 1776,
+      "hash": "U5A7-+$61uJ,S$S4]o$P1]S3|{wx,sf7$jS2",
+      "type": "image",
+      "metadata": {
+        "hash": "U5A7-+$61uJ,S$S4]o$P1]S3|{wx,sf7$jS2",
+        "size": 3341528,
+        "width": 1184,
+        "height": 1776
+      },
+      "minor": false,
+      "poi": false,
+      "availability": "Public",
+      "hasMeta": true,
+      "hasPositivePrompt": true,
+      "onSite": false,
+      "remixOfId": null
+    }
+  ],
+  "downloadUrl": "https://civitai.com/api/download/models/3462754"
+}

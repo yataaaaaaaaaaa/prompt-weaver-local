@@ -6,7 +6,9 @@ Endpoints used:
         types=LORA&types=LoCon); answer {"items": [...], "metadata": {"nextCursor"?: str, ...}}
         (metadata is {} on the last/empty page)
     GET /model-versions/{id}              a version + "modelId" + "model": {name, type, nsfw, poi}
-    GET /model-versions/by-hash/{sha256}  same shape as /model-versions/{id}
+    GET /model-versions/by-hash/{hash}    same shape as /model-versions/{id}; takes a SHA-256 or a short hash
+        (AutoV1 / CRC32 8, AutoV2 10, AutoV3 12 hex: services/file_hashes.py normalize_file_hash)
+    GET /images                           the image gallery: civitai_images.py (same get_json / map_payload)
     404 answers {"error": "Model not found"}; invalid params answer 400 {"error": {"name": "ZodError", ...}}
     Downloads: file["downloadUrl"] (307 redirect to a signed storage URL). With a stored token every request
     sends "Authorization: Bearer <token>"; 401/403 means a token is required (ProviderAuthError /
@@ -23,15 +25,20 @@ Mapping rules (owned here, nowhere else):
 - RemoteFile.downloadable only for metadata.format == "SafeTensor" (pickle files are refused) and file type
   "Model" / "Pruned Model" (not VAEs, configs, training data, ...);
 - preview images: type "image" only (videos skipped); url resized for thumbnails by replacing the
-  "/original=true/" path segment with "/width=450/"; nsfw = nsfwLevel > 2 (1 PG, 2 PG-13, 4 R, 8 X, 16 XXX);
-  when query.nsfw is False, nsfw images are dropped;
+  "/original=true/" path segment with "/width=450/" (thumbnail_url); nsfw = is_nsfw_level(nsfwLevel): above
+  MAX_SAFE_NSFW_LEVEL (1 PG, 2 PG-13, 4 R, 8 X, 16 XXX), or missing / unrated; when query.nsfw is False, nsfw
+  images are dropped;
 - page_url: https://civitai.com/models/{modelId}?modelVersionId={versionId} (version) /
-  https://civitai.com/models/{modelId} (model);
+  https://civitai.com/models/{modelId} (model) / https://civitai.com/images/{imageId} (image_page_url);
 - trigger words: version "trainedWords" (stripped, empty ones dropped).
+
+Payload helpers (expect_* raise MalformedPayload, which map_payload turns into a ProviderError; optional_* return
+None instead) are public: civitai_images.py and civitai_image_meta.py parse their payloads with them.
 """
 
 from __future__ import annotations
 
+import math
 import re
 from collections.abc import Callable
 from typing import Any, TypeVar
@@ -52,7 +59,7 @@ from ...schemas import (
     RemoteModelVersion,
 )
 from ..backend_settings import BackendSettingsStore
-from ..file_hashes import normalize_sha256
+from ..file_hashes import normalize_file_hash, normalize_sha256
 from ..http import HttpClientFactory
 from .base import DownloadSource, ProviderAuthError, ProviderError, ProviderNotFoundError, complete_version
 
@@ -115,8 +122,8 @@ QueryParams = list[tuple[str, str]]
 _Mapped = TypeVar("_Mapped")
 
 
-class _MalformedPayload(ValueError):
-    """The Civitai payload does not have the documented shape."""
+class MalformedPayload(ValueError):
+    """The Civitai payload does not have the documented shape (map_payload turns it into a ProviderError)."""
 
 
 # ---------------------------------------------------------------------------
@@ -137,55 +144,127 @@ def download_url(version_id: str, file_id: str) -> str:
     return f"{CIVITAI_SITE_URL}/api/download/models/{version_id}?fileId={file_id}"
 
 
+def image_page_url(image_id: str) -> str:
+    return f"{CIVITAI_SITE_URL}/images/{image_id}"
+
+
 def thumbnail_url(image_url: str) -> str:
     return image_url.replace(ORIGINAL_IMAGE_SEGMENT, THUMBNAIL_IMAGE_SEGMENT)
 
 
-def _dict(value: Any, what: str) -> dict[str, Any]:
+def is_nsfw_level(level: Any) -> bool:
+    """Whether an image with this Civitai nsfw level (1 PG, 2 PG-13, 4 R, 8 X, 16 XXX) is nsfw: a level above
+    MAX_SAFE_NSFW_LEVEL, and also a missing, unreadable or unrated (< 1) level: never shown by accident."""
+    return isinstance(level, bool) or not isinstance(level, int) or not 1 <= level <= MAX_SAFE_NSFW_LEVEL
+
+
+# -- payload helpers (shared with civitai_images.py and civitai_image_meta.py) ---
+
+
+def expect_dict(value: Any, what: str) -> dict[str, Any]:
     if not isinstance(value, dict):
-        raise _MalformedPayload(f"{what} is not an object")
+        raise MalformedPayload(f"{what} is not an object")
     return value
 
 
-def _list(value: Any, what: str) -> list[Any]:
+def expect_list(value: Any, what: str) -> list[Any]:
     """`value` as a list; null/absent counts as empty."""
     if value is None:
         return []
     if not isinstance(value, list):
-        raise _MalformedPayload(f"{what} is not a list")
+        raise MalformedPayload(f"{what} is not a list")
     return value
 
 
-def _id(value: Any, what: str) -> str:
-    if isinstance(value, bool) or not isinstance(value, (int, str)) or value == "":
-        raise _MalformedPayload(f"{what} has no id")
-    return str(value)
+def optional_dict(value: Any) -> dict[str, Any]:
+    """`value` when it is an object, else {} (optional sub-objects such as stats, metadata or creator)."""
+    return value if isinstance(value, dict) else {}
 
 
-def _sha256(hashes: Any) -> str | None:
-    value = hashes.get("SHA256") if isinstance(hashes, dict) else None
-    return normalize_sha256(value) if isinstance(value, str) else None
+def optional_id(value: Any) -> str | None:
+    """A Civitai id (an integer, or a string of digits) as a string; None otherwise."""
+    if isinstance(value, bool) or not isinstance(value, (int, str)):
+        return None
+    text = str(value)
+    return text if _CIVITAI_ID_RE.fullmatch(text) else None
 
 
-def _optional_str(value: Any) -> str | None:
+def expect_id(value: Any, what: str) -> str:
+    civitai_id = optional_id(value)
+    if civitai_id is None:
+        raise MalformedPayload(f"{what} has no id")
+    return civitai_id
+
+
+def optional_str(value: Any) -> str | None:
     return value if isinstance(value, str) and value else None
 
 
+def optional_float(value: Any) -> float | None:
+    """A finite JSON number (int or float, not a bool) as a float; None otherwise."""
+    if isinstance(value, bool) or not isinstance(value, (int, float)):
+        return None
+    try:
+        number = float(value)
+    except OverflowError:  # an integer beyond the float range
+        return None
+    return number if math.isfinite(number) else None
+
+
+def optional_int(value: Any) -> int | None:
+    """A JSON integer (an integral float such as 512.0 too; not a bool); None otherwise."""
+    if isinstance(value, int) and not isinstance(value, bool):
+        return value
+    number = optional_float(value)
+    return int(number) if number is not None and number.is_integer() else None
+
+
+def optional_positive_int(value: Any) -> int | None:
+    """optional_int(value) when it is > 0 (sizes, steps); None otherwise."""
+    number = optional_int(value)
+    return number if number is not None and number > 0 else None
+
+
+def stat_count(stats: Any, *keys: str) -> int:
+    """Sum of the counters `keys` of a "stats" object (missing, negative or unreadable counters count 0)."""
+    counters = optional_dict(stats)
+    return sum(max(optional_int(counters.get(key)) or 0, 0) for key in keys)
+
+
+def page_items(raw: Any, what: str) -> tuple[list[Any], str | None]:
+    """(items, next cursor) of a paged answer {"items": [...], "metadata": {"nextCursor"?: str | int, ...}}
+    (metadata is {} on the last page: next cursor None). items must be a list."""
+    raw = expect_dict(raw, what)
+    items = raw.get("items")
+    if not isinstance(items, list):
+        raise MalformedPayload(f"{what} has no items")
+    next_cursor = optional_dict(raw.get("metadata")).get("nextCursor")
+    return items, (str(next_cursor) if next_cursor not in (None, "") else None)
+
+
+def _sha256(hashes: Any) -> str | None:
+    value = optional_dict(hashes).get("SHA256")
+    return normalize_sha256(value) if isinstance(value, str) else None
+
+
+# -- mappers -------------------------------------------------------------------
+
+
 def map_file(raw: Any) -> RemoteFile:
-    raw = _dict(raw, "file")
-    metadata = raw.get("metadata") if isinstance(raw.get("metadata"), dict) else {}
-    file_format = _optional_str(metadata.get("format"))
-    size_kb = raw.get("sizeKB")
-    if isinstance(size_kb, bool) or not isinstance(size_kb, (int, float)):
-        raise _MalformedPayload("file has no sizeKB")
+    raw = expect_dict(raw, "file")
+    metadata = optional_dict(raw.get("metadata"))
+    file_format = optional_str(metadata.get("format"))
+    size_kb = optional_float(raw.get("sizeKB"))
+    if size_kb is None:
+        raise MalformedPayload("file has no sizeKB")
     return RemoteFile(
-        id=_id(raw.get("id"), "file"),
+        id=expect_id(raw.get("id"), "file"),
         name=raw["name"],
         size_bytes=round(size_kb * 1024),
         sha256=_sha256(raw.get("hashes")),
         format=file_format,
-        precision=_optional_str(metadata.get("fp")),
-        variant=_optional_str(metadata.get("size")),
+        precision=optional_str(metadata.get("fp")),
+        variant=optional_str(metadata.get("size")),
         primary=raw.get("primary") is True,
         downloadable=file_format == SAFETENSORS_FORMAT and raw.get("type") in DOWNLOADABLE_FILE_TYPES,
         local_path=None,
@@ -194,14 +273,12 @@ def map_file(raw: Any) -> RemoteFile:
 
 def map_images(raw_images: Any, *, include_nsfw: bool) -> list[PreviewImage]:
     images: list[PreviewImage] = []
-    for raw in _list(raw_images, "images"):
-        raw = _dict(raw, "image")
-        url = raw.get("url")
-        if raw.get("type", "image") != "image" or not isinstance(url, str) or not url:
+    for raw in expect_list(raw_images, "images"):
+        raw = expect_dict(raw, "image")
+        url = optional_str(raw.get("url"))
+        if raw.get("type", "image") != "image" or url is None:
             continue
-        level = raw.get("nsfwLevel")
-        # An image without a level is treated as nsfw (never shown by accident).
-        nsfw = isinstance(level, bool) or not isinstance(level, int) or level > MAX_SAFE_NSFW_LEVEL
+        nsfw = is_nsfw_level(raw.get("nsfwLevel"))
         if nsfw and not include_nsfw:
             continue
         images.append(PreviewImage(url=thumbnail_url(url), width=raw.get("width"), height=raw.get("height"), nsfw=nsfw))
@@ -209,23 +286,23 @@ def map_images(raw_images: Any, *, include_nsfw: bool) -> list[PreviewImage]:
 
 
 def trigger_words(raw_words: Any) -> list[str]:
-    return [word.strip() for word in _list(raw_words, "trainedWords") if isinstance(word, str) and word.strip()]
+    return [word.strip() for word in expect_list(raw_words, "trainedWords") if isinstance(word, str) and word.strip()]
 
 
 def map_version(raw: Any, *, model_id: str, include_nsfw_images: bool) -> RemoteModelVersion:
-    raw = _dict(raw, "model version")
-    version_id = _id(raw.get("id"), "model version")
+    raw = expect_dict(raw, "model version")
+    version_id = expect_id(raw.get("id"), "model version")
     base_model = raw.get("baseModel") if isinstance(raw.get("baseModel"), str) else ""
     return complete_version(
         RemoteModelVersion(
             id=version_id,
-            name=_optional_str(raw.get("name")) or version_id,
+            name=optional_str(raw.get("name")) or version_id,
             base_model=base_model,
             architecture=CIVITAI_BASE_MODELS.get(base_model),
             trigger_words=trigger_words(raw.get("trainedWords")),
             published_at=raw.get("publishedAt"),
             images=map_images(raw.get("images"), include_nsfw=include_nsfw_images),
-            files=[map_file(file) for file in _list(raw.get("files"), "files")],
+            files=[map_file(file) for file in expect_list(raw.get("files"), "files")],
             page_url=version_page_url(model_id, version_id),
             default_file_id=None,
             unavailable_reason=None,
@@ -235,26 +312,24 @@ def map_version(raw: Any, *, model_id: str, include_nsfw_images: bool) -> Remote
 
 def map_search_item(raw: Any, *, include_nsfw_images: bool) -> RemoteModel | None:
     """A /models item, or None when its type is not one of the app's kinds."""
-    raw = _dict(raw, "model")
+    raw = expect_dict(raw, "model")
     kind = _KIND_BY_CIVITAI_TYPE.get(raw.get("type"))
     if kind is None:
         return None
-    model_id = _id(raw.get("id"), "model")
-    creator = raw.get("creator") if isinstance(raw.get("creator"), dict) else {}
-    stats = raw.get("stats") if isinstance(raw.get("stats"), dict) else {}
+    model_id = expect_id(raw.get("id"), "model")
     return RemoteModel(
         provider=CIVITAI_PROVIDER_ID,
         id=model_id,
         name=raw["name"],
         kind=kind,
-        creator=_optional_str(creator.get("username")),
+        creator=optional_str(optional_dict(raw.get("creator")).get("username")),
         nsfw=raw.get("nsfw") is True,
-        tags=[tag for tag in _list(raw.get("tags"), "tags") if isinstance(tag, str)],
-        download_count=int(stats.get("downloadCount") or 0),
+        tags=[tag for tag in expect_list(raw.get("tags"), "tags") if isinstance(tag, str)],
+        download_count=stat_count(raw.get("stats"), "downloadCount"),
         page_url=model_page_url(model_id),
         versions=[
             map_version(version, model_id=model_id, include_nsfw_images=include_nsfw_images)
-            for version in _list(raw.get("modelVersions"), "modelVersions")
+            for version in expect_list(raw.get("modelVersions"), "modelVersions")
         ],
     )
 
@@ -262,16 +337,15 @@ def map_search_item(raw: Any, *, include_nsfw_images: bool) -> RemoteModel | Non
 def map_version_payload(raw: Any) -> RemoteModel:
     """A /model-versions/{id} or /model-versions/by-hash/{sha256} payload: the owning model with
     versions == [that version]. Every image is kept, with its nsfw flag."""
-    raw = _dict(raw, "model version")
-    model = _dict(raw.get("model"), "model version model")
+    raw = expect_dict(raw, "model version")
+    model = expect_dict(raw.get("model"), "model version model")
     model_type = model.get("type")
     kind = _KIND_BY_CIVITAI_TYPE.get(model_type)
     if kind is None:
         raise ProviderNotFoundError(
             f"Civitai model version {raw.get('id')} is a {model_type!s} model, not a checkpoint, LoRA or embedding."
         )
-    model_id = _id(raw.get("modelId"), "model version model")
-    stats = raw.get("stats") if isinstance(raw.get("stats"), dict) else {}
+    model_id = expect_id(raw.get("modelId"), "model version model")
     return RemoteModel(
         provider=CIVITAI_PROVIDER_ID,
         id=model_id,
@@ -280,23 +354,16 @@ def map_version_payload(raw: Any) -> RemoteModel:
         creator=None,
         nsfw=model.get("nsfw") is True,
         tags=[],
-        download_count=int(stats.get("downloadCount") or 0),
+        download_count=stat_count(raw.get("stats"), "downloadCount"),
         page_url=model_page_url(model_id),
         versions=[map_version(raw, model_id=model_id, include_nsfw_images=True)],
     )
 
 
 def map_search_page(raw: Any, *, include_nsfw_images: bool) -> ModelSearchPage:
-    raw = _dict(raw, "search page")
-    if not isinstance(raw.get("items"), list):
-        raise _MalformedPayload("search page has no items")
-    metadata = raw.get("metadata") if isinstance(raw.get("metadata"), dict) else {}
-    next_cursor = metadata.get("nextCursor")
-    models = (map_search_item(item, include_nsfw_images=include_nsfw_images) for item in raw["items"])
-    return ModelSearchPage(
-        items=[model for model in models if model is not None],
-        next_cursor=str(next_cursor) if next_cursor not in (None, "") else None,
-    )
+    items, next_cursor = page_items(raw, "search page")
+    models = (map_search_item(item, include_nsfw_images=include_nsfw_images) for item in items)
+    return ModelSearchPage(items=[model for model in models if model is not None], next_cursor=next_cursor)
 
 
 def search_params(query: ModelSearchQuery) -> QueryParams:
@@ -375,22 +442,24 @@ class CivitaiProvider:
         )
 
     def search(self, query: ModelSearchQuery) -> ModelSearchPage:
-        payload = self._get_json("/models", params=search_params(query), not_found="Civitai search not found.")
-        return self._mapped(map_search_page, payload, include_nsfw_images=query.nsfw)
+        payload = self.get_json("/models", params=search_params(query), not_found="Civitai search not found.")
+        return self.map_payload(map_search_page, payload, include_nsfw_images=query.nsfw)
 
     def get_version(self, version_id: str) -> RemoteModel:
         not_found = f"Civitai model version {version_id} was not found."
         if not _CIVITAI_ID_RE.fullmatch(version_id):
             raise ProviderNotFoundError(not_found)  # Civitai ids are integers: never request anything else
-        payload = self._get_json(f"/model-versions/{version_id}", not_found=not_found)
-        return self._mapped(map_version_payload, payload)
+        payload = self.get_json(f"/model-versions/{version_id}", not_found=not_found)
+        return self.map_payload(map_version_payload, payload)
 
     def find_by_hash(self, sha256: str) -> RemoteModel:
-        not_found = f"No Civitai model version has a file with SHA-256 {sha256}."
-        if normalize_sha256(sha256) != sha256:  # lowercase hex only: never request anything else
+        """`sha256`: a lowercase file hash as normalize_file_hash returns it, a SHA-256 or a short Civitai hash
+        (AutoV1 / CRC32, AutoV2, AutoV3), all taken by the by-hash endpoint."""
+        not_found = f"No Civitai model version has a file with hash {sha256}."
+        if normalize_file_hash(sha256) != sha256:  # lowercase hex file hashes only: never request anything else
             raise ProviderNotFoundError(not_found)
-        payload = self._get_json(f"/model-versions/by-hash/{sha256}", not_found=not_found)
-        return self._mapped(map_version_payload, payload)
+        payload = self.get_json(f"/model-versions/by-hash/{sha256}", not_found=not_found)
+        return self.map_payload(map_version_payload, payload)
 
     def download_source(self, version: RemoteModel, file: RemoteFile) -> DownloadSource:
         owner = next(
@@ -405,22 +474,25 @@ class CivitaiProvider:
             auth_hint=AUTH_HINT,
         )
 
-    # -- internals ----------------------------------------------------------
+    # -- shared with civitai_images.py, and internals -----------------------
 
     @staticmethod
     def _auth_headers(token: str | None) -> dict[str, str]:
         return {"Authorization": f"Bearer {token}"} if token else {}
 
     @staticmethod
-    def _mapped(mapper: Callable[..., _Mapped], payload: Any, **kwargs: Any) -> _Mapped:
+    def map_payload(mapper: Callable[..., _Mapped], payload: Any, **kwargs: Any) -> _Mapped:
+        """mapper(payload, **kwargs); a payload without the documented shape -> ProviderError (502). Shared with
+        the image provider (civitai_images.py)."""
         try:
             return mapper(payload, **kwargs)
         except (KeyError, TypeError, ValueError) as exc:  # pydantic ValidationError is a ValueError
             raise ProviderError(f"Civitai answered an unexpected payload ({type(exc).__name__}).") from None
 
-    def _get_json(self, path: str, *, not_found: str, params: QueryParams | None = None) -> Any:
-        """GET {api_url}{path} -> parsed JSON; errors mapped to the provider exceptions of base.py. No message
-        ever contains the token (httpx errors are not chained: their text could quote request headers)."""
+    def get_json(self, path: str, *, not_found: str, params: QueryParams | None = None) -> Any:
+        """GET {api_url}{path} -> parsed JSON; errors mapped to the provider exceptions of base.py. The one Civitai
+        HTTP call: the image provider (civitai_images.py) goes through it too (same token, errors and redaction). No
+        message ever contains the token (httpx errors are not chained: their text could quote request headers)."""
         token = self._settings.get_token(self.id)
         try:
             with self._client_factory() as client:

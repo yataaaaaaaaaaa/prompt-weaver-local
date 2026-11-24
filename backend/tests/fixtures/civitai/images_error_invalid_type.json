@@ -1,0 +1,6 @@
+{
+  "error": {
+    "name": "ZodError",
+    "message": "[\n  {\n    \"code\": \"invalid_value\",\n    \"values\": [\n      \"image\",\n      \"video\",\n      \"audio\"\n    ],\n    \"path\": [\n      \"type\"\n    ],\n    \"message\": \"Invalid option: expected one of \\\"image\\\"|\\\"video\\\"|\\\"audio\\\"\"\n  }\n]"
+  }
+}

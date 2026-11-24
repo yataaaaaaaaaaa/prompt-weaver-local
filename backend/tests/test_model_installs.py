@@ -8,6 +8,7 @@ from __future__ import annotations
 import re
 import threading
 from pathlib import Path
+from typing import Any
 
 import pytest
 from fastapi import FastAPI
@@ -22,7 +23,6 @@ from app.schemas import (
     PreviewImage,
     RemoteFile,
     RemoteModel,
-    RemoteModelVersion,
 )
 from app.services.container import FILE_HASH_CACHE_NAME
 from app.services.downloads import DownloadSpec
@@ -36,7 +36,6 @@ from app.services.model_providers import (
     ProviderNotFoundError,
     UnknownProviderError,
 )
-from app.services.model_providers.base import complete_version
 from app.settings import AppPaths
 from support import (
     MODEL_CONTENT,
@@ -48,6 +47,7 @@ from support import (
     StubProvider,
     put_file,
     remote_file,
+    remote_model,
     sha256_of,
 )
 
@@ -58,44 +58,17 @@ def preview(name: str, *, nsfw: bool) -> PreviewImage:
     return PreviewImage(url=f"https://stub.example/images/{name}.jpeg", width=450, height=600, nsfw=nsfw)
 
 
-def remote_model(
-    *,
-    model_id: str,
-    name: str,
-    version_id: str,
-    version_name: str,
-    files: list[RemoteFile],
-    base_model: str = "Illustrious",
-    architecture: str | None = "sdxl",
-    images: list[PreviewImage] | None = None,
-    version_page_url: str | None = None,
-) -> RemoteModel:
-    """A provider answer of get_version(): the model with only the requested version, completed by the shared
-    install rules (complete_version) like every real provider does."""
-    version = RemoteModelVersion(
-        id=version_id,
-        name=version_name,
-        base_model=base_model,
-        architecture=architecture,  # type: ignore[arg-type]
+def lora_model(model_id: str, version_id: str, **fields: Any) -> RemoteModel:
+    """support.remote_model with the provenance fields these tests check (trigger words, model page, ...)."""
+    return remote_model(
+        model_id,
+        version_id,
         trigger_words=["pixel art", "8bit"],
-        published_at=None,
-        images=images or [],
-        files=files,
-        page_url=version_page_url,
-        default_file_id=None,
-        unavailable_reason=None,
-    )
-    return RemoteModel(
-        provider=STUB_PROVIDER_ID,
-        id=model_id,
-        name=name,
-        kind="lora",
         creator="someone",
-        nsfw=False,
         tags=["style"],
         download_count=1234,
         page_url=f"https://stub.example/models/{model_id}",
-        versions=[complete_version(version)],
+        **fields,
     )
 
 
@@ -103,28 +76,28 @@ PRIMARY_FILE = remote_file(MODEL_CONTENT, name="pixel_style.safetensors", file_i
 FP32_FILE = remote_file(OTHER_MODEL_CONTENT, name="pixel_style_fp32.safetensors", file_id="12", primary=False)
 PICKLE_FILE = remote_file(b"pickle", name="pixel_style.ckpt", file_id="13", primary=False, downloadable=False)
 
-PIXEL = remote_model(
-    model_id="100",
+PIXEL = lora_model(
+    "100",
+    "200",
     name="Pixel Style",
-    version_id="200",
     version_name="v2.0",
     files=[FP32_FILE, PRIMARY_FILE, PICKLE_FILE],
     images=[preview("nsfw", nsfw=True), PreviewImage(url=SFW_PREVIEW, width=None, height=None, nsfw=False)],
 )
 # Another model whose file has the same name as PIXEL's primary file (other content).
-TWIN = remote_model(
-    model_id="101",
+TWIN = lora_model(
+    "101",
+    "201",
     name="Pixel Twin",
-    version_id="201",
     version_name="v1",
     files=[remote_file(OTHER_MODEL_CONTENT, name="pixel_style.safetensors", file_id="21")],
     images=[preview("nsfw", nsfw=True)],
     version_page_url="https://stub.example/models/101?modelVersionId=201",
 )
-FLUX = remote_model(
-    model_id="102",
+FLUX = lora_model(
+    "102",
+    "202",
     name="Flux Thing",
-    version_id="202",
     version_name="v1",
     files=[remote_file(b"flux", name="flux.safetensors", file_id="31")],
     base_model="Flux.1 D",

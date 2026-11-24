@@ -26,7 +26,8 @@ REQUEST: dict[str, Any] = {
         "torch_dtype": "float16",
     },
     "loras": [
-        {"id": "kept-lora", "name": "kept-lora", "path": "C:/models/loras/kept-lora.safetensors"},
+        {"id": "kept-lora", "name": "kept-lora", "path": "C:/models/loras/kept-lora.safetensors", "weight": 0.6},
+        # No weight: LORA_WEIGHT_DEFAULTS.weight (1.0).
         {"id": "other-lora", "name": "other", "path": "C:/models/loras/other.safetensors"},
     ],
     "prompt": "masterpiece, <lora:Dramatic Lighting Slider:2>, 1girl",
@@ -56,7 +57,7 @@ METADATA_KEYS = {
     "steps",
     "guidance_scale",
     "model_id",
-    "active_lora_ids",
+    "active_loras",
     "selections",
     "image_path",
     "metadata_path",
@@ -107,7 +108,8 @@ def test_generate_saves_the_output_with_the_legacy_metadata(
     assert on_disk["prompt_seed"] == 290912999
     assert (on_disk["width"], on_disk["height"], on_disk["steps"], on_disk["guidance_scale"]) == (128, 192, 12, 3.5)
     assert on_disk["model_id"] == "example-model-safetensors"
-    assert on_disk["active_lora_ids"] == ["kept-lora", "other-lora"]
+    assert on_disk["active_loras"] == [{"id": "kept-lora", "weight": 0.6}, {"id": "other-lora", "weight": 1.0}]
+    assert "active_lora_ids" not in on_disk
     assert on_disk["selections"] == [
         {"category_name": "Main", "prompt_text": "masterpiece", "locked": True, "induced_lora_ids": ["kept-lora"]},
         {"category_name": "Subject", "prompt_text": "1girl", "locked": False, "induced_lora_ids": []},
@@ -126,6 +128,7 @@ def test_generate_passes_the_request_and_prompt_asset_dirs(
 
     (call,) = fake_generator.calls
     assert call.request == request()
+    assert [(spec.id, spec.weight) for spec in call.request.loras] == [("kept-lora", 0.6), ("other-lora", 1.0)]
     assert call.prompt_lora_dir == app_paths.prompt_lora_dir
     assert call.prompt_embedding_dir == app_paths.prompt_embedding_dir
 

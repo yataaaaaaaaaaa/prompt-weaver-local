@@ -1,5 +1,6 @@
-"""Model provider interface: an online catalog of checkpoints / LoRAs / embeddings (Civitai today; e.g. Hugging
-Face later). A provider maps its own API onto the provider-agnostic schemas of app/schemas.py (RemoteModel,
+"""Provider interfaces: ModelProvider, an online catalog of checkpoints / LoRAs / embeddings (Civitai today; e.g.
+Hugging Face later), and ImageProvider, an online gallery of generated images with their generation data
+(Civitai). A provider maps its own API onto the provider-agnostic schemas of app/schemas.py (RemoteModel,
 RemoteModelVersion, RemoteFile, ...) and tells the download manager how to fetch a file. It never touches the
 local disk: local copies are the business of services/local_models.py, downloads of services/downloads.py.
 
@@ -18,6 +19,9 @@ from dataclasses import dataclass, field
 from typing import Protocol
 
 from ...schemas import (
+    ImagePeriod,
+    ImageSearchPage,
+    ImageSort,
     ModelProviderInfo,
     ModelSearchPage,
     ModelSearchQuery,
@@ -67,6 +71,11 @@ def default_file(files: list[RemoteFile]) -> RemoteFile | None:
     return next((file for file in downloadable if file.primary), downloadable[0] if downloadable else None)
 
 
+def version_file(version: RemoteModelVersion, file_id: str | None) -> RemoteFile | None:
+    """The file of `version` with this id (None when file_id is None or unknown)."""
+    return next((file for file in version.files if file.id == file_id), None) if file_id is not None else None
+
+
 def unavailable_reason(version: RemoteModelVersion) -> str | None:
     """Why `version` cannot be installed (None when it can): its base model is not loadable by the local
     runtime (architecture None), or none of its files is downloadable."""
@@ -112,9 +121,49 @@ class ModelProvider(Protocol):
         ...
 
     def find_by_hash(self, sha256: str) -> RemoteModel:
-        """The model version whose file has this SHA-256 (lowercase hex), same shape as get_version()."""
+        """The model version whose file has this hash, same shape as get_version(). `sha256` is a lowercase hex
+        file hash as normalized by services/file_hashes.py normalize_file_hash: a SHA-256, or a short provider
+        hash (Civitai AutoV2 10 / AutoV3 12 hex, published by online images); anything else -> ProviderNotFoundError."""
         ...
 
     def download_source(self, version: RemoteModel, file: RemoteFile) -> DownloadSource:
         """URL + headers (API token when one is stored) to download `file` of `version`."""
+        ...
+
+
+# ---------------------------------------------------------------------------
+# Image galleries (image library)
+# ---------------------------------------------------------------------------
+
+
+@dataclass(frozen=True)
+class ImageFeedRequest:
+    """One page of a provider's image feed. services/image_library.py builds it from an ImageSearchQuery: the
+    unfiltered feed (model_id None, with a period) or one model's gallery (model_id set, period None: Civitai
+    answers empty or partial pages for a gallery + period). model_version_id narrows the gallery to that version
+    of the model (providers use it when set: Civitai answers version galleries far faster than model galleries)."""
+
+    sort: ImageSort
+    nsfw: bool
+    limit: int
+    period: ImagePeriod | None = None
+    model_id: str | None = None
+    model_version_id: str | None = None
+    # Base model ids of the provider (BaseModelOption.id) the images must be made with; empty = any.
+    base_models: tuple[str, ...] = ()
+    cursor: str | None = None
+
+
+class ImageProvider(Protocol):
+    """An online image gallery (thread-safe). It shares its id with the ModelProvider that resolves the images'
+    resources (ImageResource.version_id / hash -> ModelProvider.get_version / find_by_hash). Same errors as
+    ModelProvider (ProviderAuthError, ProviderError, ProviderNotFoundError)."""
+
+    @property
+    def id(self) -> str: ...
+
+    def search_images(self, request: ImageFeedRequest) -> ImageSearchPage:
+        """One page of images with their generation data and resources parsed from the image metadata. Images
+        rated nsfw are dropped unless request.nsfw; next_cursor is the provider's own cursor (None on the last
+        page)."""
         ...

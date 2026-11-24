@@ -49,6 +49,8 @@ class AppPaths(BaseModel):
     settings_file: Path
     # Derived data that can be rebuilt at any time (e.g. the file hash cache).
     cache_dir: Path
+    # Image library favorites (services/image_favorites.py).
+    image_favorites_file: Path
     models_root: Path
     checkpoint_dir: Path
     # LoRA folder: download target of LoRAs and the folder inline <lora:name:weight> tags resolve against.
@@ -71,6 +73,7 @@ class AppPaths(BaseModel):
             stores_dir=root / "stores",
             settings_file=root / "backend_settings.json",
             cache_dir=root / "cache",
+            image_favorites_file=root / "image_favorites.json",
             models_root=models_root,
             checkpoint_dir=models_root / MODEL_KIND_SUBDIRS["checkpoint"],
             prompt_lora_dir=models_root / MODEL_KIND_SUBDIRS["lora"],
