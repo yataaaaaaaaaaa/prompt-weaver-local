@@ -16,18 +16,19 @@ A local, Windows-first desktop tool for prompt-combinator diffusion generation.
 - Supports categories that are disabled by default and only become active when a selected sub-prompt contains their activation text.
 - Has an online model library: search Civitai for checkpoints, LoRAs and embeddings, and pick one to use it. If the file is not on disk yet it is downloaded into the ComfyUI model folders, verified, added to the local library and selected for generation.
 - Has an online image library: search Civitai images by keyword, see each image's tags, LoRAs (with their weights), checkpoint and generation parameters, and in one click use the same LoRAs with the same weights (missing ones are downloaded first), switch to the same checkpoint, or add the tags to a prompt category.
+- Has characters, for character consistency: a character bundles identity tags (appearance), outfit tags (kept separate), negative tags, optional LoRAs with weights, an optional locked seed and up to 4 reference images. Activate one in one click and every generation keeps that person: its tags go through the prompt engine as pinned categories, and its reference images steer the image through an IP-Adapter when one is available for the model. Create one by hand, or from an output or an online image, prefilled.
 - Saves every generation as an image plus an adjacent JSON metadata file in `<data dir>/output`.
-- Keeps everything else in the data directory too: frontend state (`<data dir>/stores`), the app-managed trash (`<data dir>/trash`), backend settings such as the optional Civitai API token (`<data dir>/backend_settings.json`), the file hash cache (`<data dir>/cache/file_hashes.json`), the favorite online images (`<data dir>/image_favorites.json`) and the legacy `app_state.json` / `library.json`.
+- Keeps everything else in the data directory too: frontend state (`<data dir>/stores`), the app-managed trash (`<data dir>/trash`), backend settings such as the optional Civitai API token (`<data dir>/backend_settings.json`), the file hash cache (`<data dir>/cache/file_hashes.json`), the favorite online images (`<data dir>/image_favorites.json`), the characters and their images (`<data dir>/characters`) and the legacy `app_state.json` / `library.json`.
 
 The data directory is `D:\Anything\storage\prompt-weaver-local-storage` on Windows, or `<repo>/.prompt_weaver_local_data` on other systems. Set the `PROMPT_WEAVER_DATA_DIR` environment variable to use a different one. The backend owns this layout in `backend/app/settings.py`.
 
-Model files live in the ComfyUI models folder, `D:\Anything\ComfyUI\ComfyUI\models` (`DEFAULT_MODELS_ROOT` in `backend/app/settings.py`), in its `checkpoints`, `loras` and `embeddings` sub-folders (`MODEL_KIND_SUBDIRS`). Model library downloads go there, and inline LoRA tags and embeddings in prompts are resolved from there.
+Model files live in the ComfyUI models folder, `D:\Anything\ComfyUI\ComfyUI\models` (`DEFAULT_MODELS_ROOT` in `backend/app/settings.py`), in its `checkpoints`, `loras` and `embeddings` sub-folders (`MODEL_KIND_SUBDIRS`). Model library downloads go there, and inline LoRA tags and embeddings in prompts are resolved from there. The IP-Adapter files of character reference images use the ComfyUI folders too: adapters in `ipadapter` (`IP_ADAPTER_SUBDIR`), image encoders in `clip_vision` (`IMAGE_ENCODER_SUBDIR`).
 
 ## Current behavior
 
 ### Workspace
 
-- The workspace holds movable, resizable floating windows: the panes (Image, Output browser, Generation, Used sub-prompts, Model library, Image library) and one card per prompt category. Every window shares one stacking order; clicking a window brings it to the front.
+- The workspace holds movable, resizable floating windows: the panes (Image, Output browser, Generation, Used sub-prompts, Model library, Image library, Characters) and one card per prompt category. Every window shares one stacking order; clicking a window brings it to the front.
 - Drag a window by its header and resize it with the bottom-right grip. Both handles also work from the keyboard: focus them and use the arrow keys (8 px per press, 40 px with `Shift`).
 - Each window header has a "Send to back" button; panes also have a Close button.
 - The app bar at the top has Add category, Reorganize categories, one toggle per pane to show or hide it, the visibility mode, and Undo. Tooltips show the keyboard shortcuts.
@@ -47,7 +48,7 @@ Model files live in the ComfyUI models folder, `D:\Anything\ComfyUI\ComfyUI\mode
   - LoRA files (`.safetensors`, `.bin`, `.pt`, several at once) or LoRA directories
 - The dialogs open in the last model folder or last LoRA folder you used. They need the desktop app; in a plain browser the app says so instead.
 - Adding a model or LoRA whose path is already in the library reuses (and selects) the existing entry.
-- The backend keeps the current model and its LoRAs loaded between generations. The runtime prepares the pipeline again (model included) when the model, the LoRA set or a LoRA weight changes, so the first generation after a weight change takes as long as a model switch.
+- The backend keeps the current model and its LoRAs loaded between generations. Only a different model (path, dtype, sampler or scheduler) reloads the model. LoRA changes are incremental (`diffusion-lora-runtime` 0.4.0): added LoRAs are loaded, removed ones are deleted from the pipeline, and a weight-only change just re-applies the adapter weights, so changing a weight, the LoRA set or the active character no longer reloads the model. Inline `<lora:...>` LoRAs follow the same rules; textual inversions stay loaded.
 - A sub-prompt can pull in extra LoRAs (`extra_lora_ids`). Removing a LoRA from the library also unlinks it from every sub-prompt.
 - The runtime resolves inline `<lora:name:weight>` tags against the ComfyUI `loras` folder and textual-inversion embeddings (`embedding:name`) against the `embeddings` folder (see the model folders above).
 - Library entries installed from the model library keep their provenance (provider, model, version and file ids, SHA-256, preview image, base model, trigger words, page URL). Entries added from disk have none and show as "Local file".
@@ -63,7 +64,7 @@ The Model library pane (app bar toggle "Model library") has two tabs.
   - base model: SD 1.5 / LCM / Hyper, SD 1.4, SDXL 1.0 / Lightning / Hyper / Turbo, Pony, Illustrious, NoobAI. Pony V7, SD 2.1, SD 3.5 and Flux.1 D/S are listed too, marked "Not supported locally", because the runtime cannot load them.
   - sort: Most downloaded, Highest rated, Newest
   - NSFW switch: preview images with a Civitai `nsfwLevel` above 2 are hidden unless it is on
-- Results load page by page ("Load more"). Each card shows the preview of the picked version, name, creator, type, base model, a version picker, the file size, the trigger words (with a copy button) and a status: Local, In library / Selected, Downloading, Failed or Not supported.
+- Results load page by page ("Load more"). Each card shows the preview of the picked version, name, creator, type, base model, a version picker, the file size, the trigger words (with a copy button) and a status: On disk, In library / Selected, Downloading, Failed or Not supported. The status labels are shared with the image library and the IP-Adapter files (`frontend/src/features/models/VersionStatusBadge.tsx`).
 - The card action depends on the status:
   - "Download and use" for a file that is not on disk;
   - "Use" for a file already on disk or in the library;
@@ -103,7 +104,7 @@ The Image library pane (app bar toggle "Image library") has two tabs, Search and
 
 **Detail view** of an image:
 
-- the large preview, author, base model ("Not supported locally" when the runtime cannot load it), Favorite, "Copy prompt" and a link to the image page on civitai.com;
+- the large preview, author, base model ("Not supported locally" when the runtime cannot load it), Favorite, "Copy prompt", "Create character" (see Characters) and a link to the image page on civitai.com;
 - **Tags**: the prompt split into tags, inline `<lora:...>` tags removed. "Add to category" adds them, all or only the tags you select, as one new sub-prompt of the category you pick, or of a new category. A sub-prompt that already exists in that category is refused.
 - **LoRAs**: each LoRA with its name (linked to its Civitai page once identified), its weight ("unpublished, default" when the image publishes none) and its status: In library, On disk, Available to download, Downloading (with the progress bar and Cancel of the model library), Failed, Not supported, Not identified or Resolving; the reason is in a tooltip.
 - **Use these LoRAs** makes the selection exactly the image's LoRAs, with the image's weights. LoRAs already in the library are used as they are; missing ones are installed through the model library first (same downloads, progress and checks; a download already running is joined); LoRAs that cannot be identified, downloaded or loaded are skipped with a warning listing why. When none can be used, the selection is left unchanged.
@@ -117,6 +118,44 @@ How an image's models are found:
 - A library entry of the same kind is used when its provenance (version) or SHA-256 matches, or else when its file name without extension equals the published name (case-insensitive).
 
 **Favorites** keeps images you mark with Favorite, newest first. The backend stores them in `<data dir>/image_favorites.json` (`{"version": 1, "items": [...]}`); unreadable entries are skipped.
+
+### Characters
+
+A character makes the same person appear across generations. It holds a name and a thumbnail, identity tags (appearance: face, hair, eyes, body), outfit tags (kept separate from the identity), negative tags, optional character LoRAs with their weights (the same `LoraWeight` as the LoRA selection), an optional seed that can be locked, and up to 4 reference images with a reference focus (Face or Whole subject) and a strength (0 to 1, default 0.6; `ReferenceDefaults` in `backend/app/schemas.py`).
+
+Creating a character (each opens the editor in the Characters pane, which comes to the front):
+
+- **New character**, in the Characters pane or in the Character section of the Generation pane.
+- **Create character** in the Output browser, prefilled from the output shown: its selections become the identity tags (a 'Character outfit' selection becomes the outfit tags), its LoRAs with their weights, its image seed (not locked); the output image becomes the first reference image.
+- **Create character** in an image's details (Image library), prefilled from the image: its tags, its LoRAs with their weights (found like "Use these LoRAs": missing ones are installed first, the others are skipped with a warning), its seed; the image becomes the first reference image.
+
+The **Characters pane** (app bar toggle "Characters") shows:
+
+- the **editor** while it is open: name, identity / outfit / negative tags (comma-separated), LoRAs (pick from the library, a weight field per LoRA), seed and "Lock seed", reference focus, reference strength, reference images (a new character shows the images it will import; a saved one adds "Add current output" and "Add image file", and has "Use as thumbnail" and Remove per image), Save and Cancel. Save is disabled while a field is invalid;
+- the **gallery**: one card per character, with its thumbnail, name, identity tags, the one-click **Active** switch, Edit and Delete (after a confirmation; its images are deleted, outputs made with it are kept);
+- **Reference images (IP-Adapter)**: whether reference images can be used with the selected model for each focus (the reason when they cannot, with Download for a missing IP-Adapter, its progress and Cancel), every IP-Adapter variant with the status of each file (On disk, Downloading, Available to download), and the two folders.
+
+The **Character section of the Generation pane** (right under the actions) shows the active character: thumbnail, name, tags, seed lock, Deactivate, its reference strength and whether its references apply with the selected model. Without one, it offers a dropdown to activate a character and "New character". One character at most is active; the backend saves which one.
+
+How the active character takes part in a generation (the precedence is documented once, at the top of `frontend/src/domain/characters.ts`):
+
+1. Its identity tags are the locked sub-prompt of a pinned **'Character'** category, its outfit tags the locked sub-prompt of a pinned **'Character outfit'** category. The prompt engine selects them before every user category, whatever the priorities; they never use a cycle counter and draw nothing from the prompt seed, so the same prompt seed still picks the same user sub-prompts. They appear in the Used sub-prompts pane and the output metadata like any category (locked), so forbidden rules can be created with them.
+2. Forbidden rules: the character wins. A user sub-prompt forbidden together with the identity or the outfit is never chosen (another one of its category is, or the category is skipped), and category cards show it as indirectly disabled. The outfit is skipped when a rule forbids it together with the identity.
+3. The character's tags can trigger the activation text of user categories.
+4. Its negative tags are appended to the negative prompt, except those already in it.
+5. LoRAs: the character's LoRAs come first with their weights, then the selected LoRAs, then the prompt-linked ones. A LoRA both in the character and in the selection uses the character's weight. Character LoRAs missing from the library are skipped with a warning, like selected ones.
+6. A locked seed replaces the image seed whatever the image seed behavior, and the seed field is left unchanged; the prompt seed and the cycle counters advance as usual.
+7. Reference images: the request names the character (`character_id`) and the backend applies its reference images through the IP-Adapter for the model's family and the character's focus. When they cannot apply (no reference image, a model family without IP-Adapter, the IP-Adapter not on disk), generation runs without them and the output records why.
+8. If a user category already has the key 'character' (or 'character-outfit'), the pinned one is renamed ('character-2'). Rules naming 'Character' then target the user category.
+
+IP-Adapters:
+
+- Four variants from [h94/IP-Adapter](https://huggingface.co/h94/IP-Adapter), pinned to one revision (`backend/app/services/ip_adapters.py`): SD 1.5 face (IP-Adapter Plus Face), SD 1.5 general (IP-Adapter Plus), SDXL face (IP-Adapter Plus Face ViT-H) and SDXL general (IP-Adapter Plus ViT-H). All four use the same ViT-H image encoder (`CLIP-ViT-H-14-laion2B-s32B-b79K.safetensors`, 2.5 GB), downloaded once. The SD 1.5 adapters are about 98 MB, the SDXL ones 848 MB.
+- The model's family (SD 1.5 or SDXL) is read from the checkpoint header without torch (`diffusion_lora_runtime.pipeline_architecture`), and with the character's focus picks the variant. Other families cannot use reference images.
+- Files already in ComfyUI's `models/ipadapter` and `models/clip_vision` folders are reused, found by name and size, or by SHA-256 when renamed (the first install hashes them once). Missing files are downloaded on request (Download), through the same download manager as the model library: verified by size and SHA-256, with progress and Cancel; no token is sent.
+- The runtime loads, swaps and unloads IP-Adapters and changes their scale without reloading the model. The image encoder is read once and reused while its file stays the same. A missing or unreadable reference image fails the generation with a clear message before anything is loaded.
+
+Storage: `<data dir>/characters/characters.json` (`{"version": 1, "active_id", "items"}`) and one PNG per image in `<data dir>/characters/images` (reference images at most 1024 px on the long side, thumbnails at most 384 px, EXIF orientation applied). Invalid entries are skipped. A characters file that cannot be read, or has another version, is reported as an error (HTTP 503) and never overwritten.
 
 ### Prompt categories
 
@@ -143,7 +182,7 @@ How an image's models are found:
   - a tag chip: any sub-prompt carrying that tag
 - Rules from older versions, including "contains text" rules, still load.
 - Exact sub-prompt matching ignores casing, whitespace and the order of comma-separated tags.
-- Category cards highlight the sub-prompts forbidden together with the selected association source in red, or purple when a lock is involved.
+- Category cards highlight the sub-prompts forbidden together with the selected association source in red, or purple when a lock is involved (the active character's 'Character' and 'Character outfit' prompts count as locked).
 
 ### Seeds
 
@@ -153,6 +192,7 @@ How an image's models are found:
   - `Auto increment`
   - `Randomize`
   - `Per-category cycle (random restart)` (prompt seed only)
+- An active character with a locked seed replaces the image seed and leaves the image seed field unchanged (see Characters).
 
 ### Outputs
 
@@ -161,6 +201,7 @@ How an image's models are found:
 - The arrow keys move through the output history: left/up goes to the previous output, right/down to the next. They are left to the focused control when it uses them itself (text fields, window handles, menus, dropdowns, the app bar); click elsewhere to browse again. The Output browser pane offers First / Previous / Next / Last buttons.
 - For the current output, the Output browser shows its number and position, image name, size, steps, CFG, seed, prompt seed, model and LoRAs with their weights (`name (weight)`); the Used sub-prompts pane lists each category with its chosen sub-prompt. "Copy prompt" (Output browser and Generation pane) copies the full prompt.
 - The metadata JSON lists the LoRAs used as `active_loras: [{"id", "weight"}]`. Files written before LoRA weights existed (`active_lora_ids`) still load, with weight 1; they are not rewritten.
+- An output made with an active character has a `character` key: `{"id", "name", "reference": {"applied", "variant_id", "strength", "image_ids", "reason"}}`, where `reason` says why the reference images were not applied. Outputs made without a character have no such key (the API answers `character: null`), so older outputs load unchanged. The Output browser shows it as a 'Character' row, and has "Create character" (see Characters).
 - Output ids come from file names only, so the list stays fast with thousands of outputs. Metadata and images are loaded by id through the backend API.
 
 ### Delete and undo
@@ -210,11 +251,13 @@ prompt-weaver-local/
       openapi_export.py    dumps the OpenAPI document without a server
       routers/             one APIRouter per area, registered in routers/__init__.py (ROUTERS)
         health, bootstrap, outputs, generation, tasks, stores,
-        models, model_installs, downloads, images, provider_errors (provider error -> HTTP status)
+        models, model_installs, downloads, images, characters, ip_adapters,
+        provider_errors (provider error -> HTTP status)
       services/            domain logic and IO, constructed with injected paths
         container.py       build_services -> AppServices
         json_files.py      crash-resilient JSON files (.new/.old sidecars)
-        http.py            the only place that builds outgoing httpx clients (HttpClientFactory)
+        http.py            the only place that builds outgoing httpx clients (HttpClientFactory), describe_http_error
+        files.py           small filesystem helpers (remove_quietly)
         backend_settings.py  backend_settings.json: provider API tokens (never leave the backend)
         model_providers/   ModelProvider / ImageProvider protocols + shared install rules (base.py), registries,
                            civitai.py (models), civitai_images.py (image feed and galleries),
@@ -224,19 +267,22 @@ prompt-weaver-local/
         image_favorites.py favorite images (image_favorites.json)
         downloads.py       generic DownloadManager (.part, SHA-256, retry/resume, cancel, dedupe, progress)
         file_hashes.py     streamed SHA-256, persistent hash cache, the one SHA-256 normalization
-        local_models.py    download targets and "already on disk" detection (by path and by hash)
+        local_models.py    download targets and "already on disk" detection (by path and by hash), per kind or folder
+        characters.py      CharacterStore: characters.json, image imports (output, file, URL), active character
+        ip_adapters.py     IP-Adapter catalog (h94, pinned), on-disk status, the support rule, installs
         model_installs.py  install = find on disk or download; ModelSource provenance; display names
         legacy_state.py    app_state.json / library.json (read-only seeds)
         outputs.py         output ids, metadata, images, trash/restore
         persisted_stores.py  frontend store files, legacy Electron formats included
         task_hub.py        latest event per task + WebSocket fan-out
-        generation.py      generation orchestration, GeneratorPort
+        generation.py      generation orchestration, GeneratorPort, character references (ReferenceInput)
         runtime_adapter.py the only importer of the diffusion_lora_runtime generator (loaded lazily)
         signals.py         Ctrl+C cancels, second Ctrl+C exits
     openapi.json           committed OpenAPI snapshot
     tests/                 pytest + TestClient on temp dirs with a fake generator and a fake network
-                           (support.py: FakeHttp, StubProvider, StubImageProvider, CatalogStub, FakeDownloadManager;
-                           fixtures/civitai: real answers)
+                           (support.py: FakeHttp, StubProvider, StubImageProvider, CatalogStub, FakeDownloadManager,
+                           the tiny IP-Adapter catalog; fixtures/civitai, fixtures/huggingface: real answers;
+                           fixtures/characters: a version 1 characters file)
     run_backend.py
   frontend/
     electron/              main.cjs (backend start, window, dialogs), preload.cjs (bridge), ipcChannels.cjs,
@@ -249,18 +295,18 @@ prompt-weaver-local/
       persistence/         persist.ts (the one persistence mechanism), storeBackend.ts, storeNames.ts
       domain/              pure logic: text, guards, categories, forbiddenRules, reachability, promptEngine,
                            seeds, library, loraSelection, generationRequest, outputs, layout, legacyImport, paths,
-                           modelCatalog, imageLibrary
+                           modelCatalog, imageLibrary, characters (prompt injection), characterDrafts (editor form)
       stores/              one zustand store per domain (see "Frontend stores" below), pagedSearch.ts (the search
-                           engine of the online catalogs), clipboardActions.ts
+                           engine of the online catalogs), clipboardActions.ts, flags.ts (busy flag records)
       features/            thin Fluent views per feature (categories, forbidden, generation, library, models, images,
-                           outputs)
+                           outputs, characters)
       workspace/           Workspace shell, FloatingPane, app bar, paneRegistry.tsx (PANES)
       ui/                  shared views and hooks: boot screen, error boundary, notifications host, PaneLayout, keyboard
-                           hints, useInfiniteScroll, spinButtonValue
+                           hints, useInfiniteScroll, spinButtonValue, ConfirmDialog
       app/                 App, providers + theme, keymap.json, commands.ts, global shortcuts
       services/            desktop bridge (Electron preload) and clipboard
-      test/                Vitest setup, render and dialog helpers, IntersectionObserver stub, model and image
-                           library test data
+      test/                Vitest setup, render and dialog helpers, IntersectionObserver stub, model, image library and
+                           character test data, character store doubles for view tests
     __mocks__/zustand.ts   resets every store between tests
   launcher/
     src/prompt_weaver_launcher/cli.py
@@ -269,14 +315,16 @@ prompt-weaver-local/
 ### Single sources of truth
 
 - **Shared data types.** `backend/app/schemas.py` is the truth. From `frontend/`, run `npm run gen:api` to export the OpenAPI document to `backend/openapi.json` and generate `frontend/src/api/schema.gen.ts` from it. The frontend imports named aliases from `src/api/types.ts`; never hand-write a TypeScript mirror. Two tests fail when either generated file is stale: `backend/tests/test_openapi_snapshot.py` and `frontend/src/api/apiTypes.test.ts`.
-- **Shared defaults.** Defaults needed on both sides are defined once, in a `schemas.py` model decorated with `@export_defaults`: `GenerationDefaults` (size, steps, CFG, negative prompt, seed behaviors, torch dtype), `ModelSearchQuery`, `ImageSearchQuery` (provider, sort, period, NSFW off, locally usable only, page size) and `LoraWeightDefaults` (weight 1, range -10..10, step 0.05). `npm run gen:api` writes their values to `frontend/src/api/defaults.gen.ts` (`GENERATION_DEFAULTS`, `MODEL_SEARCH_QUERY_DEFAULTS`, `IMAGE_SEARCH_QUERY_DEFAULTS`, `LORA_WEIGHT_DEFAULTS`), and the frontend derives its own defaults from them: `DEFAULT_GENERATION_SETTINGS` in `src/domain/generationRequest.ts`, `DEFAULT_CATALOG_FILTERS` in `src/domain/modelCatalog.ts` and `DEFAULT_IMAGE_FILTERS` in `src/domain/imageLibrary.ts`. The staleness test covers this file too.
-- **LoRA weights.** One representation end to end: `LoraWeight {id, weight}` (`schemas.py`). The LoRA selection (`libraryStore.selectedLoras`), the generation request (`GenerationLoRA` = library entry + weight), the output metadata (`active_loras`) and the runtime call (`LoRASpec.weight` of `diffusion-lora-runtime`) all use it. The frontend clamps weights only with `clampLoraWeight` and formats them only with `formatLoraWeight` / `weightedLorasText` (`src/domain/loraSelection.ts`).
+- **Shared defaults.** Defaults needed on both sides are defined once, in a `schemas.py` model decorated with `@export_defaults`: `GenerationDefaults` (size, steps, CFG, negative prompt, seed behaviors, torch dtype), `ModelSearchQuery`, `ImageSearchQuery` (provider, sort, period, NSFW off, locally usable only, page size), `LoraWeightDefaults` (weight 1, range -10..10, step 0.05) and `ReferenceDefaults` (character reference strength 0.6, range 0..1, step 0.05, focus face, at most 4 images). `npm run gen:api` writes their values to `frontend/src/api/defaults.gen.ts` (`GENERATION_DEFAULTS`, `MODEL_SEARCH_QUERY_DEFAULTS`, `IMAGE_SEARCH_QUERY_DEFAULTS`, `LORA_WEIGHT_DEFAULTS`, `REFERENCE_DEFAULTS`), and the frontend derives its own defaults from them: `DEFAULT_GENERATION_SETTINGS` in `src/domain/generationRequest.ts`, `DEFAULT_CATALOG_FILTERS` in `src/domain/modelCatalog.ts` and `DEFAULT_IMAGE_FILTERS` in `src/domain/imageLibrary.ts`. The staleness test covers this file too.
+- **LoRA weights.** One representation end to end: `LoraWeight {id, weight}` (`schemas.py`). The LoRA selection (`libraryStore.selectedLoras`), the character LoRAs (`Character.loras`), the generation request (`GenerationLoRA` = library entry + weight), the output metadata (`active_loras`) and the runtime call (`LoRASpec.weight` of `diffusion-lora-runtime`) all use it. The frontend clamps weights only with `clampLoraWeight`, merges character, selected and prompt-linked LoRAs only in `resolveLoraSelection` (`src/domain/loraSelection.ts`), and formats weights (and the reference strength) only with `formatWeight` (`src/domain/text.ts`) / `weightedLorasText`.
 - **Inline LoRA syntax** (`<lora:name:weight>`) belongs to `diffusion_lora_runtime.prompt_lora` (`extract_prompt_lora_specs`, `strip_prompt_lora_tags`), which imports without torch: the image library reads the prompts of online images with it.
 - **Online image metadata.** Parsing Civitai's image metadata and merging its model lists is backend-owned (`civitai_image_meta.py`); the frontend only reads `RemoteImage.resources` and `ImageGenerationParams.clean_prompt`. Splitting a prompt into tags (`splitPromptTags`) and joining tags back into prompt text (`joinPromptTags`, also used for trigger words) live in `src/domain/text.ts`.
 - **Window geometry and category priority defaults** belong to the frontend (default layouts in `paneRegistry.tsx`, the categories domain). The legacy `app_state.json` fields are nullable on the backend and carry no defaults.
 - **Model folders and data dir layout.** `backend/app/settings.py` (`DEFAULT_MODELS_ROOT`, `MODEL_KIND_SUBDIRS`, `AppPaths`); the UI shows the folders reported by `GET /api/models/info`.
 - **Model library rules** are backend-owned and only read by the frontend: which file of a version gets installed (`RemoteModelVersion.default_file_id`), whether it can be installed (`unavailable_reason`), the display name of an install (`InstalledModel.name`, the download task title), the base model -> architecture mapping and the NSFW level rule (`model_providers/civitai.py`), and file hash normalization (`services/file_hashes.py`: `normalize_sha256` for SHA-256, `normalize_file_hash` for the short Civitai hashes too).
-- **Downloads.** Every model file, including the LoRAs and checkpoints of "Use these LoRAs" / "Use this checkpoint", is installed through one flow: `modelCatalogStore.install` -> `POST /api/models/install` -> `DownloadManager`.
+- **Downloads.** Every model file, including the LoRAs and checkpoints of "Use these LoRAs" / "Use this checkpoint", is installed through one flow: `modelCatalogStore.install` -> `POST /api/models/install` -> `DownloadManager`. IP-Adapter files go through the same `DownloadManager` (`ipAdapterStore.install` -> `POST /api/ip-adapters/{variant_id}/install`). "Already on disk" (by name and size, or by hash) has one owner, `services/local_models.py` `LocalModelFiles`, used per model kind and per IP-Adapter folder; in the UI, the label, color and icon of each file status ('On disk', 'Downloading', ...) have one owner, `features/models/VersionStatusBadge.tsx`.
+- **Characters.** The data shape is `schemas.py` (`Character`, `CharacterDraft`, image sources, `OutputCharacter`); storage, ids, image imports and the active character belong to `services/characters.py` (`CharacterStore`); the frontend mirrors them in one store, `charactersStore`. Their injection into prompt building and its precedence belong to `src/domain/characters.ts`; the editor form, its validation and the prefills from an output or an image to `src/domain/characterDrafts.ts`. An image's LoRAs as library entries with weights are collected once, by `imageLibraryStore.collectImageLoras`, for both "Use these LoRAs" and "Create character".
+- **IP-Adapters.** The catalog (Hugging Face repo, pinned revision, file names, sizes, SHA-256, variants per family and focus) and the rule "can reference images apply with this model and focus, and why not" belong to `services/ip_adapters.py`; both the UI (`GET /api/ip-adapters`) and generation use that one rule, and `ipAdapterStore` never computes support itself. Which pipeline family the runtime loads a model as belongs to `diffusion_lora_runtime.pipeline_architecture` (torch-free; the runtime's own loader uses it too). The runtime request is `IPAdapterSpec`, built only in `services/runtime_adapter.py`.
 - **Host and ports.** `config/defaults.json` is read by the launcher, `backend/run_backend.py` and `config/appConfig.cjs` (Vite and Electron). The frontend builds every backend URL in `src/api/config.ts`.
 - **Frontend state.** Each domain has exactly one zustand store that owns its state and actions (see below).
 - **Untrusted values.** Persisted and imported data is validated through `src/domain/guards.ts`; lists of backend enum values (seed behaviors, torch dtypes) are exhaustive typed records, so the type-check fails when the schema changes.
@@ -287,21 +335,23 @@ The frontend is organized around zustand stores, one per domain. Each store is t
 
 | Store | Owns | Persisted as |
 | --- | --- | --- |
-| `categoriesStore` | categories and sub-prompts (`addSubPromptWithText` for tags from the image library); reachability ("indirectly disabled") hooks | `categorie-store` |
-| `forbiddenRulesStore` | forbidden rules, the association source of the Used sub-prompts pane, highlights | `forbidden-associations-store` |
+| `categoriesStore` | categories and sub-prompts (`addSubPromptWithText` for tags from the image library); reachability ("indirectly disabled") hooks, which include the active character's pinned categories | `categorie-store` |
+| `forbiddenRulesStore` | forbidden rules, the association source of the Used sub-prompts pane, highlights (the active character's prompts count as locked) | `forbidden-associations-store` |
 | `libraryStore` | models, LoRAs (with model library provenance), the model selection and the LoRA selection with weights (`selectedLoras`), file dialogs, registration of installed models | `library-store` (version 2) |
 | `modelCatalogStore` | model library: provider info, search filters, results and paging, picked versions, installs in progress, provider token updates. `install(model, version, fileId, {select, announce})` resolves to an `InstallOutcome` (installed + library entry, failed, cancelled, refused); a second install of a running install joins it | - |
-| `imageLibraryStore` | image library: search filters, results and paging, the image in the detail view, the resolution of each image's models, running "Use these LoRAs" and checkpoint switches, favorites (read from and saved to the backend) | - |
+| `imageLibraryStore` | image library: search filters, results and paging, the image in the detail view, the resolution of each image's models, running "Use these LoRAs" and checkpoint switches, favorites (read from and saved to the backend); `collectImageLoras` (an image's LoRAs as library entries with weights, shared with "Create character") | - |
+| `charactersStore` | the frontend copy of the backend-owned characters (`/api/characters`) and the active character (`activeId`), the character editor (form, and the images a new character will import), busy flags; actions: load, setActive / toggleActive, startCreate / startCreateFromOutput / startCreateFromImage / startEdit, form and form-LoRA edits, saveEditor, remove, reference images (current output, file, remove, thumbnail), setReferenceStrength | - (the backend saves characters and `active_id`) |
+| `ipAdapterStore` | the IP-Adapter status read for the selected model (variants, files on disk or downloading, reference support per focus) and running installs; actions: refresh (views call it when they show reference support and when the selected model changes), install (follows the downloads through the tasks store), cancelInstall | - |
 | `generationSettingsStore` | size, steps, CFG, negative prompt, seed inputs and behaviors | `settings-store` |
-| `generationStore` | single and continuous generations, cancel | - |
+| `generationStore` | single and continuous generations (with the active character), cancel | - |
 | `outputsStore` | output ids, current output and its metadata, delete/restore, copy | `current-image-store` |
 | `undoStore` | undo stack (generation steps, deletions) | - |
 | `tasksStore` | latest task event per task (`/ws/tasks`), generation and download progress, `waitForTask` | - |
-| `workspaceStore` | window layouts and stacking, closed panes, visibility mode | `workspace-store` |
+| `workspaceStore` | window layouts and stacking, closed panes, visibility mode; `revealPane` (shows a pane and brings it to the front, e.g. the Characters pane when "Create character" opens the editor) | `workspace-store` |
 | `notificationsStore` | user-facing errors, warnings and confirmations | - |
-| `sessionStore` | boot: bootstrap, hydration of every persisted store, legacy seeding, resuming running installs | - |
+| `sessionStore` | boot: bootstrap, hydration of every persisted store, legacy seeding, resuming running installs, loading the characters in the background (never delays or fails boot; a failure shows in the Characters pane with Retry) | - |
 
-Copying text with a notification goes through one action module, `src/stores/clipboardActions.ts` (`copyTextWithFeedback`), used by the outputs, model catalog and image library stores. The two online catalogs share one search engine, `src/stores/pagedSearch.ts` (debounced query, abort of the previous request, stale answers ignored, pages appended without duplicates).
+Copying text with a notification goes through one action module, `src/stores/clipboardActions.ts` (`copyTextWithFeedback`), used by the outputs, model catalog and image library stores. Busy / running flag records (`Record<id, true>`) are updated with `withFlag` (`src/stores/flags.ts`). The two online catalogs share one search engine, `src/stores/pagedSearch.ts` (debounced query, abort of the previous request, stale answers ignored, pages appended without duplicates).
 
 Persisted stores are declared with `persistedStoreOptions` (`src/persistence/persist.ts`) and their names come from `src/persistence/storeNames.ts`; a shape change bumps the store version and adds a `migrate` with a test.
 
@@ -311,12 +361,12 @@ Persisted stores are declared with `persistedStoreOptions` (`src/persistence/per
 - `src/persistence/persist.ts` is the only persistence mechanism. It hydrates stores explicitly at boot, ignores writes until a store has been read, coalesces writes, and runs legacy merge migrations.
 - On first start, stores without persisted data are seeded from the legacy `app_state.json` and `library.json`, which `GET /api/bootstrap` returns (LoRA references missing from the library are stripped). The app no longer saves its state to these two files: `library.json` is a read-only seed, and the library lives in `library-store`.
 - `library-store` is version 2: entries may carry a `source` (model library provenance), and the LoRA selection is `selectedLoras: [{id, weight}]`. Older data migrates on load: version 0 entries get `source: null`, and the `selectedLoraIds` of versions 0 and 1 become `selectedLoras` at weight 1. The `last_lora_ids` of a legacy `app_state.json` seed the selection at weight 1 too.
-- The backend owns the favorite online images (`<data dir>/image_favorites.json`, version 1).
+- The backend owns the favorite online images (`<data dir>/image_favorites.json`, version 1) and the characters (`<data dir>/characters/characters.json`, version 1, plus `characters/images/*.png`; see Characters).
 - The frontend reads outputs through the backend API: `/api/outputs`, `/api/outputs/{id}`, `/api/outputs/{id}/image`, `/api/outputs/{id}/trash` and `/api/trash/{id}/restore`.
 
 ### Extension points
 
-- **New panes** (for example a characters pane): add or extend a store in `src/stores` (logic in `src/domain`), then the view in `src/features/<area>` (using `src/ui/PaneLayout.tsx`), then one entry in `frontend/src/workspace/paneRegistry.tsx`. The app bar gets its show/hide toggle automatically.
+- **New panes:** add or extend a store in `src/stores` (logic in `src/domain`), then the view in `src/features/<area>` (using `src/ui/PaneLayout.tsx`), then one entry in `frontend/src/workspace/paneRegistry.tsx`. The app bar gets its show/hide toggle automatically.
 - **New API areas:** add `backend/app/routers/<area>.py` exposing an `APIRouter`, append it to `ROUTERS`, put its logic in a service wired in `services/container.py`, add its models to `schemas.py`, then run `npm run gen:api` and add the client calls to `src/api/client.ts`.
 - **Background tasks:** progress events form one discriminated union, `TaskEvent` = `GenerationTaskEvent | DownloadTaskEvent`, keyed by `task_id` and published through `TaskHub.publish` from any thread. The frontend reads them from `tasksStore` (`useDownloadProgress`, `waitForTask`).
 - **Downloads:** `services/downloads.py` `DownloadManager.start(DownloadSpec(url, dest, title, headers, expected_sha256, expected_size), on_complete=...)` is generic: any feature that needs a file gets streaming, verification, retries, cancel (`POST /api/downloads/{task_id}/cancel`) and progress events.
@@ -350,6 +400,31 @@ Errors: 404 for an unknown provider, model, version or hash; 403 when Civitai ne
 | `DELETE /api/images/favorites/{provider}/{image_id}` | removes a favorite (404 when it is not one) |
 
 Errors: 422 for invalid parameters or a cursor this backend did not produce; 404 for an unknown provider; 403 / 502 from Civitai as above. A model gallery Civitai no longer knows is skipped.
+
+### Characters API
+
+| Endpoint | Purpose |
+| --- | --- |
+| `GET /api/characters` | every character in creation order, and `active_id` |
+| `POST /api/characters` | creates a character (`CharacterCreateRequest`: the fields plus up to 4 `reference_sources`); all or nothing; the first reference image also becomes the thumbnail |
+| `PUT /api/characters/active` | `{"id": "chr-..."}` activates a character, `{"id": null}` deactivates; answers the collection |
+| `PUT /api/characters/{id}` | replaces the editable fields (`CharacterDraft`); images are kept |
+| `DELETE /api/characters/{id}` | deletes the character and its images, and deactivates it |
+| `POST /api/characters/{id}/reference-images` | `{"source": ...}` imports one more reference image (a thumbnail is made when there is none) |
+| `DELETE /api/characters/{id}/reference-images/{image_id}` | removes a reference image (the thumbnail stays) |
+| `PUT` / `DELETE /api/characters/{id}/thumbnail` | sets the thumbnail from a source, or removes it |
+| `GET /api/characters/{id}/images/{image_id}` | a reference image or the thumbnail (`image/png`) |
+
+Image sources (`kind`): `output` (an output's image), `file` (a PNG, JPEG, WebP or BMP file), `url` (at most 25 MB; error messages never quote the URL's query) and `character_image` (a copy of one of the character's images, e.g. for the thumbnail; refused when creating). A generation request names the active character with `character_id` (409 for an unknown character).
+
+Errors: 404 for an unknown character, image, output or file; 409 when a character already has 4 reference images; 422 for an invalid body (e.g. a locked seed without a seed) or a file that is not a supported image; 502 when an image URL cannot be downloaded; 503 when `characters.json` cannot be read (it is then never overwritten).
+
+### IP-Adapter API
+
+| Endpoint | Purpose |
+| --- | --- |
+| `GET /api/ip-adapters?model_path=` | every IP-Adapter variant with its files (`local_path` when on disk, `task_id` while downloading) and `ready`, the two folders, and for `model_path` its family (`architecture`) and one `ReferenceSupport` per focus (`variant_id`, `ready`, `reason` when references cannot apply) |
+| `POST /api/ip-adapters/{variant_id}/install` | `installed` when every file is on disk, else `downloading` with one task id per missing file (progress on `/ws/tasks`, cancel with `POST /api/downloads/{task_id}/cancel`); 404 for an unknown variant |
 
 ## Stack
 
@@ -438,23 +513,25 @@ npm run electron:start
 
 ## Tests and checks
 
-Tests never touch the real data directory, the model folders or the network. The backend tests point `PROMPT_WEAVER_DATA_DIR` and the model folders at a temp dir and use a fake generator. Every outgoing request is answered by `FakeHttp` (real trimmed Civitai answers live in `tests/fixtures/civitai`), and any other request to a non-loopback host fails the test. No model, GPU or network is needed.
+Tests never touch the real data directory, the model folders or the network, and never load a real model. The backend tests point `PROMPT_WEAVER_DATA_DIR` and the model folders at a temp dir and use a fake generator. Every outgoing request is answered by `FakeHttp` (real trimmed Civitai answers live in `tests/fixtures/civitai`), and any other request to a non-loopback host fails the test. No model, GPU or network is needed.
 
 ```powershell
 cd backend
-uv run pytest              # 619 tests: API tests (TestClient), service unit tests, the download manager against a
-                           # local HTTP server, and the install and image library flows end to end
+uv run pytest              # 714 tests: API tests (TestClient), service unit tests, the download manager against a
+                           # local HTTP server, and the install, image library and character flows end to end
 
 cd frontend
-npm test                   # 818 Vitest tests: domain, stores, persistence, API client, components, Electron helpers
+npm test                   # 1004 Vitest tests: domain, stores, persistence, API client, components, Electron helpers
 npm run typecheck          # tsc -b
 npm run build              # type-check + production bundle
 npm run gen:api            # regenerate backend/openapi.json, src/api/schema.gen.ts and src/api/defaults.gen.ts
                            # after changing schemas.py
 
 cd D:\Anything\libs\diffusion-lora-runtime
-D:\Anything\prompt-weaver-local\backend\.venv\Scripts\python.exe -m pytest -q -p no:cacheprovider tests
-                           # runtime lib (47 tests, torch and diffusers are stubbed)
+uv run --extra dev pytest -q tests
+                           # runtime lib (109 tests: torch, diffusers and transformers are stubbed and the pipeline is
+                           # a recording fake; one subprocess test runs the IP-Adapter code with the real libraries on a
+                           # tiny random CPU pipeline built from configs, and skips itself when they are missing)
 ```
 
 If `VIRTUAL_ENV` points at another virtual environment, unset it before running `uv` commands in `backend/`.
@@ -469,6 +546,7 @@ If `VIRTUAL_ENV` points at another virtual environment, unset it before running 
 - On SD 1.x models the prompt is plain text: Diffusers truncates it at 77 tokens (long-prompt chunking is SDXL only). Embeddings work on SD 1.x with their CLIP-L vectors.
 - New checkpoint entries, installed SD 1.5 checkpoints included, get the current generation size as their default size: set 512 x 512 (or 512 x 768) yourself for SD 1.5.
 - A LoRA entry can point to either a file or a directory.
-- The shared `diffusion-lora-runtime` package handles runtime model loading, LoRA loading (with per-LoRA weights), inline prompt LoRA resolution, textual-inversion resolution and KSample mapping. The backend imports its generator on the first generation only, because that loads torch; its `prompt_lora` module (the inline LoRA syntax) is torch-free and used at any time.
+- Reference images need an SD 1.5 or SDXL model (Pony, Illustrious and NoobAI are SDXL). The first generation with reference images reads the 2.5 GB image encoder; later ones reuse it.
+- The shared `diffusion-lora-runtime` package (0.4.0) handles runtime model loading, incremental LoRA loading (with per-LoRA weights), IP-Adapters (`IPAdapterSpec`, ComfyUI single-file or folder image encoders), inline prompt LoRA resolution, textual-inversion resolution and KSample mapping. The backend imports its generator on the first generation only, because that loads torch; its `prompt_lora` module (the inline LoRA syntax) is torch-free and used at any time.
 - Civitai rate-limits and sometimes slows down its public API; the image library shows such failures with a Retry button. With "Only locally usable models" on, Civitai is asked for images of loadable base models only, but it may still return images whose base model is unknown: they show "Not supported locally", and models the runtime cannot load are never installed.
 - Width, height, steps and CFG stay user-editable in the UI.
