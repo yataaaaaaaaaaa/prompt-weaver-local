@@ -21,7 +21,7 @@ from typing import Any
 from pydantic import ValidationError
 
 from ..schemas import STORE_NAME_PATTERN, PersistedStoreEnvelope
-from .json_files import read_json, read_resilient_json, sidecar_paths, write_json_atomic
+from .json_files import path_lock, read_json, read_resilient_json, sidecar_paths, write_json_atomic
 
 _STORE_NAME_RE = re.compile(STORE_NAME_PATTERN, re.ASCII)
 _STATE_FILE_NAME = "state.json"
@@ -43,19 +43,21 @@ _MISSING = object()
 
 def _read_file(path: Path) -> Any:
     """Parsed content of `path` (sidecar-resilient); _MISSING when no file exists.
-    Raises PersistedStoreUnreadable when files exist but none of them is valid JSON."""
-    payload = read_resilient_json(path)
-    if payload is not None:
-        return payload
-    # read_resilient_json returns None both for JSON null and for "nothing readable".
-    if path.exists():
-        try:
-            return read_json(path)
-        except (OSError, ValueError) as exc:
-            raise PersistedStoreUnreadable(f"{path} is not valid JSON: {exc}") from exc
-    if any(sidecar.exists() for sidecar in sidecar_paths(path)):
-        raise PersistedStoreUnreadable(f"{path} could not be recovered from its .new/.old copies.")
-    return _MISSING
+    Raises PersistedStoreUnreadable when files exist but none of them is valid JSON.
+    Holds the path's lock throughout, so a concurrent write of the same store is never seen half done."""
+    with path_lock(path):
+        payload = read_resilient_json(path)
+        if payload is not None:
+            return payload
+        # read_resilient_json returns None both for JSON null and for "nothing readable".
+        if path.exists():
+            try:
+                return read_json(path)
+            except (OSError, ValueError) as exc:
+                raise PersistedStoreUnreadable(f"{path} is not valid JSON: {exc}") from exc
+        if any(sidecar.exists() for sidecar in sidecar_paths(path)):
+            raise PersistedStoreUnreadable(f"{path} could not be recovered from its .new/.old copies.")
+        return _MISSING
 
 
 def _legacy_mapped_value(payload: dict[str, Any], name: str) -> str | None:
@@ -117,8 +119,9 @@ class PersistedStoreRepository:
         Other files in the store directory are left alone; the directory is removed when empty."""
         state_file = self._state_file(name)
         legacy_file = self._legacy_flat_file(name)
-        for path in (state_file, *sidecar_paths(state_file), legacy_file, *sidecar_paths(legacy_file)):
-            path.unlink(missing_ok=True)
+        with path_lock(state_file), path_lock(legacy_file):
+            for path in (state_file, *sidecar_paths(state_file), legacy_file, *sidecar_paths(legacy_file)):
+                path.unlink(missing_ok=True)
         try:
             state_file.parent.rmdir()
         except OSError:
