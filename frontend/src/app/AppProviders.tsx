@@ -30,8 +30,11 @@ export function AppProviders({ children }: { children: ReactNode }): JSX.Element
 	useDocumentStyles();
 	const styles = useStyles();
 	const theme = useAppTheme();
+	// applyStylesToPortals defaults to true, which copies `styles.root` onto every portal mount node. Fluent positions
+	// that node absolutely at z-index 1000000, so the full-height opaque background would cover the whole app as soon
+	// as the first tooltip/menu/toast portal exists. Portals still receive the theme tokens without it.
 	return (
-		<FluentProvider theme={theme} className={styles.root}>
+		<FluentProvider theme={theme} className={styles.root} applyStylesToPortals={false}>
 			<ErrorBoundary>{children}</ErrorBoundary>
 		</FluentProvider>
 	);
