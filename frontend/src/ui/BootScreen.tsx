@@ -1,26 +1,19 @@
-// Shown until the session store reaches 'ready': a spinner while connecting, the error and a Retry
-// button when booting failed.
-import {
-	Button,
-	makeStyles,
-	MessageBar,
-	MessageBarActions,
-	MessageBarBody,
-	MessageBarTitle,
-	Spinner,
-} from '@fluentui/react-components';
+// Shown until the session store reaches 'ready': the app name and a spinner while connecting, a blocking error card
+// with Retry (the primary action) when booting failed.
+import { Button, makeStyles, Spinner, Title3, tokens } from '@fluentui/react-components';
 import { ArrowClockwiseRegular } from '@fluentui/react-icons';
 import { useSessionStore } from '../stores/sessionStore';
-import { CenteredScreen } from './CenteredScreen';
+import { CenteredScreen, ErrorCard } from './CenteredScreen';
 
 const useStyles = makeStyles({
-	error: {
-		width: '100%',
-		maxWidth: '720px',
+	connecting: {
+		display: 'flex',
+		flexDirection: 'column',
+		alignItems: 'center',
+		gap: tokens.spacingVerticalXXL,
 	},
-	details: {
-		whiteSpace: 'pre-wrap',
-		wordBreak: 'break-word',
+	title: {
+		margin: 0,
 	},
 });
 
@@ -33,19 +26,22 @@ export function BootScreen(): JSX.Element {
 	return (
 		<CenteredScreen as="main">
 			{phase === 'failed' ? (
-				<MessageBar intent="error" layout="multiline" className={styles.error}>
-					<MessageBarBody>
-						<MessageBarTitle>Startup error</MessageBarTitle>
-						<span className={styles.details}>{bootError ?? 'The backend could not be reached.'}</span>
-					</MessageBarBody>
-					<MessageBarActions>
-						<Button icon={<ArrowClockwiseRegular />} onClick={() => void retry()}>
+				<ErrorCard
+					title="Prompt Weaver could not start"
+					message={bootError ?? 'The backend could not be reached.'}
+					actions={
+						<Button appearance="primary" icon={<ArrowClockwiseRegular />} onClick={() => void retry()}>
 							Retry
 						</Button>
-					</MessageBarActions>
-				</MessageBar>
+					}
+				/>
 			) : (
-				<Spinner size="large" label="Connecting to the backend…" labelPosition="below" />
+				<div role="status" className={styles.connecting}>
+					<Title3 as="h1" className={styles.title}>
+						Prompt Weaver
+					</Title3>
+					<Spinner size="large" label="Connecting to the backend…" labelPosition="below" />
+				</div>
 			)}
 		</CenteredScreen>
 	);

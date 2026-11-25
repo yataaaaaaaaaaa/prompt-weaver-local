@@ -221,20 +221,55 @@ describe('runCommand', () => {
 		}
 	});
 
-	it('ignores the same command repeated within 200 ms', () => {
+	it('ignores the echo of a key press from the other source (keydown + Electron menu) within 200 ms', () => {
 		const spies = stubActions();
-		runCommand('generate');
+		runCommand('generate', 'keyboard');
 		vi.advanceTimersByTime(COMMAND_DEDUPE_MS - 1);
-		runCommand('generate');
+		runCommand('generate', 'menu');
 		expect(spies.generate).toHaveBeenCalledTimes(1);
 
-		runCommand('output-next');
-		runCommand('generate');
+		// The menu first, then the keydown echo.
+		vi.advanceTimersByTime(COMMAND_DEDUPE_MS);
+		runCommand('generate', 'menu');
+		runCommand('generate', 'keyboard');
 		expect(spies.generate).toHaveBeenCalledTimes(2);
 
+		// Another command in between: not an echo.
 		vi.advanceTimersByTime(COMMAND_DEDUPE_MS);
-		runCommand('generate');
-		expect(spies.generate).toHaveBeenCalledTimes(3);
+		runCommand('generate', 'keyboard');
+		runCommand('output-next', 'keyboard');
+		runCommand('generate', 'menu');
+		expect(spies.generate).toHaveBeenCalledTimes(4);
+
+		// Later than 200 ms: a new press.
+		vi.advanceTimersByTime(COMMAND_DEDUPE_MS);
+		runCommand('generate', 'keyboard');
+		expect(spies.generate).toHaveBeenCalledTimes(5);
+	});
+
+	it('runs every press from the same source, however fast (Ctrl+H twice, a held arrow key)', () => {
+		const spies = stubActions();
+		runCommand('toggle-visibility', 'keyboard');
+		runCommand('toggle-visibility', 'keyboard');
+		expect(spies.cycleVisibilityMode).toHaveBeenCalledTimes(2);
+
+		runCommand('output-next');
+		runCommand('output-next');
+		runCommand('output-next');
+		expect(spies.next).toHaveBeenCalledTimes(3);
+
+		runCommand('reorganize-categories', 'menu');
+		runCommand('reorganize-categories', 'menu');
+		expect(spies.reorganize).toHaveBeenCalledTimes(2);
+	});
+
+	it('counts an ignored echo as nothing: the next press of the first source still runs', () => {
+		const spies = stubActions();
+		runCommand('toggle-visibility', 'keyboard');
+		runCommand('toggle-visibility', 'menu');
+		runCommand('toggle-visibility', 'keyboard');
+		runCommand('toggle-visibility', 'menu');
+		expect(spies.cycleVisibilityMode).toHaveBeenCalledTimes(2);
 	});
 
 	it('reports failing commands', async () => {

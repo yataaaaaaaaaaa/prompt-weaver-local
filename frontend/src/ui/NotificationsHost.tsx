@@ -1,5 +1,7 @@
-// Renders the notifications store (user-facing errors, warnings, info) as a stacked overlay of
-// Fluent message bars, top-center above the workspace.
+// Renders the notifications store (user-facing errors, warnings, info) as toasts: a stack of Fluent message bars
+// (intent colors and icons, announced to screen readers) at the bottom-end corner of the window, the Fluent 2 toast
+// position. Fixed above every workspace window (whose z-indexes stay inside the isolated workspace surface) and never
+// over the app bar; Fluent portals (menus, dialogs, tooltips) stay above it. The newest toast is the lowest one.
 import {
 	Button,
 	makeStyles,
@@ -13,14 +15,16 @@ import {
 import { DismissRegular } from '@fluentui/react-icons';
 import { useNotificationsStore, type AppNotification } from '../stores/notificationsStore';
 
+/** Toasts are narrower than the window so they cover as little as possible (multi-line messages wrap). */
+const TOAST_MAX_WIDTH = '440px';
+
 const useStyles = makeStyles({
 	host: {
 		position: 'fixed',
-		top: tokens.spacingVerticalM,
-		left: '50%',
-		transform: 'translateX(-50%)',
+		right: tokens.spacingHorizontalXXL,
+		bottom: tokens.spacingVerticalXXL,
 		zIndex: 1,
-		width: `min(720px, calc(100vw - ${tokens.spacingHorizontalXXL} - ${tokens.spacingHorizontalXXL}))`,
+		width: `min(${TOAST_MAX_WIDTH}, calc(100vw - ${tokens.spacingHorizontalXXL} - ${tokens.spacingHorizontalXXL}))`,
 		pointerEvents: 'none',
 	},
 	group: {
@@ -64,7 +68,7 @@ export function NotificationsHost(): JSX.Element | null {
 		return null;
 	}
 	return (
-		<div className={styles.host}>
+		<div role="region" aria-label="Notifications" className={styles.host}>
 			<MessageBarGroup animate="both" className={styles.group}>
 				{notifications.map((notification) => (
 					<NotificationBar key={notification.id} notification={notification} />

@@ -184,6 +184,9 @@ export function commandForKeyEvent(event: KeyLike & Pick<KeyboardEvent, 'target'
 /** An Electron menu accelerator and the renderer keydown handler both fire for one key press. */
 export const COMMAND_DEDUPE_MS = 200;
 
+/** Where a command comes from: a renderer keydown, or the Electron menu (its accelerator or a click). */
+export type CommandSource = 'keyboard' | 'menu';
+
 const COMMAND_HANDLERS: Record<AppCommand, () => unknown> = {
 	generate: () => useGenerationStore.getState().generate(),
 	'toggle-continuous-generate': () => useGenerationStore.getState().toggleContinuous(),
@@ -194,16 +197,18 @@ const COMMAND_HANDLERS: Record<AppCommand, () => unknown> = {
 	'output-next': () => useOutputsStore.getState().next(),
 };
 
-let lastCommand: { command: AppCommand; at: number } | null = null;
+let lastCommand: { command: AppCommand; source: CommandSource; at: number } | null = null;
 
-/** Dispatches to store actions. Ignores the same command repeated within 200 ms (an Electron menu
- *  accelerator and the renderer keydown handler both fire for the same key press). */
-export function runCommand(command: AppCommand): void {
+/** Dispatches to store actions. One key press can reach the app twice, through the renderer keydown handler and
+ *  through the Electron menu accelerator: the same command from the OTHER source within 200 ms is that echo and is
+ *  ignored. Repeated presses from one source always run (Ctrl+H twice cycles twice, a held arrow key keeps
+ *  navigating). */
+export function runCommand(command: AppCommand, source: CommandSource = 'keyboard'): void {
 	const now = Date.now();
-	if (lastCommand && lastCommand.command === command && now - lastCommand.at < COMMAND_DEDUPE_MS) {
+	if (lastCommand && lastCommand.command === command && lastCommand.source !== source && now - lastCommand.at < COMMAND_DEDUPE_MS) {
 		return;
 	}
-	lastCommand = { command, at: now };
+	lastCommand = { command, source, at: now };
 	try {
 		const result = COMMAND_HANDLERS[command]();
 		if (result instanceof Promise) {

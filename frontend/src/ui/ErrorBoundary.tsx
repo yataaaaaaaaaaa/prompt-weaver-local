@@ -1,25 +1,17 @@
-// Root error boundary: a render crash shows the error with its stack instead of a blank window.
-import {
-	Button,
-	makeStyles,
-	MessageBar,
-	MessageBarActions,
-	MessageBarBody,
-	MessageBarTitle,
-	tokens,
-} from '@fluentui/react-components';
+// Root error boundary: a render crash shows the error with its stack (ErrorCard) instead of a blank window.
+import { Button, makeStyles, tokens } from '@fluentui/react-components';
 import { Component, type ErrorInfo, type ReactNode } from 'react';
-import { CenteredScreen } from './CenteredScreen';
+import { CenteredScreen, ErrorCard } from './CenteredScreen';
 
 const useStyles = makeStyles({
-	bar: {
-		width: '100%',
-		maxWidth: '960px',
-	},
 	stack: {
-		margin: `${tokens.spacingVerticalS} 0 0`,
-		maxHeight: '60vh',
+		margin: 0,
+		maxHeight: '50vh',
 		overflow: 'auto',
+		padding: tokens.spacingHorizontalM,
+		borderRadius: tokens.borderRadiusMedium,
+		backgroundColor: tokens.colorNeutralBackground3,
+		color: tokens.colorNeutralForeground2,
 		whiteSpace: 'pre-wrap',
 		wordBreak: 'break-word',
 		fontFamily: tokens.fontFamilyMonospace,
@@ -32,16 +24,18 @@ function ErrorView({ error, onClose }: { error: Error; onClose: () => void }): J
 	const styles = useStyles();
 	return (
 		<CenteredScreen>
-			<MessageBar intent="error" layout="multiline" className={styles.bar}>
-				<MessageBarBody>
-					<MessageBarTitle>Frontend render error</MessageBarTitle>
-					{error.message}
-					<pre className={styles.stack}>{error.stack || error.message}</pre>
-				</MessageBarBody>
-				<MessageBarActions>
-					<Button onClick={onClose}>Close</Button>
-				</MessageBarActions>
-			</MessageBar>
+			<ErrorCard
+				title="Frontend render error"
+				message={error.message || error.name}
+				wide
+				actions={
+					<Button appearance="primary" onClick={onClose}>
+						Close
+					</Button>
+				}
+			>
+				<pre className={styles.stack}>{error.stack || error.message}</pre>
+			</ErrorCard>
 		</CenteredScreen>
 	);
 }

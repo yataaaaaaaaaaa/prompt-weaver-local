@@ -2,7 +2,7 @@ import { renderHook } from '@testing-library/react';
 import { describe, expect, it } from 'vitest';
 import { flushPersistence, hydratePersistedStores } from '../persistence/persist';
 import { createMemoryStoreBackend, setStoreBackend } from '../persistence/storeBackend';
-import { selectShowCategories, selectShowPanes, useIsPaneVisible, useWindowLayout, useWorkspaceStore } from './workspaceStore';
+import { selectIsPaneShown, selectShowCategories, selectShowPanes, useIsPaneShown, useWindowLayout, useWorkspaceStore } from './workspaceStore';
 
 const rect = { x: 50, y: 60, width: 300, height: 200 };
 const workspace = () => useWorkspaceStore.getState();
@@ -105,6 +105,51 @@ describe('workspaceStore actions', () => {
 		expect(selectShowPanes({ ...workspace(), visibilityMode: 'categories-only' })).toBe(false);
 	});
 
+	it('selectIsPaneShown: open panes are shown in "all" and "panes-only", never in "categories-only"', () => {
+		const state = { ...workspace(), hiddenPaneIds: ['models'] };
+		expect(selectIsPaneShown('image')({ ...state, visibilityMode: 'all' })).toBe(true);
+		expect(selectIsPaneShown('image')({ ...state, visibilityMode: 'panes-only' })).toBe(true);
+		expect(selectIsPaneShown('image')({ ...state, visibilityMode: 'categories-only' })).toBe(false);
+		expect(selectIsPaneShown('models')({ ...state, visibilityMode: 'all' })).toBe(false);
+	});
+
+	it('revealPane opens a closed pane in front of every window and leaves "categories-only"', () => {
+		workspace().replaceWindows({ 'pane:models': { ...rect, z: 2 }, 'category:main': { ...rect, z: 9 } });
+		workspace().setPaneVisible('models', false);
+		workspace().cycleVisibilityMode();
+		expect(workspace().visibilityMode).toBe('categories-only');
+
+		workspace().revealPane('models');
+		expect(workspace().hiddenPaneIds).toEqual([]);
+		expect(workspace().windows['pane:models']?.z).toBe(10);
+		expect(workspace().visibilityMode).toBe('all');
+		expect(selectIsPaneShown('models')(workspace())).toBe(true);
+
+		// 'panes-only' is kept (the pane is shown there already).
+		workspace().cycleVisibilityMode();
+		workspace().cycleVisibilityMode();
+		expect(workspace().visibilityMode).toBe('panes-only');
+		workspace().revealPane('models');
+		expect(workspace().visibilityMode).toBe('panes-only');
+	});
+
+	it('revealPane asks for the revealed window to scroll into view, once per reveal; nothing of it is persisted', () => {
+		expect(workspace().revealRequest).toBeNull();
+		workspace().revealPane('models');
+		const first = workspace().revealRequest;
+		expect(first?.key).toBe('pane:models');
+
+		workspace().revealPane('models');
+		expect(workspace().revealRequest?.key).toBe('pane:models');
+		expect(workspace().revealRequest?.serial).not.toBe(first?.serial);
+
+		workspace().revealPane('characters');
+		expect(workspace().revealRequest?.key).toBe('pane:characters');
+
+		const persisted = useWorkspaceStore.persist.getOptions().partialize?.(workspace());
+		expect(persisted).toEqual({ windows: workspace().windows, hiddenPaneIds: workspace().hiddenPaneIds });
+	});
+
 	it('replaceWindows drops incomplete rects', () => {
 		workspace().replaceWindows({
 			'pane:image': { ...rect, z: 3 },
@@ -129,12 +174,22 @@ describe('workspaceStore hooks', () => {
 		expect(result.current).toEqual({ x: 8, y: 40, width: 500, height: 600, z: 9 });
 	});
 
-	it('useIsPaneVisible follows hiddenPaneIds', () => {
-		const { result, rerender } = renderHook(() => useIsPaneVisible('controls'));
+	it('useIsPaneShown follows hiddenPaneIds and the visibility mode', () => {
+		const { result, rerender } = renderHook(() => useIsPaneShown('controls'));
 		expect(result.current).toBe(true);
 		workspace().setPaneVisible('controls', false);
 		rerender();
 		expect(result.current).toBe(false);
+
+		workspace().setPaneVisible('controls', true);
+		workspace().cycleVisibilityMode();
+		rerender();
+		expect(workspace().visibilityMode).toBe('categories-only');
+		expect(result.current).toBe(false);
+
+		workspace().cycleVisibilityMode();
+		rerender();
+		expect(result.current).toBe(true);
 	});
 });
 

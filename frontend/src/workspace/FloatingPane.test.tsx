@@ -1,8 +1,9 @@
-import { fireEvent, screen, waitFor } from '@testing-library/react';
+import { act, fireEvent, screen, waitFor } from '@testing-library/react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { MIN_VISIBLE_WINDOW_OFFSET, type Rect, type WindowKey } from '../domain/layout';
 import { useWorkspaceStore } from '../stores/workspaceStore';
 import { renderWithProviders } from '../test/render';
+import { STATE_COLORS } from '../ui/stateColors';
 import { FloatingPane, KEYBOARD_STEP, KEYBOARD_STEP_LARGE } from './FloatingPane';
 
 const KEY: WindowKey = 'pane:test';
@@ -175,6 +176,111 @@ describe('FloatingPane actions', () => {
 		);
 		expect(screen.getByRole('region', { name: 'hair category' })).toBeInTheDocument();
 		expect(screen.getByRole('button', { name: 'Move hair category' })).toBeInTheDocument();
+	});
+});
+
+describe('FloatingPane chrome', () => {
+	it('is a section of header, content body and footer; the resize grip has the footer to itself', () => {
+		renderPane({ onClose: vi.fn(), headerActions: <button>Extra</button> });
+		const [header, body, footer, ...rest] = Array.from(region().children);
+		expect(rest).toEqual([]);
+		expect(header.tagName).toBe('HEADER');
+		expect(footer.tagName).toBe('FOOTER');
+
+		// Every window command is in the header; the content is only in the body.
+		for (const name of ['Move Test pane', 'Extra', 'Send Test pane to back', 'Close Test pane']) {
+			expect(header).toContainElement(screen.getByRole('button', { name }));
+		}
+		expect(body).toContainElement(screen.getByText('Pane content'));
+		expect(body).not.toContainElement(screen.getByRole('button', { name: 'Resize Test pane' }));
+
+		// The grip lives below the body (never over the content) and is the footer's only control.
+		const grip = screen.getByRole('button', { name: 'Resize Test pane' });
+		expect(footer).toContainElement(grip);
+		expect(footer.querySelectorAll('button')).toHaveLength(1);
+	});
+
+	it('shows the title next to the icon in the header', () => {
+		renderPane({ icon: () => <svg data-testid="pane-icon" /> });
+		const header = region().querySelector('header');
+		expect(header).toHaveTextContent('Test pane');
+		expect(header).toContainElement(screen.getByTestId('pane-icon'));
+	});
+});
+
+describe('FloatingPane frame state', () => {
+	it('shows no state by default', () => {
+		renderPane();
+		expect(region()).not.toHaveAttribute('data-visual-state');
+		expect(region()).not.toHaveAttribute('aria-description');
+	});
+
+	it('marks the window with the state, its label and its icon (never color alone)', () => {
+		renderPane({ frameState: 'forbidden' });
+		expect(region()).toHaveAttribute('data-visual-state', 'forbidden');
+		expect(region()).toHaveAttribute('aria-description', STATE_COLORS.forbidden.label);
+		expect(screen.getByRole('img', { name: STATE_COLORS.forbidden.label })).toBeInTheDocument();
+	});
+
+	it('shows the state icon at the start of the header, next to the move handle, with its label in a tooltip', async () => {
+		const { user } = renderPane({ frameState: 'forbidden', headerActions: <button>Extra</button> });
+		const header = region().querySelector('header')!;
+		const icon = screen.getByRole('img', { name: STATE_COLORS.forbidden.label });
+		const move = screen.getByRole('button', { name: 'Move Test pane' });
+		const extra = screen.getByRole('button', { name: 'Extra' });
+		expect(header).toContainElement(icon);
+		// Document order: move handle, state icon, title, then the commands (the icon never reads as a command).
+		expect(move.compareDocumentPosition(icon) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+		expect(icon.compareDocumentPosition(screen.getByText('Test pane')) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+		expect(icon.compareDocumentPosition(extra) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+
+		await user.hover(icon);
+		expect(await screen.findByRole('tooltip')).toHaveTextContent(STATE_COLORS.forbidden.label);
+	});
+
+	it('changes the frame classes with the state', () => {
+		const { rerender } = renderPane({ frameState: 'associated' });
+		const associatedClasses = region().className;
+		rerender(
+			<FloatingPane windowKey={KEY} defaultLayout={DEFAULT_LAYOUT} title="Test pane" frameState="indirectlyDisabled">
+				<p>Pane content</p>
+			</FloatingPane>,
+		);
+		expect(region().className).not.toBe(associatedClasses);
+		expect(region()).toHaveAttribute('data-visual-state', 'indirectlyDisabled');
+	});
+});
+
+describe('FloatingPane header actions', () => {
+	it('shows extra commands in the header without starting a drag', async () => {
+		const onAction = vi.fn();
+		const { user } = renderPane({ headerActions: <button onClick={onAction}>Extra</button> });
+		await user.click(screen.getByRole('button', { name: 'Extra' }));
+		expect(onAction).toHaveBeenCalledTimes(1);
+		expect(actions.commitWindowRect).not.toHaveBeenCalled();
+	});
+});
+
+describe('FloatingPane reveal', () => {
+	it('scrolls into view when the workspace store reveals it, and only then', () => {
+		const scrollIntoView = vi.fn();
+		const original = HTMLElement.prototype.scrollIntoView;
+		HTMLElement.prototype.scrollIntoView = scrollIntoView;
+		try {
+			useWorkspaceStore.setState({ revealRequest: { key: 'pane:other', serial: 1 } });
+			renderPane();
+			expect(scrollIntoView).not.toHaveBeenCalled();
+
+			act(() => useWorkspaceStore.setState({ revealRequest: { key: KEY, serial: 2 } }));
+			expect(scrollIntoView).toHaveBeenCalledTimes(1);
+			expect(scrollIntoView).toHaveBeenCalledWith({ block: 'nearest', inline: 'nearest' });
+			expect(scrollIntoView.mock.contexts[0]).toBe(region());
+
+			act(() => useWorkspaceStore.setState({ revealRequest: { key: KEY, serial: 3 } }));
+			expect(scrollIntoView).toHaveBeenCalledTimes(2);
+		} finally {
+			HTMLElement.prototype.scrollIntoView = original;
+		}
 	});
 });
 

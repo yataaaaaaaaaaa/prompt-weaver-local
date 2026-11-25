@@ -1,6 +1,11 @@
 // Movable/resizable window surface of the workspace (panes and category cards). The layout lives in the
 // workspace store; only the rect being dragged/resized is local (ephemeral), committed on release.
-import { Button, Caption1Strong, makeStyles, mergeClasses, tokens, Tooltip } from '@fluentui/react-components';
+//
+// Structure (the e2e suite and other features rely on it): <section aria-label={name}> directly on the workspace
+// surface, holding <header> (move handle, state icon, icon, title, header actions, Send to back, Close), the content
+// body (the only scrolling part) and <footer> (the resize grip). The grip lives in its own footer row, below the
+// body, so it can never cover the window's content (bottom-right buttons, spin button arrows, scrollbars).
+import { Body1Strong, Button, makeStyles, mergeClasses, tokens, Tooltip } from '@fluentui/react-components';
 import {
 	ArrowMaximizeTopLeftBottomRightRegular,
 	DismissRegular,
@@ -18,14 +23,19 @@ import {
 	type ReactNode,
 } from 'react';
 import { moveRect, resizeRect, type Rect, type WindowKey } from '../domain/layout';
-import { useIsTopWindow, useWindowLayout, useWorkspaceStore } from '../stores/workspaceStore';
+import { useIsTopWindow, useRevealSerial, useWindowLayout, useWorkspaceStore } from '../stores/workspaceStore';
 import { ownsKeysProps } from '../ui/keyboard';
+import { STATE_COLORS, type VisualState } from '../ui/stateColors';
+import { STATE_ICONS, useStateAccentClasses, useStateFrameClasses } from '../ui/stateStyles';
 
 export const DEFAULT_MIN_WIDTH = 280;
 export const DEFAULT_MIN_HEIGHT = 180;
 /** Keyboard move/resize step (px); Shift uses the large step. */
 export const KEYBOARD_STEP = 8;
 export const KEYBOARD_STEP_LARGE = 40;
+/** Side of the resize grip and height of the footer row reserved for it (px). Smaller than a Fluent small button
+ *  (24px) so windows keep their room; nothing else is placed in the footer, so the target stays isolated. */
+export const RESIZE_GRIP_SIZE = 20;
 
 export type FloatingPaneProps = {
 	windowKey: WindowKey;
@@ -40,6 +50,13 @@ export type FloatingPaneProps = {
 	onClose?: () => void;
 	minWidth?: number;
 	minHeight?: number;
+	/** Semantic state of the window's content (category windows: forbidden, associated, indirectly disabled, ...):
+	 *  shown by the frame border, the tinted header and the state icon at the start of the header (its label in a
+	 *  tooltip), and announced as the window's description. Colors come from src/ui/stateColors.ts only. */
+	frameState?: VisualState | null;
+	/** Extra commands of the window, shown in its header before "Send to back" (e.g. a category window's own
+	 *  actions). Interactive content here never starts a drag. */
+	headerActions?: ReactNode;
 	children: ReactNode;
 };
 
@@ -112,6 +129,10 @@ const useStyles = makeStyles({
 		fontSize: tokens.fontSizeBase400,
 		color: tokens.colorNeutralForeground3,
 	},
+	stateIcon: {
+		flexShrink: 0,
+		fontSize: tokens.fontSizeBase400,
+	},
 	title: {
 		minWidth: 0,
 		overflow: 'hidden',
@@ -130,11 +151,20 @@ const useStyles = makeStyles({
 		minHeight: 0,
 		overflow: 'auto',
 	},
+	// The row of the resize grip: below the body, so the grip never overlaps content.
+	footer: {
+		display: 'flex',
+		justifyContent: 'flex-end',
+		flexShrink: 0,
+		height: `${RESIZE_GRIP_SIZE}px`,
+	},
 	resizeGrip: {
-		position: 'absolute',
-		right: 0,
-		bottom: 0,
-		minWidth: 'auto',
+		width: `${RESIZE_GRIP_SIZE}px`,
+		minWidth: `${RESIZE_GRIP_SIZE}px`,
+		maxWidth: `${RESIZE_GRIP_SIZE}px`,
+		height: `${RESIZE_GRIP_SIZE}px`,
+		minHeight: `${RESIZE_GRIP_SIZE}px`,
+		padding: 0,
 		cursor: 'nwse-resize',
 		touchAction: 'none',
 		color: tokens.colorNeutralForeground3,
@@ -142,6 +172,11 @@ const useStyles = makeStyles({
 		borderTopRightRadius: 0,
 		borderBottomLeftRadius: 0,
 		borderBottomRightRadius: tokens.borderRadiusLarge,
+		'& .fui-Button__icon': {
+			fontSize: tokens.fontSizeBase400,
+			width: tokens.fontSizeBase400,
+			height: tokens.fontSizeBase400,
+		},
 	},
 });
 
@@ -154,11 +189,19 @@ export function FloatingPane({
 	onClose,
 	minWidth = DEFAULT_MIN_WIDTH,
 	minHeight = DEFAULT_MIN_HEIGHT,
+	frameState = null,
+	headerActions,
 	children,
 }: FloatingPaneProps): JSX.Element {
 	const styles = useStyles();
+	const frameClasses = useStateFrameClasses();
+	const accentClasses = useStateAccentClasses();
+	const StateIcon = frameState ? STATE_ICONS[frameState] : null;
+	const stateLabel = frameState ? STATE_COLORS[frameState].label : undefined;
 	const layout = useWindowLayout(windowKey, defaultLayout);
 	const isTop = useIsTopWindow(windowKey);
+	const revealSerial = useRevealSerial(windowKey);
+	const sectionRef = useRef<HTMLElement | null>(null);
 	const commitWindowRect = useWorkspaceStore((state) => state.commitWindowRect);
 	const focusWindow = useWorkspaceStore((state) => state.focusWindow);
 	const sendWindowToBack = useWorkspaceStore((state) => state.sendWindowToBack);
@@ -266,6 +309,14 @@ export function FloatingPane({
 
 	useEffect(() => () => endInteraction(false), [endInteraction]);
 
+	// A revealed window (workspaceStore.revealPane) scrolls into view on the workspace surface, e.g. a pane stored
+	// beyond the right edge of a small window. Scrolling is view behavior: the store only records the request.
+	useEffect(() => {
+		if (revealSerial !== null) {
+			sectionRef.current?.scrollIntoView?.({ block: 'nearest', inline: 'nearest' });
+		}
+	}, [revealSerial]);
+
 	const handleKeyboard = (kind: InteractionKind, event: ReactKeyboardEvent<HTMLElement>) => {
 		const direction = ARROW_DIRECTIONS[event.key];
 		if (!direction || event.ctrlKey || event.metaKey || event.altKey) {
@@ -279,12 +330,15 @@ export function FloatingPane({
 
 	return (
 		<section
+			ref={sectionRef}
 			aria-label={name}
-			className={mergeClasses(styles.window, isTop && styles.top)}
+			aria-description={stateLabel}
+			data-visual-state={frameState ?? undefined}
+			className={mergeClasses(styles.window, isTop && styles.top, frameState ? frameClasses.window[frameState] : undefined)}
 			style={{ left: shown.x, top: shown.y, width: shown.width, height: shown.height, zIndex: layout.z }}
 			onPointerDownCapture={() => focusWindow(windowKey)}
 		>
-			<div className={styles.header}>
+			<header className={mergeClasses(styles.header, frameState ? frameClasses.header[frameState] : undefined)}>
 				<div
 					className={mergeClasses(styles.dragRegion, activeKind === 'move' && styles.dragging)}
 					onPointerDown={(event) => beginInteraction('move', event)}
@@ -300,10 +354,16 @@ export function FloatingPane({
 							onKeyDown={(event) => handleKeyboard('move', event)}
 						/>
 					</Tooltip>
+					{StateIcon && frameState ? (
+						<Tooltip content={stateLabel ?? ''} relationship="inaccessible">
+							<StateIcon role="img" aria-label={stateLabel} className={mergeClasses(styles.stateIcon, accentClasses[frameState])} />
+						</Tooltip>
+					) : null}
 					{Icon ? <Icon aria-hidden className={styles.titleIcon} /> : null}
-					{title ? <Caption1Strong className={styles.title}>{title}</Caption1Strong> : null}
+					{title ? <Body1Strong className={styles.title}>{title}</Body1Strong> : null}
 				</div>
 				<div className={styles.actions}>
+					{headerActions}
 					<Tooltip content={`Send ${name} to back`} relationship="label">
 						<Button appearance="subtle" size="small" icon={<PositionToBackRegular />} onClick={() => sendWindowToBack(windowKey)} />
 					</Tooltip>
@@ -313,20 +373,22 @@ export function FloatingPane({
 						</Tooltip>
 					) : null}
 				</div>
-			</div>
+			</header>
 			<div className={styles.body}>{children}</div>
-			<Tooltip content="Drag to resize, or use the arrow keys (Shift for larger steps)" relationship="description">
-				<Button
-					{...ownsKeysProps}
-					appearance="subtle"
-					size="small"
-					className={styles.resizeGrip}
-					icon={<ArrowMaximizeTopLeftBottomRightRegular />}
-					aria-label={`Resize ${name}`}
-					onPointerDown={(event) => beginInteraction('resize', event)}
-					onKeyDown={(event) => handleKeyboard('resize', event)}
-				/>
-			</Tooltip>
+			<footer className={styles.footer}>
+				<Tooltip content="Drag to resize, or use the arrow keys (Shift for larger steps)" relationship="description">
+					<Button
+						{...ownsKeysProps}
+						appearance="subtle"
+						size="small"
+						className={styles.resizeGrip}
+						icon={<ArrowMaximizeTopLeftBottomRightRegular />}
+						aria-label={`Resize ${name}`}
+						onPointerDown={(event) => beginInteraction('resize', event)}
+						onKeyDown={(event) => handleKeyboard('resize', event)}
+					/>
+				</Tooltip>
+			</footer>
 		</section>
 	);
 }

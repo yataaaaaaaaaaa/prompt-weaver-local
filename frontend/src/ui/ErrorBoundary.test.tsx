@@ -43,8 +43,10 @@ describe('ErrorBoundary', () => {
 			</ErrorBoundary>,
 		);
 
-		expect(screen.getByText('Frontend render error')).toBeInTheDocument();
-		expect(screen.getAllByText(/kaboom/).length).toBeGreaterThan(0);
+		const alert = screen.getByRole('alert', { name: 'Frontend render error' });
+		expect(alert).toHaveTextContent('kaboom');
+		// The stack trace is shown below the message.
+		expect(alert.querySelector('pre')).toHaveTextContent(/Error: kaboom/);
 		expect(console.error).toHaveBeenCalled();
 
 		shouldThrow = false;

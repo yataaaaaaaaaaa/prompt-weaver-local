@@ -1,12 +1,15 @@
-import { screen, within } from '@testing-library/react';
-import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { act, screen, within } from '@testing-library/react';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { categoryKeyOf, type Category } from '../domain/categories';
 import { categoryWindowKey } from '../domain/layout';
 import { useCategoriesStore } from '../stores/categoriesStore';
 import { useUndoStore } from '../stores/undoStore';
 import { useWorkspaceStore } from '../stores/workspaceStore';
 import { renderWithProviders } from '../test/render';
-import { categoryDefaultLayout, Workspace } from './Workspace';
+import { categoryDefaultLayout } from '../features/categories/CategoryWindows';
+import { installLayoutStub, type LayoutStub } from '../test/layoutStub';
+import type { ToolbarDensity } from './useToolbarDensity';
+import { Workspace } from './Workspace';
 
 // Registered panes and category cards have their own tests: the shell only places them.
 vi.mock('./paneRegistry', async () => {
@@ -28,7 +31,7 @@ function category(text: string): Category {
 
 function stubActions() {
 	const categories = { addCategory: vi.fn(() => 'new-category'), reorganize: vi.fn() };
-	const workspace = { setPaneVisible: vi.fn(), cycleVisibilityMode: vi.fn(), focusWindow: vi.fn() };
+	const workspace = { setPaneVisible: vi.fn(), revealPane: vi.fn(), cycleVisibilityMode: vi.fn(), focusWindow: vi.fn() };
 	const undo = { undo: vi.fn(async () => undefined) };
 	useCategoriesStore.setState(categories);
 	useWorkspaceStore.setState(workspace);
@@ -112,8 +115,34 @@ describe('Workspace toolbar', () => {
 
 		await user.click(alpha);
 		expect(actions.setPaneVisible).toHaveBeenLastCalledWith('alpha', false);
+		// Showing a pane reveals it (in front of every window).
 		await user.click(beta);
-		expect(actions.setPaneVisible).toHaveBeenLastCalledWith('beta', true);
+		expect(actions.revealPane).toHaveBeenCalledWith('beta');
+		expect(actions.setPaneVisible).toHaveBeenCalledTimes(1);
+	});
+
+	it('shows the toggles unpressed while "categories only" hides the panes, and reveals a pane from there', async () => {
+		useWorkspaceStore.setState({ visibilityMode: 'categories-only' });
+		const { user } = renderWithProviders(<Workspace />);
+		const alpha = within(toolbar()).getByRole('button', { name: 'Alpha' });
+		expect(alpha).toHaveAttribute('aria-pressed', 'false');
+
+		await user.click(alpha);
+		expect(actions.revealPane).toHaveBeenCalledWith('alpha');
+		expect(actions.setPaneVisible).not.toHaveBeenCalled();
+	});
+
+	it('shows a pane in front of the others with the real store when its toggle is clicked', async () => {
+		useWorkspaceStore.setState({
+			...useWorkspaceStore.getInitialState(),
+			hiddenPaneIds: ['beta'],
+			windows: { 'pane:alpha': { x: 10, y: 20, width: 300, height: 200, z: 5 }, 'pane:beta': { x: 400, y: 20, width: 300, height: 200, z: 1 } },
+		});
+		const { user } = renderWithProviders(<Workspace />);
+		await user.click(within(toolbar()).getByRole('button', { name: 'Beta' }));
+
+		expect(within(windowsArea()).getByRole('region', { name: 'Beta' })).toHaveStyle({ zIndex: '6' });
+		expect(within(toolbar()).getByRole('button', { name: 'Beta' })).toHaveAttribute('aria-pressed', 'true');
 	});
 
 	it('adds and reorganizes categories', async () => {
@@ -146,5 +175,97 @@ describe('Workspace toolbar', () => {
 		expect(undo).toBeEnabled();
 		await user.click(undo);
 		expect(actions.undo).toHaveBeenCalledTimes(1);
+	});
+});
+
+describe('Workspace toolbar density (one row at every width)', () => {
+	// What the toolbar's items need on one row at each density (jsdom does no layout).
+	const NATURAL: Record<ToolbarDensity, number> = { full: 1700, untitled: 1500, compact: 1000, minimal: 500 };
+	let layout: LayoutStub;
+
+	beforeEach(() => {
+		layout = installLayoutStub((element) => NATURAL[element.getAttribute('data-density') as ToolbarDensity] ?? 0);
+	});
+
+	afterEach(() => {
+		layout.restore();
+	});
+
+	const COMMANDS = ['Add category', 'Reorganize categories', 'Showing: All windows', 'Undo'];
+
+	const title = () => screen.getByRole('heading', { level: 1, name: 'Prompt Weaver' });
+
+	it('shows the title and every label when they fit', () => {
+		layout.setAvailableWidth(1800);
+		renderWithProviders(<Workspace />);
+		expect(toolbar()).toHaveAttribute('data-density', 'full');
+		expect(title()).toBeInTheDocument();
+		expect(within(toolbar()).getByRole('button', { name: 'Alpha' })).toHaveTextContent('Alpha');
+		for (const name of COMMANDS) {
+			expect(within(toolbar()).getByRole('button', { name })).toHaveTextContent(name);
+		}
+	});
+
+	it('hides the title first, which stays the page heading, and keeps every label', () => {
+		layout.setAvailableWidth(1800);
+		const { unmount } = renderWithProviders(<Workspace />);
+		const visibleTitleClasses = title().className;
+		unmount();
+
+		layout.setAvailableWidth(1600);
+		renderWithProviders(<Workspace />);
+		expect(toolbar()).toHaveAttribute('data-density', 'untitled');
+		expect(title()).toBeInTheDocument();
+		expect(title().className).not.toBe(visibleTitleClasses);
+		expect(within(toolbar()).getByRole('button', { name: 'Alpha' })).toHaveTextContent('Alpha');
+		for (const name of COMMANDS) {
+			expect(within(toolbar()).getByRole('button', { name })).toHaveTextContent(name);
+		}
+	});
+
+	it('then makes the pane toggles icon-only, keeping their names', () => {
+		layout.setAvailableWidth(1200);
+		renderWithProviders(<Workspace />);
+		expect(toolbar()).toHaveAttribute('data-density', 'compact');
+		for (const name of ['Alpha', 'Beta']) {
+			const toggle = within(toolbar()).getByRole('button', { name });
+			expect(toggle).toHaveTextContent('');
+			expect(toggle).toHaveAttribute('aria-pressed', 'true');
+		}
+		for (const name of COMMANDS) {
+			expect(within(toolbar()).getByRole('button', { name })).toHaveTextContent(name);
+		}
+	});
+
+	it('makes every item icon-only when even that does not fit, keeping names and shortcuts', () => {
+		layout.setAvailableWidth(600);
+		renderWithProviders(<Workspace />);
+		expect(toolbar()).toHaveAttribute('data-density', 'minimal');
+		for (const name of [...COMMANDS, 'Alpha', 'Beta']) {
+			expect(within(toolbar()).getByRole('button', { name })).toHaveTextContent('');
+		}
+		expect(within(toolbar()).getByRole('button', { name: 'Reorganize categories' })).toHaveAttribute('aria-keyshortcuts', 'Control+O');
+	});
+
+	it('brings the labels back when the window grows', () => {
+		layout.setAvailableWidth(600);
+		renderWithProviders(<Workspace />);
+		act(() => layout.resize(1800));
+		expect(toolbar()).toHaveAttribute('data-density', 'full');
+		expect(within(toolbar()).getByRole('button', { name: 'Beta' })).toHaveTextContent('Beta');
+	});
+
+	it('measures again when the visibility mode label changes', () => {
+		useWorkspaceStore.setState({ cycleVisibilityMode: useWorkspaceStore.getInitialState().cycleVisibilityMode });
+		layout.setAvailableWidth(1800);
+		renderWithProviders(<Workspace />);
+		// The longer label no longer fits next to the title.
+		layout.setNaturalWidth((element) => {
+			const density = element.getAttribute('data-density') as ToolbarDensity | null;
+			return density === 'full' && useWorkspaceStore.getState().visibilityMode !== 'all' ? 1900 : density ? NATURAL[density] : 0;
+		});
+		act(() => useWorkspaceStore.getState().cycleVisibilityMode());
+		expect(within(toolbar()).getByRole('button', { name: 'Showing: Categories only' })).toBeInTheDocument();
+		expect(toolbar()).toHaveAttribute('data-density', 'untitled');
 	});
 });

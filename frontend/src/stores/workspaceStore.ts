@@ -40,7 +40,12 @@ export type WorkspaceState = {
 	/** Registered panes (src/workspace/paneRegistry.tsx) the user closed. */
 	hiddenPaneIds: string[];
 	visibilityMode: VisibilityMode;
+	/** The last window revealed by revealPane (serial: a new request for the same window is a new value), so the
+	 *  window scrolls into view on the workspace surface. Not persisted. */
+	revealRequest: RevealRequest | null;
 };
+
+export type RevealRequest = { key: WindowKey; serial: number };
 
 export type WorkspaceActions = {
 	/** End of a drag/resize (or keyboard move): stores the rect (sanitized: x,y >= 8, size >= 1), keeps z. */
@@ -56,9 +61,10 @@ export type WorkspaceActions = {
 	 *  A window's stored size takes precedence over the item's preferred (estimated) size. */
 	arrangeCategoryWindows: (items: ArrangeItem[], viewport: Viewport) => void;
 	setPaneVisible: (paneId: string, visible: boolean) => void;
-	/** Shows a registered pane in front of every window: makes it visible, brings its window to the front and leaves
-	 *  'categories-only' for 'all' (where panes are hidden). Cross-pane flows use it (e.g. "Create character" opens
-	 *  the Characters pane). */
+	/** Shows a registered pane in front of every window: makes it visible, brings its window to the front, leaves
+	 *  'categories-only' for 'all' (where panes are hidden) and asks for its window to be scrolled into view
+	 *  (revealRequest). The app bar toggles and cross-pane flows use it (e.g. "Create character" opens the Characters
+	 *  pane). */
 	revealPane: (paneId: string) => void;
 	cycleVisibilityMode: () => void;
 	/** Wholesale replacement (legacy import from app_state.json); incomplete rects are dropped. */
@@ -90,6 +96,7 @@ export const useWorkspaceStore = create<WorkspaceStore>()(
 			windows: {},
 			hiddenPaneIds: [],
 			visibilityMode: 'all' as VisibilityMode,
+			revealRequest: null,
 			commitWindowRect: (key, rect) =>
 				set((state) => {
 					const stored = state.windows[key];
@@ -151,6 +158,7 @@ export const useWorkspaceStore = create<WorkspaceStore>()(
 						hiddenPaneIds: state.hiddenPaneIds.includes(paneId) ? state.hiddenPaneIds.filter((id) => id !== paneId) : state.hiddenPaneIds,
 						windows: z === null ? state.windows : withZ(state.windows, key, z),
 						visibilityMode: state.visibilityMode === 'categories-only' ? 'all' : state.visibilityMode,
+						revealRequest: { key, serial: (state.revealRequest?.serial ?? 0) + 1 },
 					};
 				}),
 			cycleVisibilityMode: () => set((state) => ({ visibilityMode: NEXT_VISIBILITY_MODE[state.visibilityMode] })),
@@ -191,10 +199,22 @@ export function useWindowLayout(key: WindowKey, fallback: Rect): WindowLayout {
 }
 
 /** The window is drawn above every other window (it gets the raised elevation). */
+/** The serial of the latest reveal request of `key` (null when the last reveal was another window's). */
+export function useRevealSerial(key: WindowKey): number | null {
+	return useWorkspaceStore((state) => (state.revealRequest?.key === key ? state.revealRequest.serial : null));
+}
+
 export function useIsTopWindow(key: WindowKey): boolean {
 	return useWorkspaceStore((state) => frontZ(state.windows, key) === null);
 }
 
-export function useIsPaneVisible(paneId: string): boolean {
-	return useWorkspaceStore((state) => !state.hiddenPaneIds.includes(paneId));
+/** The registered pane is on screen: not closed by the user and not hidden by the visibility mode
+ *  ('categories-only'). Its window is rendered and its app bar toggle is pressed exactly then. */
+export const selectIsPaneShown =
+	(paneId: string) =>
+	(state: WorkspaceState): boolean =>
+		selectShowPanes(state) && !state.hiddenPaneIds.includes(paneId);
+
+export function useIsPaneShown(paneId: string): boolean {
+	return useWorkspaceStore(selectIsPaneShown(paneId));
 }

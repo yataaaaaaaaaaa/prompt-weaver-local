@@ -14,13 +14,13 @@ export function useGlobalShortcuts(): void {
 			}
 			event.preventDefault();
 			event.stopPropagation();
-			runCommand(command);
+			runCommand(command, 'keyboard');
 		}
 
 		window.addEventListener('keydown', handleKeyDown, { capture: true });
 		const unsubscribeDesktop = desktop.onCommand((command) => {
 			if (isAppCommand(command)) {
-				runCommand(command);
+				runCommand(command, 'menu');
 			}
 		});
 		return () => {

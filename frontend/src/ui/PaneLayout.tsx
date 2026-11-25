@@ -1,8 +1,8 @@
 // Layout primitives of the tool panes rendered inside a FloatingPane body (which scrolls but has no padding):
 // PaneContent = padded column; PaneSection = titled section (heading + optional header actions) separated
 // from the previous one by a divider stroke; PaneGrid = two-column field grid. Shared by every pane view.
-import { makeStyles, Subtitle2, tokens, useId } from '@fluentui/react-components';
-import type { ReactNode } from 'react';
+import { makeStyles, mergeClasses, Subtitle2, tokens, useId } from '@fluentui/react-components';
+import type { CSSProperties, ReactNode } from 'react';
 
 const useStyles = makeStyles({
 	content: {
@@ -43,11 +43,17 @@ const useStyles = makeStyles({
 		gap: tokens.spacingHorizontalXS,
 		marginLeft: 'auto',
 	},
+	// Fields keep their own height: a hint under one field never stretches the field next to it.
 	grid: {
 		display: 'grid',
 		gridTemplateColumns: 'repeat(2, minmax(0, 1fr))',
+		alignItems: 'start',
 		columnGap: tokens.spacingHorizontalM,
 		rowGap: tokens.spacingVerticalS,
+	},
+	// Two columns while each gets at least --pane-grid-min-column, else one (never more than two).
+	responsive: {
+		gridTemplateColumns: `repeat(auto-fit, minmax(min(100%, max(var(--pane-grid-min-column), calc((100% - ${tokens.spacingHorizontalM}) / 2))), 1fr))`,
 	},
 });
 
@@ -79,8 +85,22 @@ export function PaneSection({ title, actions, children }: PaneSectionProps): JSX
 	);
 }
 
-/** Two equal columns of form fields. */
-export function PaneGrid({ children }: { children: ReactNode }): JSX.Element {
+export type PaneGridProps = {
+	children: ReactNode;
+	/** Narrowest column (CSS length, e.g. '160px'): below two of these the fields stack in one column, so labels and
+	 *  values never wrap or get cut in a narrow pane. Without it the grid always has two columns. */
+	minColumnWidth?: string;
+};
+
+/** Two equal columns of form fields (one in a narrow pane when `minColumnWidth` is given). */
+export function PaneGrid({ children, minColumnWidth }: PaneGridProps): JSX.Element {
 	const styles = useStyles();
-	return <div className={styles.grid}>{children}</div>;
+	return (
+		<div
+			className={mergeClasses(styles.grid, minColumnWidth !== undefined && styles.responsive)}
+			style={minColumnWidth !== undefined ? ({ '--pane-grid-min-column': minColumnWidth } as CSSProperties) : undefined}
+		>
+			{children}
+		</div>
+	);
 }

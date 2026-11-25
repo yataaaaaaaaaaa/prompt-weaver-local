@@ -43,7 +43,7 @@ describe('useGlobalShortcuts', () => {
 		document.body.dispatchEvent(event);
 
 		expect(commandForKeyEvent).toHaveBeenCalledWith(event);
-		expect(runCommand).toHaveBeenCalledWith('reorganize-categories');
+		expect(runCommand).toHaveBeenCalledWith('reorganize-categories', 'keyboard');
 		expect(event.defaultPrevented).toBe(true);
 	});
 
@@ -69,7 +69,7 @@ describe('useGlobalShortcuts', () => {
 		bridge.emit('compute-indirectly-disabled');
 
 		expect(runCommand).toHaveBeenCalledTimes(1);
-		expect(runCommand).toHaveBeenCalledWith('toggle-visibility');
+		expect(runCommand).toHaveBeenCalledWith('toggle-visibility', 'menu');
 	});
 
 	it('removes both listeners on unmount', () => {
