@@ -1,0 +1,59 @@
+{
+  "output_id": "0000000002",
+  "generated_at": "2026-11-21T09:30:00+00:00",
+  "prompt": "1girl, short red hair, green eyes, freckles, leather jacket, white scarf, castle courtyard, smiling",
+  "negative_prompt": "lowres, bad anatomy, watermark",
+  "seed": 777,
+  "prompt_seed": 2222,
+  "image_seed": 777,
+  "width": 832,
+  "height": 1216,
+  "steps": 12,
+  "guidance_scale": 6.5,
+  "model_id": "studio-xl-local-safetensors",
+  "selections": [
+    {
+      "category_name": "Character",
+      "prompt_text": "1girl, short red hair, green eyes, freckles",
+      "locked": true,
+      "induced_lora_ids": []
+    },
+    {
+      "category_name": "Character outfit",
+      "prompt_text": "leather jacket, white scarf",
+      "locked": true,
+      "induced_lora_ids": []
+    },
+    {
+      "category_name": "Background",
+      "prompt_text": "castle courtyard",
+      "locked": false,
+      "induced_lora_ids": []
+    },
+    {
+      "category_name": "Mood",
+      "prompt_text": "smiling",
+      "locked": false,
+      "induced_lora_ids": []
+    }
+  ],
+  "image_path": "{{DATA_DIR}}/output/0000000002.png",
+  "metadata_path": "{{DATA_DIR}}/output/0000000002.json",
+  "active_loras": [
+    {
+      "id": "watercolor-wash-safetensors",
+      "weight": 0.5
+    }
+  ],
+  "character": {
+    "id": "chr-aaaaaaaaaaa1",
+    "name": "Mira",
+    "reference": {
+      "applied": false,
+      "variant_id": null,
+      "strength": null,
+      "image_ids": [],
+      "reason": "The IP-Adapter for SDXL face is not downloaded."
+    }
+  }
+}

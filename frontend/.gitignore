@@ -65,3 +65,8 @@ desktop.ini
 backend/data/
 output/
 trash/
+# Playwright e2e output (baselines under e2e/__screenshots__ are committed)
+test-results/
+playwright-report/
+blob-report/
+e2e/.screens/

@@ -1,0 +1,54 @@
+{
+  "output_id": "0000000003",
+  "generated_at": "2026-11-22T10:45:00+00:00",
+  "prompt": "1girl, silver hair, school uniform, beach at sunset, smiling",
+  "negative_prompt": "lowres, bad anatomy, watermark",
+  "seed": 53333,
+  "prompt_seed": 3333,
+  "image_seed": 53333,
+  "width": 832,
+  "height": 1216,
+  "steps": 12,
+  "guidance_scale": 6.5,
+  "model_id": "studio-xl-local-safetensors",
+  "selections": [
+    {
+      "category_name": "Subject",
+      "prompt_text": "1girl, silver hair",
+      "locked": true,
+      "induced_lora_ids": []
+    },
+    {
+      "category_name": "Outfit",
+      "prompt_text": "school uniform",
+      "locked": false,
+      "induced_lora_ids": [
+        "sharp-lineart-safetensors"
+      ]
+    },
+    {
+      "category_name": "Background",
+      "prompt_text": "beach at sunset",
+      "locked": false,
+      "induced_lora_ids": []
+    },
+    {
+      "category_name": "Mood",
+      "prompt_text": "smiling",
+      "locked": false,
+      "induced_lora_ids": []
+    }
+  ],
+  "image_path": "{{DATA_DIR}}/output/0000000003.png",
+  "metadata_path": "{{DATA_DIR}}/output/0000000003.json",
+  "active_loras": [
+    {
+      "id": "watercolor-wash-safetensors",
+      "weight": 0.65
+    },
+    {
+      "id": "sharp-lineart-safetensors",
+      "weight": 1.0
+    }
+  ]
+}

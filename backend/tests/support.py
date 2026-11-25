@@ -36,7 +36,7 @@ from app.services.backend_settings import BackendSettingsStore
 from app.services.container import FILE_HASH_CACHE_NAME
 from app.services.downloads import CompletionCallback, DownloadSpec
 from app.services.file_hashes import FileHashCache
-from app.services.generation import GeneratedImage, ReferenceInput, StepCallback
+from app.services.generation import GeneratedImage, GenerationCancelledError, ReferenceInput, StepCallback
 from app.services.http import USER_AGENT
 from app.services.image_favorites import ImageFavoritesStore
 from app.services.image_library import ImageLibraryService
@@ -68,20 +68,30 @@ class GenerateCall:
     reference: ReferenceInput | None = None
 
 
+ImageFactory = Callable[[GenerateRequest, int], Image.Image]
+
+
 @dataclass
 class FakeGenerator:
     """GeneratorPort test double: records calls, reports `reported_steps` sampling steps, returns a small image.
 
     Set `error` to raise it (after the reported steps) instead of returning an image, or `on_generate` to run
-    code in the middle of a generation (e.g. publish from the worker thread or block until released)."""
+    code in the middle of a generation (e.g. publish from the worker thread or block until released).
 
-    reported_steps: int = 2
+    Paced mode (the e2e server, tests/e2e/server.py): `step_delay_s` > 0 waits that long before each step, and a
+    cancel() during the steps raises GenerationCancelledError like the runtime does. `reported_steps=None` reports
+    every step of the request. `image_factory(request, seed)` replaces the default tiny red image."""
+
+    reported_steps: int | None = 2
     seed: int = 4242
     error: Exception | None = None
     on_generate: Callable[[], None] | None = None
+    step_delay_s: float = 0.0
+    image_factory: ImageFactory | None = None
     calls: list[GenerateCall] = field(default_factory=list)
     cancel_calls: int = 0
     unload_calls: int = 0
+    _cancelled: threading.Event = field(default_factory=threading.Event, repr=False)
 
     def generate(
         self,
@@ -93,21 +103,32 @@ class FakeGenerator:
         reference: ReferenceInput | None = None,
     ) -> GeneratedImage:
         self.calls.append(GenerateCall(request, prompt_lora_dir, prompt_embedding_dir, reference))
-        for step in range(1, self.reported_steps + 1):
+        self._cancelled.clear()
+        steps = request.steps if self.reported_steps is None else self.reported_steps
+        for step in range(1, steps + 1):
+            if self.step_delay_s > 0 and self._cancelled.wait(self.step_delay_s):
+                raise GenerationCancelledError("Generation cancelled")
             on_step(step, request.steps)
         if self.on_generate is not None:
             self.on_generate()
         if self.error is not None:
             raise self.error
+        seed = request.seed if request.seed is not None else self.seed
+        image = (
+            self.image_factory(request, seed)
+            if self.image_factory is not None
+            else Image.new("RGB", (request.width // 64 or 1, request.height // 64 or 1), (200, 30, 30))
+        )
         return GeneratedImage(
-            image=Image.new("RGB", (request.width // 64 or 1, request.height // 64 or 1), (200, 30, 30)),
-            seed=request.seed if request.seed is not None else self.seed,
+            image=image,
+            seed=seed,
             prompt=f"resolved({request.prompt})",
             negative_prompt=f"resolved({request.negative_prompt})",
         )
 
     def cancel(self) -> None:
         self.cancel_calls += 1
+        self._cancelled.set()
 
     def unload(self) -> None:
         self.unload_calls += 1

@@ -1,0 +1,15 @@
+{
+  "state": {
+    "width": 832,
+    "height": 1216,
+    "steps": 12,
+    "guidanceScale": 6.5,
+    "negativePrompt": "lowres, bad anatomy, watermark",
+    "promptSeedInput": "424242",
+    "seedInput": "1234567",
+    "promptSeedBehavior": "fixed",
+    "imageSeedBehavior": "increment",
+    "promptCategorySeedState": {}
+  },
+  "version": 0
+}

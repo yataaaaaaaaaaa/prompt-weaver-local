@@ -70,3 +70,7 @@ output/
 trash/
 # pytest temp dirs
 .pytest-tmp/
+
+# e2e fixture data (synthetic data dir template, tests/e2e/fixtures/data) is committed
+!tests/e2e/fixtures/data/output/
+!tests/e2e/fixtures/data/trash/

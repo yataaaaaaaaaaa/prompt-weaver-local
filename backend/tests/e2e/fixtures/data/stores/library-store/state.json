@@ -1,0 +1,93 @@
+{
+  "state": {
+    "models": [
+      {
+        "id": "studio-xl-local-safetensors",
+        "name": "studio_xl_local.safetensors",
+        "path": "{{MODELS_ROOT}}/checkpoints/studio_xl_local.safetensors",
+        "default_width": 832,
+        "default_height": 1216,
+        "torch_dtype": "float16",
+        "source": null
+      },
+      {
+        "id": "classic-sd15-local-safetensors",
+        "name": "classic_sd15_local.safetensors",
+        "path": "{{MODELS_ROOT}}/checkpoints/classic_sd15_local.safetensors",
+        "default_width": 512,
+        "default_height": 768,
+        "torch_dtype": "float16",
+        "source": null
+      },
+      {
+        "id": "dreamline-v7-safetensors",
+        "name": "Dreamline 1.5 v7",
+        "path": "{{MODELS_ROOT}}/checkpoints/dreamline_v7.safetensors",
+        "default_width": 512,
+        "default_height": 768,
+        "torch_dtype": "float16",
+        "source": {
+          "provider": "civitai",
+          "model_id": "910007",
+          "version_id": "920008",
+          "file_id": "930008",
+          "model_name": "Dreamline 1.5",
+          "version_name": "v7",
+          "base_model": "SD 1.5",
+          "sha256": "{{SHA256:930008}}",
+          "preview_url": "https://image.civitai.com/e2e/940010/width=450/940010.jpeg",
+          "trigger_words": [],
+          "page_url": "https://civitai.com/models/910007?modelVersionId=920008"
+        }
+      }
+    ],
+    "loras": [
+      {
+        "id": "watercolor-wash-safetensors",
+        "name": "Watercolor Wash v1.2",
+        "path": "{{MODELS_ROOT}}/loras/watercolor_wash.safetensors",
+        "source": {
+          "provider": "civitai",
+          "model_id": "910002",
+          "version_id": "920003",
+          "file_id": "930003",
+          "model_name": "Watercolor Wash",
+          "version_name": "v1.2",
+          "base_model": "SD 1.5",
+          "sha256": "{{SHA256:930003}}",
+          "preview_url": "https://image.civitai.com/e2e/940004/width=450/940004.jpeg",
+          "trigger_words": [
+            "watercolor"
+          ],
+          "page_url": "https://civitai.com/models/910002?modelVersionId=920003"
+        }
+      },
+      {
+        "id": "local-detail-tweaker-safetensors",
+        "name": "local_detail_tweaker.safetensors",
+        "path": "{{MODELS_ROOT}}/loras/local_detail_tweaker.safetensors",
+        "source": null
+      },
+      {
+        "id": "sharp-lineart-safetensors",
+        "name": "sharp_lineart.safetensors",
+        "path": "{{MODELS_ROOT}}/loras/sharp_lineart.safetensors",
+        "source": null
+      }
+    ],
+    "selectedModelId": "studio-xl-local-safetensors",
+    "selectedLoras": [
+      {
+        "id": "watercolor-wash-safetensors",
+        "weight": 0.65
+      },
+      {
+        "id": "local-detail-tweaker-safetensors",
+        "weight": -0.5
+      }
+    ],
+    "lastModelDir": "{{MODELS_ROOT}}/checkpoints",
+    "lastLoraDir": "{{MODELS_ROOT}}/loras"
+  },
+  "version": 2
+}

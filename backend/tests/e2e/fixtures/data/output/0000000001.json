@@ -1,0 +1,45 @@
+{
+  "output_id": "0000000001",
+  "generated_at": "2026-11-20T08:15:00+00:00",
+  "prompt": "1boy, short hair, armor, cape, castle courtyard, serious expression",
+  "negative_prompt": "lowres, bad anatomy, watermark",
+  "seed": 51111,
+  "prompt_seed": 1111,
+  "image_seed": 51111,
+  "width": 512,
+  "height": 768,
+  "steps": 12,
+  "guidance_scale": 6.5,
+  "model_id": "classic-sd15-local-safetensors",
+  "selections": [
+    {
+      "category_name": "Subject",
+      "prompt_text": "1boy, short hair",
+      "locked": false,
+      "induced_lora_ids": []
+    },
+    {
+      "category_name": "Outfit",
+      "prompt_text": "armor, cape",
+      "locked": false,
+      "induced_lora_ids": []
+    },
+    {
+      "category_name": "Background",
+      "prompt_text": "castle courtyard",
+      "locked": false,
+      "induced_lora_ids": []
+    },
+    {
+      "category_name": "Mood",
+      "prompt_text": "serious expression",
+      "locked": false,
+      "induced_lora_ids": []
+    }
+  ],
+  "image_path": "{{DATA_DIR}}/output/0000000001.png",
+  "metadata_path": "{{DATA_DIR}}/output/0000000001.json",
+  "active_lora_ids": [
+    "watercolor-wash-safetensors"
+  ]
+}

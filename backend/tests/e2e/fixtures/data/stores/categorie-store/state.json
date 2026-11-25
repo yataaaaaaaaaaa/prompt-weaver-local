@@ -1,0 +1,160 @@
+{
+  "state": {
+    "categories": [
+      {
+        "text": "Subject",
+        "activation_text": "",
+        "priority": 1,
+        "state": "normal",
+        "subPrompts": [
+          {
+            "text": "1girl, silver hair",
+            "state": "lock",
+            "extraLoraIds": []
+          },
+          {
+            "text": "1boy, short hair",
+            "state": "normal",
+            "extraLoraIds": []
+          },
+          {
+            "text": "2girls, twins",
+            "state": "normal",
+            "extraLoraIds": []
+          }
+        ]
+      },
+      {
+        "text": "Outfit",
+        "activation_text": "",
+        "priority": 2,
+        "state": "normal",
+        "subPrompts": [
+          {
+            "text": "red dress",
+            "state": "normal",
+            "extraLoraIds": []
+          },
+          {
+            "text": "school uniform",
+            "state": "normal",
+            "extraLoraIds": [
+              "sharp-lineart-safetensors"
+            ]
+          },
+          {
+            "text": "armor, cape",
+            "state": "skip",
+            "extraLoraIds": []
+          },
+          {
+            "text": "swimsuit",
+            "state": "normal",
+            "extraLoraIds": []
+          }
+        ]
+      },
+      {
+        "text": "Background",
+        "activation_text": "",
+        "priority": 3,
+        "state": "normal",
+        "subPrompts": [
+          {
+            "text": "castle courtyard",
+            "state": "normal",
+            "extraLoraIds": []
+          },
+          {
+            "text": "neon city street, rain",
+            "state": "normal",
+            "extraLoraIds": []
+          },
+          {
+            "text": "beach at sunset",
+            "state": "normal",
+            "extraLoraIds": []
+          }
+        ]
+      },
+      {
+        "text": "Weather effects",
+        "activation_text": "rain, storm",
+        "priority": 4,
+        "state": "normal",
+        "subPrompts": [
+          {
+            "text": "lightning bolts",
+            "state": "normal",
+            "extraLoraIds": []
+          },
+          {
+            "text": "puddles reflections",
+            "state": "normal",
+            "extraLoraIds": []
+          }
+        ]
+      },
+      {
+        "text": "Lighting",
+        "activation_text": "",
+        "priority": 5,
+        "state": "skip",
+        "subPrompts": [
+          {
+            "text": "studio lighting",
+            "state": "normal",
+            "extraLoraIds": []
+          },
+          {
+            "text": "golden hour",
+            "state": "normal",
+            "extraLoraIds": []
+          }
+        ]
+      },
+      {
+        "text": "Mood",
+        "activation_text": "",
+        "priority": 6,
+        "state": "normal",
+        "subPrompts": [
+          {
+            "text": "smiling",
+            "state": "normal",
+            "extraLoraIds": []
+          },
+          {
+            "text": "serious expression",
+            "state": "skip",
+            "extraLoraIds": []
+          },
+          {
+            "text": "crying",
+            "state": "normal",
+            "extraLoraIds": []
+          }
+        ]
+      },
+      {
+        "text": "Sea creatures",
+        "activation_text": "underwater",
+        "priority": 7,
+        "state": "normal",
+        "subPrompts": [
+          {
+            "text": "jellyfish",
+            "state": "normal",
+            "extraLoraIds": []
+          },
+          {
+            "text": "coral reef",
+            "state": "normal",
+            "extraLoraIds": []
+          }
+        ]
+      }
+    ]
+  },
+  "version": 0
+}

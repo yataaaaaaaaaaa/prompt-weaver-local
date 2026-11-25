@@ -1,0 +1,996 @@
+{
+ "_comment": "Synthetic Civitai catalog of the e2e backend (tests/e2e/fake_civitai.py expands it into Civitai API answers). Never real data.",
+ "models": [
+  {
+   "id": 910001,
+   "name": "Pixel Forge Style",
+   "type": "LORA",
+   "creator": "e2e-studio",
+   "tags": [
+    "style",
+    "pixel art",
+    "retro"
+   ],
+   "downloads": 48210,
+   "versions": [
+    {
+     "id": 920001,
+     "name": "v2.0",
+     "baseModel": "Illustrious",
+     "publishedAt": "2026-10-12T09:00:00.000Z",
+     "trainedWords": [
+      "pixel art",
+      "dithering"
+     ],
+     "files": [
+      {
+       "id": 930001,
+       "name": "pixel_forge_style_v2.safetensors",
+       "format": "SafeTensor",
+       "type": "Model",
+       "primary": true
+      }
+     ],
+     "images": [
+      {
+       "id": 940001,
+       "width": 832,
+       "height": 1216,
+       "nsfwLevel": 1
+      },
+      {
+       "id": 940002,
+       "width": 1216,
+       "height": 832,
+       "nsfwLevel": 1
+      }
+     ]
+    },
+    {
+     "id": 920002,
+     "name": "v1.0",
+     "baseModel": "SD 1.5",
+     "publishedAt": "2026-03-02T09:00:00.000Z",
+     "trainedWords": [
+      "pixel art"
+     ],
+     "files": [
+      {
+       "id": 930002,
+       "name": "pixel_forge_style_v1.safetensors",
+       "format": "SafeTensor",
+       "type": "Model",
+       "primary": true
+      }
+     ],
+     "images": [
+      {
+       "id": 940003,
+       "width": 512,
+       "height": 768,
+       "nsfwLevel": 1
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "id": 910002,
+   "name": "Watercolor Wash",
+   "type": "LORA",
+   "creator": "aquarelle",
+   "tags": [
+    "style",
+    "watercolor"
+   ],
+   "downloads": 31877,
+   "versions": [
+    {
+     "id": 920003,
+     "name": "v1.2",
+     "baseModel": "SD 1.5",
+     "trainedWords": [
+      "watercolor"
+     ],
+     "files": [
+      {
+       "id": 930003,
+       "name": "watercolor_wash.safetensors",
+       "format": "SafeTensor",
+       "type": "Model",
+       "primary": true
+      }
+     ],
+     "images": [
+      {
+       "id": 940004,
+       "width": 512,
+       "height": 768,
+       "nsfwLevel": 1
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "id": 910003,
+   "name": "Neon Rim Light",
+   "type": "LORA",
+   "creator": "lumen-lab",
+   "tags": [
+    "lighting",
+    "neon"
+   ],
+   "downloads": 22150,
+   "versions": [
+    {
+     "id": 920004,
+     "name": "v3",
+     "baseModel": "SDXL 1.0",
+     "trainedWords": [
+      "neon rim light"
+     ],
+     "files": [
+      {
+       "id": 930004,
+       "name": "neon_rim_light.safetensors",
+       "format": "SafeTensor",
+       "type": "Model",
+       "primary": true
+      }
+     ],
+     "images": [
+      {
+       "id": 940005,
+       "width": 1024,
+       "height": 1024,
+       "nsfwLevel": 1
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "id": 910004,
+   "name": "Flux Glow",
+   "type": "LORA",
+   "creator": "fluxer",
+   "tags": [
+    "lighting",
+    "glow"
+   ],
+   "downloads": 9800,
+   "versions": [
+    {
+     "id": 920005,
+     "name": "v1",
+     "baseModel": "Flux.1 D",
+     "trainedWords": [
+      "glow"
+     ],
+     "files": [
+      {
+       "id": 930005,
+       "name": "flux_glow.safetensors",
+       "format": "SafeTensor",
+       "type": "Model",
+       "primary": true
+      }
+     ],
+     "images": [
+      {
+       "id": 940006,
+       "width": 1024,
+       "height": 1024,
+       "nsfwLevel": 1
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "id": 910005,
+   "name": "Legacy Ink Lines",
+   "type": "LORA",
+   "creator": "old-school",
+   "tags": [
+    "lineart"
+   ],
+   "downloads": 5400,
+   "versions": [
+    {
+     "id": 920006,
+     "name": "v1",
+     "baseModel": "SD 1.5",
+     "trainedWords": [
+      "ink lines"
+     ],
+     "files": [
+      {
+       "id": 930006,
+       "name": "legacy_ink_lines.pt",
+       "format": "PickleTensor",
+       "type": "Model",
+       "primary": true
+      }
+     ],
+     "images": [
+      {
+       "id": 940007,
+       "width": 512,
+       "height": 512,
+       "nsfwLevel": 1
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "id": 910006,
+   "name": "Aurora XL",
+   "type": "Checkpoint",
+   "creator": "aurora-team",
+   "tags": [
+    "base model",
+    "photorealistic"
+   ],
+   "downloads": 120400,
+   "versions": [
+    {
+     "id": 920007,
+     "name": "v4.0",
+     "baseModel": "SDXL 1.0",
+     "trainedWords": [],
+     "files": [
+      {
+       "id": 930007,
+       "name": "aurora_xl_v4.safetensors",
+       "format": "SafeTensor",
+       "type": "Model",
+       "primary": true
+      }
+     ],
+     "images": [
+      {
+       "id": 940008,
+       "width": 1024,
+       "height": 1024,
+       "nsfwLevel": 1
+      },
+      {
+       "id": 940009,
+       "width": 832,
+       "height": 1216,
+       "nsfwLevel": 1
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "id": 910007,
+   "name": "Dreamline 1.5",
+   "type": "Checkpoint",
+   "creator": "dreamline",
+   "tags": [
+    "base model",
+    "anime"
+   ],
+   "downloads": 87000,
+   "versions": [
+    {
+     "id": 920008,
+     "name": "v7",
+     "baseModel": "SD 1.5",
+     "trainedWords": [],
+     "files": [
+      {
+       "id": 930008,
+       "name": "dreamline_v7.safetensors",
+       "format": "SafeTensor",
+       "type": "Model",
+       "primary": true
+      }
+     ],
+     "images": [
+      {
+       "id": 940010,
+       "width": 512,
+       "height": 768,
+       "nsfwLevel": 1
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "id": 910008,
+   "name": "Easy Negative Lite",
+   "type": "TextualInversion",
+   "creator": "negatives",
+   "tags": [
+    "negative",
+    "embedding"
+   ],
+   "downloads": 64000,
+   "versions": [
+    {
+     "id": 920009,
+     "name": "v1",
+     "baseModel": "SD 1.5",
+     "trainedWords": [
+      "easynegativelite"
+     ],
+     "files": [
+      {
+       "id": 930009,
+       "name": "easy_negative_lite.safetensors",
+       "format": "SafeTensor",
+       "type": "Model",
+       "primary": true
+      }
+     ],
+     "images": [
+      {
+       "id": 940011,
+       "width": 512,
+       "height": 512,
+       "nsfwLevel": 1
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "id": 910009,
+   "name": "Moonlit Night",
+   "type": "LORA",
+   "creator": "e2e-studio",
+   "tags": [
+    "background",
+    "night"
+   ],
+   "downloads": 12000,
+   "versions": [
+    {
+     "id": 920010,
+     "name": "v1",
+     "baseModel": "Illustrious",
+     "trainedWords": [
+      "moonlit night"
+     ],
+     "files": [
+      {
+       "id": 930010,
+       "name": "moonlit_night.safetensors",
+       "format": "SafeTensor",
+       "type": "Model",
+       "primary": true
+      }
+     ],
+     "images": [
+      {
+       "id": 940012,
+       "width": 832,
+       "height": 1216,
+       "nsfwLevel": 1
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "id": 910010,
+   "name": "Velvet Noir",
+   "type": "LORA",
+   "creator": "after-dark",
+   "nsfw": true,
+   "tags": [
+    "style",
+    "noir"
+   ],
+   "downloads": 3000,
+   "versions": [
+    {
+     "id": 920011,
+     "name": "v1",
+     "baseModel": "SDXL 1.0",
+     "trainedWords": [
+      "velvet noir"
+     ],
+     "files": [
+      {
+       "id": 930011,
+       "name": "velvet_noir.safetensors",
+       "format": "SafeTensor",
+       "type": "Model",
+       "primary": true
+      }
+     ],
+     "images": [
+      {
+       "id": 940013,
+       "width": 832,
+       "height": 1216,
+       "nsfwLevel": 4
+      }
+     ]
+    }
+   ]
+  }
+ ],
+ "images": [
+  {
+   "id": 950001,
+   "width": 832,
+   "height": 1216,
+   "baseModel": "Illustrious",
+   "username": "e2e-painter",
+   "reactions": 812,
+   "createdAt": "2026-11-20T10:00:00.000Z",
+   "modelVersionIds": [
+    920001,
+    920007
+   ],
+   "meta": {
+    "prompt": "masterpiece, 1girl, pixel art, castle, sunset sky <lora:pixel_forge_style_v2:0.8>",
+    "negativePrompt": "lowres, blurry, watermark",
+    "seed": 123456,
+    "steps": 28,
+    "cfgScale": 6,
+    "sampler": "Euler a",
+    "Size": "832x1216",
+    "civitaiResources": [
+     {
+      "type": "lora",
+      "modelVersionId": 920001,
+      "weight": 0.8
+     },
+     {
+      "type": "checkpoint",
+      "modelVersionId": 920007
+     }
+    ]
+   }
+  },
+  {
+   "id": 950002,
+   "width": 512,
+   "height": 768,
+   "baseModel": "SD 1.5",
+   "username": "aquarelle",
+   "reactions": 455,
+   "createdAt": "2026-11-19T10:00:00.000Z",
+   "modelVersionIds": [
+    920003,
+    920004,
+    920008
+   ],
+   "meta": {
+    "prompt": "watercolor, harbor town, boats, soft light",
+    "negativePrompt": "lowres, blurry, watermark",
+    "seed": 98765,
+    "steps": 24,
+    "cfgScale": 7,
+    "sampler": "DPM++ 2M Karras",
+    "Size": "512x768",
+    "clipSkip": 2,
+    "civitaiResources": [
+     {
+      "type": "lora",
+      "modelVersionId": 920003,
+      "weight": 0.65
+     },
+     {
+      "type": "lora",
+      "modelVersionId": 920004,
+      "weight": 1.2
+     },
+     {
+      "type": "checkpoint",
+      "modelVersionId": 920008
+     }
+    ]
+   }
+  },
+  {
+   "id": 950003,
+   "width": 512,
+   "height": 768,
+   "baseModel": "SD 1.5",
+   "username": "mystery-user",
+   "reactions": 210,
+   "createdAt": "2026-11-18T10:00:00.000Z",
+   "modelVersionIds": [],
+   "meta": {
+    "prompt": "portrait, freckles, rim light <lora:mystery_detail:0.5>",
+    "negativePrompt": "lowres, blurry, watermark",
+    "seed": 4242,
+    "steps": 28,
+    "cfgScale": 6,
+    "sampler": "Euler a",
+    "Size": "512x768",
+    "Model": "unknown_base_v1",
+    "resources": [
+     {
+      "name": "mystery_detail",
+      "type": "lora",
+      "weight": 0.5
+     },
+     {
+      "name": "unknown_base_v1",
+      "type": "model"
+     }
+    ]
+   }
+  },
+  {
+   "id": 950004,
+   "width": 1024,
+   "height": 1024,
+   "baseModel": "Flux.1 D",
+   "username": "fluxer",
+   "reactions": 120,
+   "createdAt": "2026-11-17T10:00:00.000Z",
+   "modelVersionIds": [
+    920005
+   ],
+   "meta": {
+    "prompt": "glowing forest, fireflies, night",
+    "negativePrompt": "lowres, blurry, watermark",
+    "seed": 31337,
+    "steps": 20,
+    "cfgScale": 3.5,
+    "sampler": "Euler a",
+    "Size": "1024x1024",
+    "civitaiResources": [
+     {
+      "type": "lora",
+      "modelVersionId": 920005,
+      "weight": 1.0
+     }
+    ]
+   }
+  },
+  {
+   "id": 950005,
+   "width": 1024,
+   "height": 1024,
+   "baseModel": "SDXL 1.0",
+   "username": "no-meta",
+   "reactions": 80,
+   "createdAt": "2026-11-16T10:00:00.000Z",
+   "modelVersionIds": [],
+   "meta": null
+  },
+  {
+   "id": 950006,
+   "width": 832,
+   "height": 1216,
+   "baseModel": "Illustrious",
+   "username": "after-dark",
+   "reactions": 999,
+   "createdAt": "2026-11-15T10:00:00.000Z",
+   "nsfwLevel": 4,
+   "modelVersionIds": [
+    920001
+   ],
+   "meta": {
+    "prompt": "night club, neon lights",
+    "negativePrompt": "lowres, blurry, watermark",
+    "seed": 666,
+    "steps": 28,
+    "cfgScale": 6,
+    "sampler": "Euler a",
+    "Size": "832x1216"
+   }
+  },
+  {
+   "id": 950007,
+   "width": 832,
+   "height": 1216,
+   "baseModel": "SDXL 1.0",
+   "username": "e2e-artist-1",
+   "reactions": 60,
+   "createdAt": "2026-11-14T10:00:00.000Z",
+   "modelVersionIds": [],
+   "meta": {
+    "prompt": "mountain lake, morning mist",
+    "negativePrompt": "lowres, blurry, watermark",
+    "seed": 1000,
+    "steps": 28,
+    "cfgScale": 6,
+    "sampler": "Euler a",
+    "Size": "832x1216"
+   }
+  },
+  {
+   "id": 950008,
+   "width": 1216,
+   "height": 832,
+   "baseModel": "Illustrious",
+   "username": "e2e-artist-2",
+   "reactions": 55,
+   "createdAt": "2026-11-13T10:00:00.000Z",
+   "modelVersionIds": [
+    920010
+   ],
+   "meta": {
+    "prompt": "cyberpunk alley, rain",
+    "negativePrompt": "lowres, blurry, watermark",
+    "seed": 1001,
+    "steps": 28,
+    "cfgScale": 6,
+    "sampler": "Euler a",
+    "Size": "832x1216",
+    "civitaiResources": [
+     {
+      "type": "lora",
+      "modelVersionId": 920010,
+      "weight": 0.7
+     }
+    ]
+   }
+  },
+  {
+   "id": 950009,
+   "width": 832,
+   "height": 1216,
+   "baseModel": "SD 1.5",
+   "username": "e2e-artist-3",
+   "reactions": 50,
+   "createdAt": "2026-11-12T10:00:00.000Z",
+   "modelVersionIds": [],
+   "meta": {
+    "prompt": "cat on a windowsill, sunbeam",
+    "negativePrompt": "lowres, blurry, watermark",
+    "seed": 1002,
+    "steps": 28,
+    "cfgScale": 6,
+    "sampler": "Euler a",
+    "Size": "832x1216"
+   }
+  },
+  {
+   "id": 950010,
+   "width": 1216,
+   "height": 832,
+   "baseModel": "Illustrious",
+   "username": "e2e-artist-4",
+   "reactions": 45,
+   "createdAt": "2026-11-11T10:00:00.000Z",
+   "modelVersionIds": [
+    920010
+   ],
+   "meta": {
+    "prompt": "desert caravan, dunes",
+    "negativePrompt": "lowres, blurry, watermark",
+    "seed": 1003,
+    "steps": 28,
+    "cfgScale": 6,
+    "sampler": "Euler a",
+    "Size": "832x1216",
+    "civitaiResources": [
+     {
+      "type": "lora",
+      "modelVersionId": 920010,
+      "weight": 0.7
+     }
+    ]
+   }
+  },
+  {
+   "id": 950011,
+   "width": 832,
+   "height": 1216,
+   "baseModel": "SDXL 1.0",
+   "username": "e2e-artist-5",
+   "reactions": 40,
+   "createdAt": "2026-11-10T10:00:00.000Z",
+   "modelVersionIds": [],
+   "meta": {
+    "prompt": "snowy village, lanterns",
+    "negativePrompt": "lowres, blurry, watermark",
+    "seed": 1004,
+    "steps": 28,
+    "cfgScale": 6,
+    "sampler": "Euler a",
+    "Size": "832x1216"
+   }
+  },
+  {
+   "id": 950012,
+   "width": 1216,
+   "height": 832,
+   "baseModel": "Illustrious",
+   "username": "e2e-artist-6",
+   "reactions": 35,
+   "createdAt": "2026-11-09T10:00:00.000Z",
+   "modelVersionIds": [
+    920010
+   ],
+   "meta": {
+    "prompt": "underwater temple, light rays",
+    "negativePrompt": "lowres, blurry, watermark",
+    "seed": 1005,
+    "steps": 28,
+    "cfgScale": 6,
+    "sampler": "Euler a",
+    "Size": "832x1216",
+    "civitaiResources": [
+     {
+      "type": "lora",
+      "modelVersionId": 920010,
+      "weight": 0.7
+     }
+    ]
+   }
+  },
+  {
+   "id": 950013,
+   "width": 832,
+   "height": 1216,
+   "baseModel": "SDXL 1.0",
+   "username": "e2e-filler-1",
+   "reactions": 30,
+   "createdAt": "2026-11-08T10:00:00.000Z",
+   "modelVersionIds": [],
+   "meta": {
+    "prompt": "harbor lighthouse, dusk",
+    "negativePrompt": "lowres, blurry, watermark",
+    "seed": 2000,
+    "steps": 28,
+    "cfgScale": 6,
+    "sampler": "Euler a",
+    "Size": "832x1216"
+   }
+  },
+  {
+   "id": 950014,
+   "width": 1216,
+   "height": 832,
+   "baseModel": "Illustrious",
+   "username": "e2e-filler-2",
+   "reactions": 29,
+   "createdAt": "2026-11-08T10:00:00.000Z",
+   "modelVersionIds": [],
+   "meta": {
+    "prompt": "1girl, school rooftop, wind",
+    "negativePrompt": "lowres, blurry, watermark",
+    "seed": 2001,
+    "steps": 28,
+    "cfgScale": 6,
+    "sampler": "Euler a",
+    "Size": "1216x832"
+   }
+  },
+  {
+   "id": 950015,
+   "width": 832,
+   "height": 1216,
+   "baseModel": "SD 1.5",
+   "username": "e2e-filler-3",
+   "reactions": 28,
+   "createdAt": "2026-11-08T10:00:00.000Z",
+   "modelVersionIds": [],
+   "meta": {
+    "prompt": "forest path, autumn leaves",
+    "negativePrompt": "lowres, blurry, watermark",
+    "seed": 2002,
+    "steps": 28,
+    "cfgScale": 6,
+    "sampler": "Euler a",
+    "Size": "832x1216"
+   }
+  },
+  {
+   "id": 950016,
+   "width": 832,
+   "height": 1216,
+   "baseModel": "SDXL 1.0",
+   "username": "e2e-filler-4",
+   "reactions": 27,
+   "createdAt": "2026-11-07T10:00:00.000Z",
+   "modelVersionIds": [],
+   "meta": {
+    "prompt": "city skyline, night, rain",
+    "negativePrompt": "lowres, blurry, watermark",
+    "seed": 2003,
+    "steps": 28,
+    "cfgScale": 6,
+    "sampler": "Euler a",
+    "Size": "832x1216"
+   }
+  },
+  {
+   "id": 950017,
+   "width": 1216,
+   "height": 832,
+   "baseModel": "Illustrious",
+   "username": "e2e-filler-5",
+   "reactions": 26,
+   "createdAt": "2026-11-07T10:00:00.000Z",
+   "modelVersionIds": [],
+   "meta": {
+    "prompt": "dragon, mountains, clouds",
+    "negativePrompt": "lowres, blurry, watermark",
+    "seed": 2004,
+    "steps": 28,
+    "cfgScale": 6,
+    "sampler": "Euler a",
+    "Size": "1216x832"
+   }
+  },
+  {
+   "id": 950018,
+   "width": 832,
+   "height": 1216,
+   "baseModel": "SD 1.5",
+   "username": "e2e-filler-6",
+   "reactions": 25,
+   "createdAt": "2026-11-07T10:00:00.000Z",
+   "modelVersionIds": [],
+   "meta": {
+    "prompt": "still life, apples, window light",
+    "negativePrompt": "lowres, blurry, watermark",
+    "seed": 2005,
+    "steps": 28,
+    "cfgScale": 6,
+    "sampler": "Euler a",
+    "Size": "832x1216"
+   }
+  },
+  {
+   "id": 950019,
+   "width": 832,
+   "height": 1216,
+   "baseModel": "SDXL 1.0",
+   "username": "e2e-filler-7",
+   "reactions": 24,
+   "createdAt": "2026-11-06T10:00:00.000Z",
+   "modelVersionIds": [],
+   "meta": {
+    "prompt": "space station, earth view",
+    "negativePrompt": "lowres, blurry, watermark",
+    "seed": 2006,
+    "steps": 28,
+    "cfgScale": 6,
+    "sampler": "Euler a",
+    "Size": "832x1216"
+   }
+  },
+  {
+   "id": 950020,
+   "width": 1216,
+   "height": 832,
+   "baseModel": "Illustrious",
+   "username": "e2e-filler-8",
+   "reactions": 23,
+   "createdAt": "2026-11-06T10:00:00.000Z",
+   "modelVersionIds": [],
+   "meta": {
+    "prompt": "1boy, armor, castle gate",
+    "negativePrompt": "lowres, blurry, watermark",
+    "seed": 2007,
+    "steps": 28,
+    "cfgScale": 6,
+    "sampler": "Euler a",
+    "Size": "1216x832"
+   }
+  },
+  {
+   "id": 950021,
+   "width": 832,
+   "height": 1216,
+   "baseModel": "SD 1.5",
+   "username": "e2e-filler-9",
+   "reactions": 22,
+   "createdAt": "2026-11-06T10:00:00.000Z",
+   "modelVersionIds": [],
+   "meta": {
+    "prompt": "beach, palm trees, sunset",
+    "negativePrompt": "lowres, blurry, watermark",
+    "seed": 2008,
+    "steps": 28,
+    "cfgScale": 6,
+    "sampler": "Euler a",
+    "Size": "832x1216"
+   }
+  },
+  {
+   "id": 950022,
+   "width": 832,
+   "height": 1216,
+   "baseModel": "SDXL 1.0",
+   "username": "e2e-filler-10",
+   "reactions": 21,
+   "createdAt": "2026-11-05T10:00:00.000Z",
+   "modelVersionIds": [],
+   "meta": {
+    "prompt": "old library, candles",
+    "negativePrompt": "lowres, blurry, watermark",
+    "seed": 2009,
+    "steps": 28,
+    "cfgScale": 6,
+    "sampler": "Euler a",
+    "Size": "832x1216"
+   }
+  },
+  {
+   "id": 950023,
+   "width": 1216,
+   "height": 832,
+   "baseModel": "Illustrious",
+   "username": "e2e-filler-11",
+   "reactions": 20,
+   "createdAt": "2026-11-05T10:00:00.000Z",
+   "modelVersionIds": [],
+   "meta": {
+    "prompt": "fox spirit, shrine, lanterns",
+    "negativePrompt": "lowres, blurry, watermark",
+    "seed": 2010,
+    "steps": 28,
+    "cfgScale": 6,
+    "sampler": "Euler a",
+    "Size": "1216x832"
+   }
+  },
+  {
+   "id": 950024,
+   "width": 832,
+   "height": 1216,
+   "baseModel": "SD 1.5",
+   "username": "e2e-filler-12",
+   "reactions": 19,
+   "createdAt": "2026-11-05T10:00:00.000Z",
+   "modelVersionIds": [],
+   "meta": {
+    "prompt": "winter cabin, smoke, snow",
+    "negativePrompt": "lowres, blurry, watermark",
+    "seed": 2011,
+    "steps": 28,
+    "cfgScale": 6,
+    "sampler": "Euler a",
+    "Size": "832x1216"
+   }
+  },
+  {
+   "id": 950025,
+   "width": 832,
+   "height": 1216,
+   "baseModel": "SDXL 1.0",
+   "username": "e2e-filler-13",
+   "reactions": 18,
+   "createdAt": "2026-11-04T10:00:00.000Z",
+   "modelVersionIds": [],
+   "meta": {
+    "prompt": "market street, crowd, morning",
+    "negativePrompt": "lowres, blurry, watermark",
+    "seed": 2012,
+    "steps": 28,
+    "cfgScale": 6,
+    "sampler": "Euler a",
+    "Size": "832x1216"
+   }
+  },
+  {
+   "id": 950026,
+   "width": 1216,
+   "height": 832,
+   "baseModel": "Illustrious",
+   "username": "e2e-filler-14",
+   "reactions": 17,
+   "createdAt": "2026-11-04T10:00:00.000Z",
+   "modelVersionIds": [],
+   "meta": {
+    "prompt": "robot, garden, flowers",
+    "negativePrompt": "lowres, blurry, watermark",
+    "seed": 2013,
+    "steps": 28,
+    "cfgScale": 6,
+    "sampler": "Euler a",
+    "Size": "1216x832"
+   }
+  }
+ ]
+}

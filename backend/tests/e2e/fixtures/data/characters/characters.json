@@ -1,0 +1,134 @@
+{
+  "version": 1,
+  "active_id": null,
+  "items": [
+    {
+      "id": "chr-aaaaaaaaaaa1",
+      "name": "Mira",
+      "identity_tags": [
+        "1girl",
+        "short red hair",
+        "green eyes",
+        "freckles"
+      ],
+      "outfit_tags": [
+        "leather jacket",
+        "white scarf"
+      ],
+      "negative_tags": [
+        "long hair"
+      ],
+      "loras": [
+        {
+          "id": "watercolor-wash-safetensors",
+          "weight": 0.5
+        }
+      ],
+      "seed": 777,
+      "seed_locked": true,
+      "reference_strength": 0.6,
+      "reference_focus": "face",
+      "reference_images": [
+        {
+          "id": "img-aaaaaaaaaaa1",
+          "width": 512,
+          "height": 768,
+          "source": {
+            "kind": "output",
+            "output_id": "0000000002"
+          },
+          "added_at": "2026-11-21T09:31:00Z"
+        },
+        {
+          "id": "img-aaaaaaaaaaa2",
+          "width": 512,
+          "height": 512,
+          "source": {
+            "kind": "url",
+            "url": "https://image.civitai.com/e2e/950007/original=true/950007.jpeg"
+          },
+          "added_at": "2026-11-21T09:32:00Z"
+        }
+      ],
+      "thumbnail": {
+        "id": "img-aaaaaaaaaaa3",
+        "width": 256,
+        "height": 384,
+        "source": {
+          "kind": "character_image",
+          "image_id": "img-aaaaaaaaaaa1"
+        },
+        "added_at": "2026-11-21T09:31:00Z"
+      },
+      "created_at": "2026-11-21T09:31:00Z",
+      "updated_at": "2026-11-21T09:32:00Z"
+    },
+    {
+      "id": "chr-bbbbbbbbbbb1",
+      "name": "Bram the knight",
+      "identity_tags": [
+        "1boy",
+        "short brown hair",
+        "beard"
+      ],
+      "outfit_tags": [],
+      "negative_tags": [],
+      "loras": [],
+      "seed": null,
+      "seed_locked": false,
+      "reference_strength": 0.6,
+      "reference_focus": "general",
+      "reference_images": [],
+      "thumbnail": null,
+      "created_at": "2026-11-22T07:00:00Z",
+      "updated_at": "2026-11-22T07:00:00Z"
+    },
+    {
+      "id": "chr-ccccccccccc1",
+      "name": "Nova",
+      "identity_tags": [
+        "1girl",
+        "silver hair",
+        "blue eyes"
+      ],
+      "outfit_tags": [
+        "space suit"
+      ],
+      "negative_tags": [],
+      "loras": [
+        {
+          "id": "missing-lora-safetensors",
+          "weight": 0.8
+        }
+      ],
+      "seed": 9001,
+      "seed_locked": false,
+      "reference_strength": 0.85,
+      "reference_focus": "general",
+      "reference_images": [
+        {
+          "id": "img-ccccccccccc1",
+          "width": 512,
+          "height": 512,
+          "source": {
+            "kind": "file",
+            "path": "C:/e2e/pictures/nova.png"
+          },
+          "added_at": "2026-11-22T08:00:00Z"
+        }
+      ],
+      "thumbnail": {
+        "id": "img-ccccccccccc2",
+        "width": 384,
+        "height": 384,
+        "source": {
+          "kind": "character_image",
+          "image_id": "img-ccccccccccc1"
+        },
+        "added_at": "2026-11-22T08:00:00Z"
+      },
+      "created_at": "2026-11-22T08:00:00Z",
+      "updated_at": "2026-11-22T08:00:00Z"
+    }
+  ]
+}

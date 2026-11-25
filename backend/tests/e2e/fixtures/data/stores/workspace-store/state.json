@@ -1,0 +1,110 @@
+{
+  "state": {
+    "windows": {
+      "pane:image": {
+        "x": 16,
+        "y": 16,
+        "width": 420,
+        "height": 400,
+        "z": 1
+      },
+      "pane:browser": {
+        "x": 16,
+        "y": 428,
+        "width": 420,
+        "height": 592,
+        "z": 2
+      },
+      "pane:controls": {
+        "x": 448,
+        "y": 16,
+        "width": 420,
+        "height": 560,
+        "z": 3
+      },
+      "pane:used": {
+        "x": 448,
+        "y": 588,
+        "width": 420,
+        "height": 432,
+        "z": 4
+      },
+      "pane:models": {
+        "x": 1240,
+        "y": 16,
+        "width": 664,
+        "height": 1004,
+        "z": 5
+      },
+      "pane:images": {
+        "x": 880,
+        "y": 16,
+        "width": 1024,
+        "height": 1004,
+        "z": 6
+      },
+      "pane:characters": {
+        "x": 880,
+        "y": 16,
+        "width": 1024,
+        "height": 1004,
+        "z": 7
+      },
+      "category:subject": {
+        "x": 880,
+        "y": 16,
+        "width": 500,
+        "height": 256,
+        "z": 8
+      },
+      "category:outfit": {
+        "x": 880,
+        "y": 284,
+        "width": 500,
+        "height": 296,
+        "z": 9
+      },
+      "category:mood": {
+        "x": 880,
+        "y": 592,
+        "width": 500,
+        "height": 256,
+        "z": 10
+      },
+      "category:background": {
+        "x": 1392,
+        "y": 16,
+        "width": 512,
+        "height": 256,
+        "z": 11
+      },
+      "category:weather-effects": {
+        "x": 1392,
+        "y": 284,
+        "width": 512,
+        "height": 216,
+        "z": 12
+      },
+      "category:lighting": {
+        "x": 1392,
+        "y": 512,
+        "width": 512,
+        "height": 216,
+        "z": 13
+      },
+      "category:sea-creatures": {
+        "x": 1392,
+        "y": 740,
+        "width": 512,
+        "height": 216,
+        "z": 14
+      }
+    },
+    "hiddenPaneIds": [
+      "models",
+      "images",
+      "characters"
+    ]
+  },
+  "version": 0
+}

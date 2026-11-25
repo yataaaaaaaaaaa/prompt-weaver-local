@@ -31,7 +31,10 @@ export function themeFor(dark: boolean): Theme {
 	return dark ? webDarkTheme : webLightTheme;
 }
 
-/** The Fluent 2 web theme matching the OS color scheme. */
-export function useAppTheme(): Theme {
-	return themeFor(usePrefersDarkColorScheme());
+export type ColorScheme = 'light' | 'dark';
+
+/** The Fluent 2 web theme matching the OS color scheme, or `forced` (component tests render a fixed theme). */
+export function useAppTheme(forced?: ColorScheme): Theme {
+	const prefersDark = usePrefersDarkColorScheme();
+	return themeFor(forced === undefined ? prefersDark : forced === 'dark');
 }

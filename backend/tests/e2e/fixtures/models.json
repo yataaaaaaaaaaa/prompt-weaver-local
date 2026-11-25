@@ -1,0 +1,30 @@
+[
+ {
+  "path": "checkpoints/studio_xl_local.safetensors",
+  "architecture": "sdxl"
+ },
+ {
+  "path": "checkpoints/classic_sd15_local.safetensors",
+  "architecture": "sd15"
+ },
+ {
+  "path": "checkpoints/dreamline_v7.safetensors",
+  "civitai_file_id": 930008
+ },
+ {
+  "path": "loras/watercolor_wash.safetensors",
+  "civitai_file_id": 930003
+ },
+ {
+  "path": "loras/neon_rim_light.safetensors",
+  "civitai_file_id": 930004
+ },
+ {
+  "path": "loras/local_detail_tweaker.safetensors",
+  "bytes": 4096
+ },
+ {
+  "path": "loras/sharp_lineart.safetensors",
+  "bytes": 4096
+ }
+]

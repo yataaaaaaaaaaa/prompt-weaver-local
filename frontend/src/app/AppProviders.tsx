@@ -1,9 +1,10 @@
 // Root providers: Fluent 2 theme (following the OS color scheme), document-level static styles and the
-// root error boundary. Every view renders inside this.
+// root error boundary. Every view renders inside this: the app (main.tsx) and every component test
+// (src/test/render.tsx, with a forced color scheme), so there is one provider setup.
 import { FluentProvider, makeStaticStyles, makeStyles, tokens } from '@fluentui/react-components';
 import type { ReactNode } from 'react';
 import { ErrorBoundary } from '../ui/ErrorBoundary';
-import { useAppTheme } from './theme';
+import { useAppTheme, type ColorScheme } from './theme';
 
 const useDocumentStyles = makeStaticStyles({
 	'html, body, #root': {
@@ -26,10 +27,16 @@ const useStyles = makeStyles({
 	},
 });
 
-export function AppProviders({ children }: { children: ReactNode }): JSX.Element {
+export type AppProvidersProps = {
+	children: ReactNode;
+	/** Forces the theme instead of following the OS color scheme (component tests). */
+	colorScheme?: ColorScheme;
+};
+
+export function AppProviders({ children, colorScheme }: AppProvidersProps): JSX.Element {
 	useDocumentStyles();
 	const styles = useStyles();
-	const theme = useAppTheme();
+	const theme = useAppTheme(colorScheme);
 	// applyStylesToPortals defaults to true, which copies `styles.root` onto every portal mount node. Fluent positions
 	// that node absolutely at z-index 1000000, so the full-height opaque background would cover the whole app as soon
 	// as the first tooltip/menu/toast portal exists. Portals still receive the theme tokens without it.

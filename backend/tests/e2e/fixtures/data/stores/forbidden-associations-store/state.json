@@ -1,0 +1,87 @@
+{
+  "state": {
+    "rules": [
+      {
+        "left": {
+          "kind": "specific",
+          "category_name": "Subject",
+          "prompt_text": "1girl, silver hair",
+          "contains_text": null,
+          "tag_text": null
+        },
+        "right": {
+          "kind": "specific",
+          "category_name": "Outfit",
+          "prompt_text": "swimsuit",
+          "contains_text": null,
+          "tag_text": null
+        }
+      },
+      {
+        "left": {
+          "kind": "specific",
+          "category_name": "Outfit",
+          "prompt_text": "red dress",
+          "contains_text": null,
+          "tag_text": null
+        },
+        "right": {
+          "kind": "specific",
+          "category_name": "Background",
+          "prompt_text": "beach at sunset",
+          "contains_text": null,
+          "tag_text": null
+        }
+      },
+      {
+        "left": {
+          "kind": "tag",
+          "category_name": "Background",
+          "prompt_text": null,
+          "contains_text": null,
+          "tag_text": "rain"
+        },
+        "right": {
+          "kind": "specific",
+          "category_name": "Mood",
+          "prompt_text": "crying",
+          "contains_text": null,
+          "tag_text": null
+        }
+      },
+      {
+        "left": {
+          "kind": "contains",
+          "category_name": null,
+          "prompt_text": null,
+          "contains_text": "neon",
+          "tag_text": null
+        },
+        "right": {
+          "kind": "specific",
+          "category_name": "Lighting",
+          "prompt_text": "golden hour",
+          "contains_text": null,
+          "tag_text": null
+        }
+      },
+      {
+        "left": {
+          "kind": "specific",
+          "category_name": "Weather effects",
+          "prompt_text": null,
+          "contains_text": null,
+          "tag_text": null
+        },
+        "right": {
+          "kind": "specific",
+          "category_name": "Sea creatures",
+          "prompt_text": null,
+          "contains_text": null,
+          "tag_text": null
+        }
+      }
+    ]
+  },
+  "version": 0
+}
