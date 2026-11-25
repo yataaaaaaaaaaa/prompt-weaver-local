@@ -1,12 +1,16 @@
 // Used sub-prompts of the current output + two-click forbidden associations (P = sub-prompt, C = category,
-// tag chips = tag). Rows and their flags are derived by the forbidden-rules store (useUsedSelectionRows);
-// every click goes to pickAssociationEndpoint, which owns the association rules.
+// tag chips = tag). Rows, their flags and their visual states are derived by the forbidden-rules store
+// (useUsedSelectionRows): the association source is 'associated' (green), an endpoint a rule forbids with it is
+// 'forbidden' (red) or 'forbiddenLocked' (purple). Colors and icons come from src/ui/stateStyles.tsx only; every
+// click goes to pickAssociationEndpoint, which owns the association rules.
 import { Badge, Body1, Button, Caption1, Caption1Strong, makeStyles, mergeClasses, ToggleButton, tokens, Tooltip } from '@fluentui/react-components';
-import { Copy20Regular } from '@fluentui/react-icons';
+import { CopyRegular } from '@fluentui/react-icons';
 import type { AssociationEndpoint } from '../../domain/forbiddenRules';
 import { useForbiddenRulesStore, useUsedSelectionRows, type UsedSelectionRow } from '../../stores/forbiddenRulesStore';
 import { useOutputsStore } from '../../stores/outputsStore';
 import { PaneContent } from '../../ui/PaneLayout';
+import { STATE_COLORS, type VisualState } from '../../ui/stateColors';
+import { STATE_ICONS, useStateBadgeClasses, useStateSurfaceClasses } from '../../ui/stateStyles';
 
 const useStyles = makeStyles({
 	intro: {
@@ -38,20 +42,6 @@ const useStyles = makeStyles({
 		border: `${tokens.strokeWidthThin} solid ${tokens.colorNeutralStroke2}`,
 		backgroundColor: tokens.colorNeutralBackground2,
 	},
-	rowPromptForbidden: {
-		border: `${tokens.strokeWidthThin} solid ${tokens.colorPaletteRedBorder2}`,
-	},
-	rowCategoryForbidden: {
-		border: `${tokens.strokeWidthThin} solid ${tokens.colorPaletteBerryBorder2}`,
-	},
-	rowPromptSource: {
-		border: `${tokens.strokeWidthThin} solid ${tokens.colorBrandStroke1}`,
-		backgroundColor: tokens.colorBrandBackground2,
-	},
-	rowCategorySource: {
-		border: `${tokens.strokeWidthThin} solid ${tokens.colorPalettePurpleBorderActive}`,
-		backgroundColor: tokens.colorPalettePurpleBackground2,
-	},
 	top: {
 		display: 'flex',
 		alignItems: 'center',
@@ -60,6 +50,7 @@ const useStyles = makeStyles({
 	},
 	category: {
 		display: 'flex',
+		flexWrap: 'wrap',
 		alignItems: 'center',
 		gap: tokens.spacingHorizontalXS,
 		minWidth: 0,
@@ -84,21 +75,6 @@ const useStyles = makeStyles({
 		minWidth: 0,
 		fontWeight: tokens.fontWeightRegular,
 	},
-	forbiddenPrompt: {
-		backgroundColor: tokens.colorPaletteRedBackground2,
-		color: tokens.colorPaletteRedForeground2,
-		border: `${tokens.strokeWidthThin} solid ${tokens.colorPaletteRedBorder2}`,
-	},
-	forbiddenCategory: {
-		backgroundColor: tokens.colorPaletteBerryBackground2,
-		color: tokens.colorPaletteBerryForeground2,
-		border: `${tokens.strokeWidthThin} solid ${tokens.colorPaletteBerryBorder2}`,
-	},
-	forbiddenTag: {
-		backgroundColor: tokens.colorPaletteMarigoldBackground2,
-		color: tokens.colorPaletteMarigoldForeground2,
-		border: `${tokens.strokeWidthThin} solid ${tokens.colorPaletteMarigoldBorder2}`,
-	},
 });
 
 function describeSource(source: AssociationEndpoint): string {
@@ -111,57 +87,68 @@ function describeSource(source: AssociationEndpoint): string {
 	return `tag '${source.tagText ?? ''}'`;
 }
 
-type ModeButtonProps = {
-	letter: string;
-	description: string;
-	checked: boolean;
-	forbidden: boolean;
-	forbiddenClassName: string;
+type EndpointButtonProps = {
+	/** Visible text (P, C or the tag). */
+	children: string;
+	/** Accessible name (defaults to the visible text). */
+	ariaLabel?: string;
+	/** Visual tooltip (P / C: what the letter means; the accessible name already says it). */
+	tooltip?: string;
+	className: string;
+	isSource: boolean;
+	state: VisualState | null;
 	onClick: () => void;
 };
 
-/** P / C association toggle: brand when it is the association source, palette colored when forbidden with it. */
-function ModeButton({ letter, description, checked, forbidden, forbiddenClassName, onClick }: ModeButtonProps): JSX.Element {
-	const styles = useStyles();
-	return (
-		<Tooltip content={description} relationship="inaccessible">
-			<ToggleButton
-				className={mergeClasses(styles.modeButton, forbidden && !checked && forbiddenClassName)}
-				appearance={checked ? 'primary' : 'outline'}
-				shape="circular"
-				size="small"
-				checked={checked}
-				aria-label={`${letter}: ${description.toLowerCase()}`}
-				data-forbidden={forbidden ? 'true' : undefined}
-				onClick={onClick}
-			>
-				{letter}
-			</ToggleButton>
+/** P / C / tag toggle: pressed when it is the association source; its state shows by the surface color, the state
+ *  icon and the accessible description. */
+function EndpointButton({ children, ariaLabel, tooltip, className, isSource, state, onClick }: EndpointButtonProps): JSX.Element {
+	const surface = useStateSurfaceClasses();
+	const StateIcon = state ? STATE_ICONS[state] : null;
+	const button = (
+		<ToggleButton
+			className={mergeClasses(className, state ? surface[state] : undefined)}
+			appearance="outline"
+			shape="circular"
+			size="small"
+			checked={isSource}
+			icon={StateIcon ? <StateIcon /> : undefined}
+			aria-label={ariaLabel}
+			aria-description={state ? STATE_COLORS[state].label : undefined}
+			data-visual-state={state ?? undefined}
+			onClick={onClick}
+		>
+			{children}
+		</ToggleButton>
+	);
+	return tooltip ? (
+		<Tooltip content={tooltip} relationship="inaccessible">
+			{button}
 		</Tooltip>
+	) : (
+		button
 	);
 }
 
 function UsedSelectionRowView({ row }: { row: UsedSelectionRow }): JSX.Element {
 	const styles = useStyles();
+	const surface = useStateSurfaceClasses();
+	const badges = useStateBadgeClasses();
 	const pickAssociationEndpoint = useForbiddenRulesStore((state) => state.pickAssociationEndpoint);
 	const copySelectionPrompt = useOutputsStore((state) => state.copySelectionPrompt);
+	const LockedIcon = STATE_ICONS.locked;
 
 	return (
 		<li
-			className={mergeClasses(
-				styles.row,
-				row.isPromptForbidden && styles.rowPromptForbidden,
-				row.isCategoryForbidden && styles.rowCategoryForbidden,
-				row.isPromptSource && styles.rowPromptSource,
-				row.isCategorySource && styles.rowCategorySource,
-			)}
+			className={mergeClasses(styles.row, row.state ? surface[row.state] : undefined)}
 			aria-label={`${row.categoryName}: ${row.promptText}`}
+			data-visual-state={row.state ?? undefined}
 		>
 			<div className={styles.top}>
 				<Caption1Strong className={styles.category}>
 					{row.categoryName}
 					{row.locked ? (
-						<Badge appearance="outline" size="small" color="informative">
+						<Badge appearance="outline" size="small" className={badges.locked} icon={<LockedIcon />}>
 							Locked
 						</Badge>
 					) : null}
@@ -171,44 +158,45 @@ function UsedSelectionRowView({ row }: { row: UsedSelectionRow }): JSX.Element {
 						<Button
 							appearance="subtle"
 							size="small"
-							icon={<Copy20Regular />}
+							icon={<CopyRegular />}
 							aria-label="Copy sub-prompt"
 							onClick={() => void copySelectionPrompt(row.index)}
 						/>
 					</Tooltip>
-					<ModeButton
-						letter="P"
-						description="Sub-prompt association"
-						checked={row.isPromptSource}
-						forbidden={row.isPromptForbidden}
-						forbiddenClassName={styles.forbiddenPrompt}
+					<EndpointButton
+						className={styles.modeButton}
+						ariaLabel="P: sub-prompt association"
+						tooltip="Sub-prompt association"
+						isSource={row.isPromptSource}
+						state={row.promptState}
 						onClick={() => pickAssociationEndpoint(row.promptEndpoint)}
-					/>
-					<ModeButton
-						letter="C"
-						description="Category association"
-						checked={row.isCategorySource}
-						forbidden={row.isCategoryForbidden}
-						forbiddenClassName={styles.forbiddenCategory}
+					>
+						P
+					</EndpointButton>
+					<EndpointButton
+						className={styles.modeButton}
+						ariaLabel="C: category association"
+						tooltip="Category association"
+						isSource={row.isCategorySource}
+						state={row.categoryState}
 						onClick={() => pickAssociationEndpoint(row.categoryEndpoint)}
-					/>
+					>
+						C
+					</EndpointButton>
 				</div>
 			</div>
 			{row.tags.length > 0 ? (
 				<div className={styles.tags} role="group" aria-label="Tags">
 					{row.tags.map((tag, tagIndex) => (
-						<ToggleButton
+						<EndpointButton
 							key={`${tagIndex}:${tag.tagText}`}
-							className={mergeClasses(styles.tag, tag.isForbidden && !tag.isSource && styles.forbiddenTag)}
-							appearance={tag.isSource ? 'primary' : 'outline'}
-							shape="circular"
-							size="small"
-							checked={tag.isSource}
-							data-forbidden={tag.isForbidden ? 'true' : undefined}
+							className={styles.tag}
+							isSource={tag.isSource}
+							state={tag.state}
 							onClick={() => pickAssociationEndpoint(tag.endpoint)}
 						>
 							{tag.tagText}
-						</ToggleButton>
+						</EndpointButton>
 					))}
 				</div>
 			) : null}

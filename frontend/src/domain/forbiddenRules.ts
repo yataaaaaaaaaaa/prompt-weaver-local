@@ -360,12 +360,58 @@ export function forbiddenHighlightOf(highlights: ForbiddenHighlights, categoryKe
 	return highlights.get(subPromptPath(categoryKey, promptKey)) ?? 'none';
 }
 
-function isLockedPrompt(categories: readonly Category[], prompt: PromptRef): boolean {
+/** The prompt is a locked sub-prompt of `categories` (user categories and / or the active character's pinned ones). */
+export function isLockedPrompt(categories: readonly Category[], prompt: PromptRef): boolean {
 	return categories.some(
 		(category) =>
 			sameCategoryName(category.text, prompt.categoryName) &&
 			category.subPrompts.some((subPrompt) => subPrompt.state === 'lock' && areNameEquivalent(subPrompt.text, prompt.promptText)),
 	);
+}
+
+/** THE lock rule of every forbidden highlight (category windows and Used sub-prompts pane): 'forbidden-locked' when
+ *  the association source or the forbidden prompt is locked, else 'forbidden'. */
+export function forbiddenHighlightFor(sourceLocked: boolean, promptLocked: boolean): Exclude<ForbiddenHighlight, 'none'> {
+	return sourceLocked || promptLocked ? 'forbidden-locked' : 'forbidden';
+}
+
+const HIGHLIGHT_STRENGTH: Readonly<Record<ForbiddenHighlight, number>> = { none: 0, forbidden: 1, 'forbidden-locked': 2 };
+
+/** The strongest of `highlights`: 'forbidden-locked' > 'forbidden' > 'none'. */
+export function strongestForbiddenHighlight(highlights: Iterable<ForbiddenHighlight>): ForbiddenHighlight {
+	let best: ForbiddenHighlight = 'none';
+	for (const highlight of highlights) {
+		if (HIGHLIGHT_STRENGTH[highlight] > HIGHLIGHT_STRENGTH[best]) {
+			best = highlight;
+		}
+	}
+	return best;
+}
+
+/** Highlight of a category window: the strongest highlight of its sub-prompts (computeForbiddenHighlights output). */
+export function categoryForbiddenHighlight(highlights: ForbiddenHighlights, category: Category): ForbiddenHighlight {
+	if (highlights.size === 0) {
+		return 'none';
+	}
+	const categoryKey = categoryKeyOf(category.text);
+	return strongestForbiddenHighlight(
+		category.subPrompts.map((subPrompt) => forbiddenHighlightOf(highlights, categoryKey, subPromptKeyOf(subPrompt.text))),
+	);
+}
+
+/**
+ * What the association source designates in the category windows ('associated'): a 'prompt' source its own
+ * sub-prompt, a 'category' source every sub-prompt of its category, a 'tag' source the sub-prompts of its category
+ * carrying the tag. The source's own matcher (endpointToMatcher) decides, so designation and the rules it creates
+ * always agree.
+ */
+export function sourceDesignatesPrompt(source: AssociationEndpoint, prompt: PromptRef): boolean {
+	return matcherMatchesPrompt(endpointToMatcher(source), prompt);
+}
+
+/** The association source belongs to this category: its window is 'associated' (whatever the source mode). */
+export function sourceDesignatesCategory(source: AssociationEndpoint, categoryName: string): boolean {
+	return sameCategoryName(source.categoryName, categoryName);
 }
 
 /**
@@ -411,8 +457,7 @@ export function computeForbiddenHighlights(
 				continue;
 			}
 			if (isForbidden(target)) {
-				const locked = sourceLocked || subPrompt.state === 'lock';
-				highlights.set(subPromptPath(categoryKey, subPromptKeyOf(subPrompt.text)), locked ? 'forbidden-locked' : 'forbidden');
+				highlights.set(subPromptPath(categoryKey, subPromptKeyOf(subPrompt.text)), forbiddenHighlightFor(sourceLocked, subPrompt.state === 'lock'));
 			}
 		}
 	}

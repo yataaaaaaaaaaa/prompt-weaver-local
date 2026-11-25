@@ -4,9 +4,12 @@ import type { AssociationEndpoint } from '../../domain/forbiddenRules';
 import { useForbiddenRulesStore, useUsedSelectionRows, type UsedSelectionRow } from '../../stores/forbiddenRulesStore';
 import { useOutputsStore } from '../../stores/outputsStore';
 import { renderWithProviders } from '../../test/render';
+import { STATE_COLORS, type VisualState } from '../../ui/stateColors';
+import { hasClasses, stateClasses } from '../../test/stateClasses';
 import { UsedSelectionsPane } from './UsedSelectionsPane';
 
-// Rows are derived by the forbidden-rules store (selections of the current output + rules + source).
+// Rows, their flags and their visual states are derived by the forbidden-rules store (selections of the current
+// output + rules + source + locks; tested there without rendering): the view is tested against that contract.
 vi.mock('../../stores/forbiddenRulesStore', async (importOriginal) => {
 	const actual = await importOriginal<typeof import('../../stores/forbiddenRulesStore')>();
 	return { ...actual, useUsedSelectionRows: vi.fn() };
@@ -28,7 +31,16 @@ function row(index: number, categoryName: string, promptText: string, tags: stri
 		isCategorySource: false,
 		isPromptForbidden: false,
 		isCategoryForbidden: false,
-		tags: tags.map((tagText) => ({ tagText, endpoint: endpoint('tag', categoryName, promptText, tagText), isSource: false, isForbidden: false })),
+		promptState: null,
+		categoryState: null,
+		state: null,
+		tags: tags.map((tagText) => ({
+			tagText,
+			endpoint: endpoint('tag', categoryName, promptText, tagText),
+			isSource: false,
+			isForbidden: false,
+			state: null,
+		})),
 		...flags,
 	};
 }
@@ -46,6 +58,14 @@ function seedActions() {
 
 function rowItem(name: string): HTMLElement {
 	return screen.getByRole('listitem', { name });
+}
+
+function promptButton(item: HTMLElement): HTMLElement {
+	return within(item).getByRole('button', { name: 'P: sub-prompt association' });
+}
+
+function categoryButton(item: HTMLElement): HTMLElement {
+	return within(item).getByRole('button', { name: 'C: category association' });
 }
 
 beforeEach(() => {
@@ -75,8 +95,19 @@ describe('UsedSelectionsPane', () => {
 			'red hair',
 			'long',
 		]);
-		expect(within(rowItem('Pose: sitting')).getByText('Locked')).toBeInTheDocument();
 		expect(screen.queryByText('No selected sub-prompts for the current image.')).not.toBeInTheDocument();
+	});
+
+	it('marks a locked selection with the purple Locked badge (outline and icon)', () => {
+		seedActions();
+		vi.mocked(useUsedSelectionRows).mockReturnValue([HAIR, { ...POSE, locked: true }]);
+		renderWithProviders(<UsedSelectionsPane />);
+		const classes = stateClasses();
+
+		const badge = within(rowItem('Pose: sitting')).getByText('Locked');
+		expect(hasClasses(badge, classes.badge.locked)).toBe(true);
+		expect(badge.querySelector('.fui-Badge__icon svg')).not.toBeNull();
+		expect(within(rowItem('Hair: red hair, long')).queryByText('Locked')).not.toBeInTheDocument();
 	});
 
 	it('picks P, C and tag endpoints', async () => {
@@ -86,10 +117,10 @@ describe('UsedSelectionsPane', () => {
 		const hair = rowItem('Hair: red hair, long');
 		const pose = rowItem('Pose: sitting');
 
-		await user.click(within(hair).getByRole('button', { name: 'P: sub-prompt association' }));
+		await user.click(promptButton(hair));
 		expect(actions.pickAssociationEndpoint).toHaveBeenLastCalledWith(HAIR.promptEndpoint);
 
-		await user.click(within(pose).getByRole('button', { name: 'C: category association' }));
+		await user.click(categoryButton(pose));
 		expect(actions.pickAssociationEndpoint).toHaveBeenLastCalledWith(POSE.categoryEndpoint);
 
 		await user.click(within(hair).getByRole('button', { name: 'long' }));
@@ -106,36 +137,59 @@ describe('UsedSelectionsPane', () => {
 		expect(actions.copySelectionPrompt).toHaveBeenCalledWith(1);
 	});
 
-	it('reflects the association source and forbidden endpoints', () => {
+	it('presses the association source and shows every endpoint state', () => {
 		seedActions();
 		vi.mocked(useUsedSelectionRows).mockReturnValue([
-			{ ...HAIR, isPromptSource: true },
+			{ ...HAIR, isPromptSource: true, promptState: 'associated', state: 'associated' },
 			{
 				...POSE,
 				isPromptForbidden: true,
 				isCategoryForbidden: true,
-				tags: [{ ...POSE.tags[0], isForbidden: true }],
+				promptState: 'forbidden',
+				categoryState: 'forbiddenLocked',
+				state: 'forbiddenLocked',
+				tags: [{ ...POSE.tags[0], isForbidden: true, state: 'forbidden' }],
 			},
 			row(2, 'Light', 'soft light', ['soft light'], {
-				isCategorySource: false,
-				tags: [{ tagText: 'soft light', endpoint: endpoint('tag', 'Light', 'soft light', 'soft light'), isSource: true, isForbidden: false }],
+				state: 'associated',
+				tags: [{ tagText: 'soft light', endpoint: endpoint('tag', 'Light', 'soft light', 'soft light'), isSource: true, isForbidden: false, state: 'associated' }],
 			}),
 		]);
 		renderWithProviders(<UsedSelectionsPane />);
+		const classes = stateClasses();
+		const expectState = (element: HTMLElement, state: VisualState | null) => {
+			if (state === null) {
+				expect(element).not.toHaveAttribute('data-visual-state');
+				return;
+			}
+			expect(element).toHaveAttribute('data-visual-state', state);
+			expect(hasClasses(element, classes.surface[state])).toBe(true);
+		};
 
 		const hair = rowItem('Hair: red hair, long');
-		expect(within(hair).getByRole('button', { name: 'P: sub-prompt association' })).toHaveAttribute('aria-pressed', 'true');
-		expect(within(hair).getByRole('button', { name: 'C: category association' })).toHaveAttribute('aria-pressed', 'false');
+		expectState(hair, 'associated');
+		expect(promptButton(hair)).toHaveAttribute('aria-pressed', 'true');
+		expectState(promptButton(hair), 'associated');
+		expect(promptButton(hair)).toHaveAccessibleDescription(STATE_COLORS.associated.label);
+		expect(promptButton(hair).querySelector('.fui-Button__icon svg')).not.toBeNull();
+		expect(categoryButton(hair)).toHaveAttribute('aria-pressed', 'false');
+		expectState(categoryButton(hair), null);
+		expect(categoryButton(hair).querySelector('.fui-Button__icon')).toBeNull();
+		expect(categoryButton(hair)).not.toHaveAccessibleDescription();
 
 		const pose = rowItem('Pose: sitting');
-		const poseP = within(pose).getByRole('button', { name: 'P: sub-prompt association' });
-		expect(poseP).toHaveAttribute('aria-pressed', 'false');
-		expect(poseP).toHaveAttribute('data-forbidden', 'true');
-		expect(within(pose).getByRole('button', { name: 'C: category association' })).toHaveAttribute('data-forbidden', 'true');
-		expect(within(pose).getByRole('button', { name: 'sitting' })).toHaveAttribute('data-forbidden', 'true');
-		expect(within(hair).getByRole('button', { name: 'long' })).not.toHaveAttribute('data-forbidden');
+		expectState(pose, 'forbiddenLocked');
+		expect(promptButton(pose)).toHaveAttribute('aria-pressed', 'false');
+		expectState(promptButton(pose), 'forbidden');
+		expect(promptButton(pose)).toHaveAccessibleDescription(STATE_COLORS.forbidden.label);
+		expectState(categoryButton(pose), 'forbiddenLocked');
+		expect(categoryButton(pose)).toHaveAccessibleDescription(STATE_COLORS.forbiddenLocked.label);
+		expectState(within(pose).getByRole('button', { name: 'sitting' }), 'forbidden');
+		expectState(within(hair).getByRole('button', { name: 'long' }), null);
 
-		expect(within(rowItem('Light: soft light')).getByRole('button', { name: 'soft light' })).toHaveAttribute('aria-pressed', 'true');
+		const light = within(rowItem('Light: soft light')).getByRole('button', { name: 'soft light' });
+		expect(light).toHaveAttribute('aria-pressed', 'true');
+		expectState(light, 'associated');
 	});
 
 	it.each([

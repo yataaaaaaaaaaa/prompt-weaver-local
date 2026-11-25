@@ -1,7 +1,7 @@
 import { act, renderHook } from '@testing-library/react';
 import { describe, expect, it } from 'vitest';
 import type { GenerationSelection, OutputRecord } from '../api/types';
-import type { Category } from '../domain/categories';
+import type { Category, SubPromptState } from '../domain/categories';
 import {
 	categoryMatcher,
 	containsMatcher,
@@ -15,7 +15,20 @@ import { createMemoryStoreBackend, setStoreBackend } from '../persistence/storeB
 import { character } from '../test/characterData';
 import { useCategoriesStore } from './categoriesStore';
 import { useCharactersStore } from './charactersStore';
-import { buildUsedSelectionRows, useForbiddenHighlight, useForbiddenRulesStore, useUsedSelectionRows } from './forbiddenRulesStore';
+import {
+	buildUsedSelectionRows,
+	categoryWindowVisualState,
+	highlightVisualState,
+	subPromptVisualState,
+	useCategoryForbiddenHighlight,
+	useCategoryWindowState,
+	useForbiddenHighlight,
+	useForbiddenRulesStore,
+	useIsCategoryDesignated,
+	useIsSubPromptDesignated,
+	useSubPromptVisualState,
+	useUsedSelectionRows,
+} from './forbiddenRulesStore';
 import { useOutputsStore } from './outputsStore';
 
 const store = () => useForbiddenRulesStore.getState();
@@ -239,5 +252,233 @@ describe('persistence', () => {
 			state: { rules: [hydratedWithoutTag, withTag, makeRule(specificMatcher('Alpha', 'a1'), categoryMatcher('Beta'))] },
 			version: 0,
 		});
+	});
+});
+
+describe('visual states (pure mappings)', () => {
+	it('highlightVisualState: red, purple, none', () => {
+		expect(highlightVisualState('forbidden')).toBe('forbidden');
+		expect(highlightVisualState('forbidden-locked')).toBe('forbiddenLocked');
+		expect(highlightVisualState('none')).toBeNull();
+	});
+
+	const plainRow = { uiState: 'normal', highlight: 'none', designated: false, current: false } as const;
+
+	it('subPromptVisualState maps each input alone', () => {
+		expect(subPromptVisualState(plainRow)).toBeNull();
+		expect(subPromptVisualState({ ...plainRow, highlight: 'forbidden' })).toBe('forbidden');
+		expect(subPromptVisualState({ ...plainRow, highlight: 'forbidden-locked' })).toBe('forbiddenLocked');
+		expect(subPromptVisualState({ ...plainRow, designated: true })).toBe('associated');
+		expect(subPromptVisualState({ ...plainRow, current: true })).toBe('current');
+		expect(subPromptVisualState({ ...plainRow, uiState: 'lock' })).toBe('locked');
+		expect(subPromptVisualState({ ...plainRow, uiState: 'indirectly-disabled' })).toBe('indirectlyDisabled');
+		expect(subPromptVisualState({ ...plainRow, uiState: 'skip' })).toBe('skipped');
+	});
+
+	it('subPromptVisualState: forbiddenLocked > forbidden > associated > current > locked > indirectlyDisabled > skipped', () => {
+		const everything = { uiState: 'lock', highlight: 'forbidden-locked', designated: true, current: true } as const;
+		expect(subPromptVisualState(everything)).toBe('forbiddenLocked');
+		expect(subPromptVisualState({ ...everything, highlight: 'forbidden' })).toBe('forbidden');
+		expect(subPromptVisualState({ ...everything, highlight: 'none' })).toBe('associated');
+		expect(subPromptVisualState({ ...everything, highlight: 'none', designated: false })).toBe('current');
+		expect(subPromptVisualState({ ...plainRow, uiState: 'indirectly-disabled', current: true })).toBe('current');
+		expect(subPromptVisualState({ ...plainRow, uiState: 'skip', highlight: 'forbidden' })).toBe('forbidden');
+		expect(subPromptVisualState({ ...plainRow, uiState: 'indirectly-disabled', designated: true })).toBe('associated');
+	});
+
+	const plainWindow = { uiState: 'normal', highlight: 'none', designated: false } as const;
+
+	it('categoryWindowVisualState: forbiddenLocked > forbidden > associated > indirectlyDisabled > skipped', () => {
+		expect(categoryWindowVisualState(plainWindow)).toBeNull();
+		expect(categoryWindowVisualState({ ...plainWindow, uiState: 'skip' })).toBe('skipped');
+		expect(categoryWindowVisualState({ ...plainWindow, uiState: 'indirectly-disabled' })).toBe('indirectlyDisabled');
+		expect(categoryWindowVisualState({ ...plainWindow, uiState: 'indirectly-disabled', designated: true })).toBe('associated');
+		expect(categoryWindowVisualState({ ...plainWindow, uiState: 'skip', designated: true, highlight: 'forbidden' })).toBe('forbidden');
+		expect(categoryWindowVisualState({ uiState: 'skip', designated: true, highlight: 'forbidden-locked' })).toBe('forbiddenLocked');
+	});
+});
+
+describe('Used sub-prompts states (buildUsedSelectionRows)', () => {
+	const locks: Category[] = [
+		{ text: 'Subject', activation_text: '', priority: 1, state: 'normal', subPrompts: [{ text: '1girl', state: 'lock', extraLoraIds: [] }] },
+	];
+	const selections = [selection('Subject', '1girl', true), selection('Outfit', 'red dress'), selection('Mood', 'smiling, happy')];
+
+	it('the source is associated, its row too; nothing else without rules', () => {
+		const rows = buildUsedSelectionRows(selections, [], endpoint('prompt', 'Outfit', 'red dress'), locks);
+		expect(rows.map((row) => [row.promptState, row.categoryState, row.state])).toEqual([
+			[null, null, null],
+			['associated', null, 'associated'],
+			[null, null, null],
+		]);
+	});
+
+	it('an endpoint forbidden with the source is red; purple when the source or the row prompt is locked', () => {
+		const rules = [
+			makeRule(specificMatcher('Outfit', 'red dress'), specificMatcher('Mood', 'smiling, happy')),
+			makeRule(specificMatcher('Outfit', 'red dress'), specificMatcher('Subject', '1girl')),
+			makeRule(specificMatcher('Subject', '1girl'), categoryMatcher('Mood')),
+		];
+		const fromDress = buildUsedSelectionRows(selections, rules, endpoint('prompt', 'Outfit', 'red dress'), locks);
+		expect(fromDress[2]).toMatchObject({ isPromptForbidden: true, promptState: 'forbidden', categoryState: null, state: 'forbidden' });
+		expect(fromDress[0]).toMatchObject({ isPromptForbidden: true, promptState: 'forbiddenLocked', state: 'forbiddenLocked' });
+
+		const fromSubject = buildUsedSelectionRows(selections, rules, endpoint('prompt', 'Subject', '1girl'), locks);
+		expect(fromSubject[2]).toMatchObject({ promptState: null, categoryState: 'forbiddenLocked', state: 'forbiddenLocked' });
+		expect(fromSubject[0]).toMatchObject({ promptState: 'associated', state: 'associated' });
+
+		// Without lock sources (e.g. the lock was removed since): plain red.
+		expect(buildUsedSelectionRows(selections, rules, endpoint('prompt', 'Subject', '1girl'))[2].categoryState).toBe('forbidden');
+	});
+
+	it('tag chips: the source tag is associated, a forbidden tag red, and the row takes the strongest state', () => {
+		const rules = [makeRule(specificMatcher('Outfit', 'red dress'), tagMatcher('Mood', 'happy'))];
+		const rows = buildUsedSelectionRows(selections, rules, endpoint('prompt', 'Outfit', 'red dress'), locks);
+		expect(rows[2].tags.map((tag) => [tag.tagText, tag.state])).toEqual([
+			['smiling', null],
+			['happy', 'forbidden'],
+		]);
+		expect(rows[2].state).toBe('forbidden');
+
+		const fromTag = buildUsedSelectionRows(selections, rules, endpoint('tag', 'Mood', 'smiling, happy', 'happy'), locks);
+		expect(fromTag[2].tags.map((tag) => tag.state)).toEqual([null, 'associated']);
+		expect(fromTag[2].state).toBe('associated');
+		expect(fromTag[1].promptState).toBe('forbidden');
+	});
+
+	it('useUsedSelectionRows reads the locks of the categories and of the active character', () => {
+		const alice = character({ outfit_tags: [] });
+		useOutputsStore.setState({ record: record([selection('Character', '1girl, silver hair, blue eyes', true), selection('Outfit', 'red dress')]) });
+		useForbiddenRulesStore.setState({
+			rules: [makeRule(specificMatcher('Character', '1girl, silver hair, blue eyes'), specificMatcher('Outfit', 'red dress'))],
+			associationSource: endpoint('prompt', 'Outfit', 'red dress'),
+		});
+		useCharactersStore.setState({ characters: [alice], activeId: null });
+		const { result } = renderHook(() => useUsedSelectionRows());
+		expect(result.current[0].promptState).toBe('forbidden');
+
+		act(() => useCharactersStore.setState({ activeId: alice.id }));
+		expect(result.current[0].promptState).toBe('forbiddenLocked');
+	});
+});
+
+describe('row and window visual-state hooks', () => {
+	function fixtureCategory(text: string, subPrompts: [string, SubPromptState?][], extra: Partial<Category> = {}): Category {
+		return {
+			text,
+			activation_text: '',
+			priority: 1,
+			state: 'normal',
+			subPrompts: subPrompts.map(([promptText, state = 'normal']) => ({ text: promptText, state, extraLoraIds: [] })),
+			...extra,
+		};
+	}
+
+	// A small version of the e2e fixture (backend/tests/e2e/fixtures).
+	const fixture: Category[] = [
+		fixtureCategory('Subject', [['1girl, silver hair', 'lock'], ['1boy']], { priority: 1 }),
+		fixtureCategory('Outfit', [['red dress'], ['armor', 'skip'], ['swimsuit']], { priority: 2 }),
+		fixtureCategory('Background', [['neon street, rain'], ['beach']], { priority: 3 }),
+		fixtureCategory('Lighting', [['studio']], { priority: 4, state: 'skip' }),
+		fixtureCategory('Sea', [['jellyfish']], { priority: 5, activation_text: 'underwater' }),
+	];
+	const fixtureRules = [
+		makeRule(specificMatcher('Subject', '1girl, silver hair'), specificMatcher('Outfit', 'swimsuit')),
+		makeRule(specificMatcher('Outfit', 'red dress'), specificMatcher('Background', 'beach')),
+		makeRule(categoryMatcher('Background'), categoryMatcher('Sea')),
+	];
+
+	function renderStates() {
+		useCategoriesStore.setState({ categories: fixture });
+		useForbiddenRulesStore.setState({ rules: fixtureRules });
+		useOutputsStore.setState({ record: record([selection('Subject', '1girl, silver hair', true), selection('Outfit', 'red dress')]) });
+		return renderHook(() => ({
+			rows: {
+				girl: useSubPromptVisualState('subject', '1girl-silver-hair'),
+				boy: useSubPromptVisualState('subject', '1boy'),
+				dress: useSubPromptVisualState('outfit', 'red-dress'),
+				armor: useSubPromptVisualState('outfit', 'armor'),
+				swimsuit: useSubPromptVisualState('outfit', 'swimsuit'),
+				neon: useSubPromptVisualState('background', 'neon-street-rain'),
+				beach: useSubPromptVisualState('background', 'beach'),
+				studio: useSubPromptVisualState('lighting', 'studio'),
+				jellyfish: useSubPromptVisualState('sea', 'jellyfish'),
+			},
+			windows: {
+				subject: useCategoryWindowState('subject'),
+				outfit: useCategoryWindowState('outfit'),
+				background: useCategoryWindowState('background'),
+				lighting: useCategoryWindowState('lighting'),
+				sea: useCategoryWindowState('sea'),
+			},
+		}));
+	}
+
+	it('without a source: current, locked, unreachable and skipped', () => {
+		const { result } = renderStates();
+		expect(result.current.rows).toEqual({
+			girl: 'current',
+			boy: 'indirectlyDisabled',
+			dress: 'current',
+			armor: 'skipped',
+			swimsuit: 'indirectlyDisabled',
+			neon: null,
+			beach: null,
+			studio: 'skipped',
+			jellyfish: 'indirectlyDisabled',
+		});
+		expect(result.current.windows).toEqual({ subject: null, outfit: null, background: null, lighting: 'skipped', sea: 'indirectlyDisabled' });
+
+		act(() => useOutputsStore.setState({ record: null }));
+		expect(result.current.rows.girl).toBe('locked');
+	});
+
+	it('a P source: its row and window associated, what it forbids red', () => {
+		const { result } = renderStates();
+		act(() => useForbiddenRulesStore.getState().pickAssociationEndpoint(endpoint('prompt', 'Outfit', 'red dress')));
+		expect(result.current.rows).toMatchObject({ dress: 'associated', armor: 'skipped', beach: 'forbidden', neon: null });
+		expect(result.current.windows).toMatchObject({ outfit: 'associated', background: 'forbidden', subject: null });
+	});
+
+	it('a locked P source: what it forbids is purple, in the row and its window', () => {
+		const { result } = renderStates();
+		act(() => useForbiddenRulesStore.getState().pickAssociationEndpoint(endpoint('prompt', 'Subject', '1girl, silver hair')));
+		expect(result.current.rows).toMatchObject({ girl: 'associated', swimsuit: 'forbiddenLocked', dress: 'current' });
+		expect(result.current.windows).toMatchObject({ subject: 'associated', outfit: 'forbiddenLocked' });
+	});
+
+	it('a C source: every row of its category associated; a category-wide rule makes the other window red', () => {
+		const { result } = renderStates();
+		act(() => useForbiddenRulesStore.getState().pickAssociationEndpoint(endpoint('category', 'Background', 'neon street, rain')));
+		expect(result.current.rows).toMatchObject({ neon: 'associated', beach: 'associated', jellyfish: 'forbidden' });
+		expect(result.current.windows).toMatchObject({ background: 'associated', sea: 'forbidden', outfit: null });
+
+		act(() => useForbiddenRulesStore.getState().clearAssociationSource());
+		expect(result.current.windows).toMatchObject({ background: null, sea: 'indirectlyDisabled' });
+	});
+
+	it('a tag source: the rows of its category carrying the tag', () => {
+		const { result } = renderStates();
+		act(() => useForbiddenRulesStore.getState().pickAssociationEndpoint(endpoint('tag', 'Background', 'neon street, rain', 'rain')));
+		expect(result.current.rows).toMatchObject({ neon: 'associated', beach: null });
+		expect(result.current.windows.background).toBe('associated');
+	});
+
+	it('the designation and window highlight hooks', () => {
+		useCategoriesStore.setState({ categories: fixture });
+		useForbiddenRulesStore.setState({ rules: fixtureRules, associationSource: endpoint('prompt', 'Outfit', 'red dress') });
+		const { result } = renderHook(() => ({
+			dress: useIsSubPromptDesignated('outfit', 'red-dress'),
+			armor: useIsSubPromptDesignated('outfit', 'armor'),
+			unknown: useIsSubPromptDesignated('outfit', 'unknown'),
+			outfit: useIsCategoryDesignated('outfit'),
+			subject: useIsCategoryDesignated('subject'),
+			background: useCategoryForbiddenHighlight('background'),
+			missing: useCategoryForbiddenHighlight('missing'),
+		}));
+		expect(result.current).toEqual({ dress: true, armor: false, unknown: false, outfit: true, subject: false, background: 'forbidden', missing: 'none' });
+
+		act(() => useForbiddenRulesStore.getState().clearAssociationSource());
+		expect(result.current).toEqual({ dress: false, armor: false, unknown: false, outfit: false, subject: false, background: 'none', missing: 'none' });
 	});
 });

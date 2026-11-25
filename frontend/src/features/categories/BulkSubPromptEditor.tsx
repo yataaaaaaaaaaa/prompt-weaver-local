@@ -5,6 +5,9 @@ import { useLayoutEffect, useRef, useState, type KeyboardEvent } from 'react';
 import type { CategoryKey } from '../../domain/categories';
 import { useBulkText, useCategoriesStore } from '../../stores/categoriesStore';
 
+// The editor fills the window body: the text area takes the height left by the label and the hint and scrolls
+// inside. It never shrinks under its own minimum height: in a very small window the body scrolls instead (the hint is
+// never covered).
 const useStyles = makeStyles({
 	root: {
 		display: 'flex',
@@ -13,8 +16,21 @@ const useStyles = makeStyles({
 		minHeight: 0,
 		paddingTop: tokens.spacingVerticalS,
 		paddingBottom: tokens.spacingVerticalS,
-		paddingLeft: tokens.spacingHorizontalM,
-		paddingRight: tokens.spacingHorizontalM,
+		paddingLeft: tokens.spacingHorizontalS,
+		paddingRight: tokens.spacingHorizontalS,
+	},
+	field: {
+		flex: '1 1 auto',
+		minHeight: 0,
+		gridTemplateRows: 'auto 1fr auto',
+	},
+	textarea: {
+		height: '100%',
+		maxHeight: 'none',
+	},
+	textareaInput: {
+		height: '100%',
+		maxHeight: 'none',
 	},
 });
 
@@ -65,14 +81,16 @@ export function BulkSubPromptEditor({ categoryKey, onClose }: BulkSubPromptEdito
 	return (
 		<div className={styles.root}>
 			<Field
+				className={styles.field}
 				label="All sub-prompts"
 				hint="Separate sub-prompts with a line containing only '|'. Ctrl+Enter applies, Escape cancels."
 			>
 				<Textarea
 					ref={textareaRef}
+					className={styles.textarea}
+					textarea={{ className: styles.textareaInput }}
 					value={draft}
-					rows={8}
-					resize="vertical"
+					resize="none"
 					onChange={(_event, data) => setDraft(data.value)}
 					onKeyDown={handleKeyDown}
 					onBlur={() => close(true)}

@@ -1,21 +1,22 @@
+// Category windows as the workspace renders them (CategoryWindows: FloatingPane frame + CategoryActions in its header +
+// CategoryCard body + SubPromptRow rows), inside the app's real providers. The derived visual states are produced by
+// the forbidden-rules store (tested there without rendering): here the views are tested against that contract.
 import { act, screen, within } from '@testing-library/react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
-import type { Category, CategoryUiState, SubPromptUiState } from '../../domain/categories';
-import { useCategoriesStore, useCategoryUiState, useSubPromptUiState } from '../../stores/categoriesStore';
-import { useForbiddenHighlight } from '../../stores/forbiddenRulesStore';
+import type { Category } from '../../domain/categories';
+import { useCategoriesStore } from '../../stores/categoriesStore';
+import { useCategoryWindowState, useSubPromptVisualState } from '../../stores/forbiddenRulesStore';
 import { useCurrentSelectionKey, useIsSubPromptInCurrentOutput } from '../../stores/outputsStore';
 import { openDialog, waitForDialogClose } from '../../test/dialogs';
 import { renderWithProviders } from '../../test/render';
+import { STATE_COLORS, VISUAL_STATES, type VisualState } from '../../ui/stateColors';
 import { CategoryCard } from './CategoryCard';
+import { CategoryWindows } from './CategoryWindows';
+import { hasClasses, stateClasses } from '../../test/stateClasses';
 
-// Derived-state hooks are implemented by other stores' owners: the view is tested against their contract.
-vi.mock('../../stores/categoriesStore', async (importOriginal) => {
-	const actual = await importOriginal<typeof import('../../stores/categoriesStore')>();
-	return { ...actual, useCategoryUiState: vi.fn(), useSubPromptUiState: vi.fn() };
-});
 vi.mock('../../stores/forbiddenRulesStore', async (importOriginal) => {
 	const actual = await importOriginal<typeof import('../../stores/forbiddenRulesStore')>();
-	return { ...actual, useForbiddenHighlight: vi.fn() };
+	return { ...actual, useSubPromptVisualState: vi.fn(), useCategoryWindowState: vi.fn() };
 });
 vi.mock('../../stores/outputsStore', async (importOriginal) => {
 	const actual = await importOriginal<typeof import('../../stores/outputsStore')>();
@@ -50,11 +51,23 @@ function seed(category: Category = HAIR) {
 	return actions;
 }
 
-function renderCard() {
-	return renderWithProviders(<CategoryCard categoryKey="hair" />);
+function renderWindows() {
+	return renderWithProviders(<CategoryWindows />);
 }
 
-function rowOf(text: string): HTMLElement {
+function hairWindow(): HTMLElement {
+	return screen.getByRole('region', { name: 'Hair category' });
+}
+
+function header(): HTMLElement {
+	const element = hairWindow().querySelector(':scope > header');
+	if (!(element instanceof HTMLElement)) {
+		throw new Error('no window header');
+	}
+	return element;
+}
+
+function itemOf(text: string): HTMLElement {
 	const item = screen.getAllByRole('listitem').find((element) => within(element).queryByRole('button', { name: `Sub-prompt: ${text}` }));
 	if (!item) {
 		throw new Error(`no row for ${text}`);
@@ -62,37 +75,71 @@ function rowOf(text: string): HTMLElement {
 	return item;
 }
 
+/** The row element (carries the state surface and data-visual-state). */
+function rowOf(text: string): HTMLElement {
+	return itemOf(text).firstElementChild as HTMLElement;
+}
+
 beforeEach(() => {
-	vi.mocked(useCategoryUiState).mockReset().mockReturnValue('normal');
-	vi.mocked(useSubPromptUiState).mockReset().mockReturnValue('normal');
-	vi.mocked(useForbiddenHighlight).mockReset().mockReturnValue('none');
+	vi.mocked(useSubPromptVisualState).mockReset().mockReturnValue(null);
+	vi.mocked(useCategoryWindowState).mockReset().mockReturnValue(null);
 	vi.mocked(useIsSubPromptInCurrentOutput).mockReset().mockReturnValue(false);
 	vi.mocked(useCurrentSelectionKey).mockReset().mockReturnValue(null);
 });
 
-describe('CategoryCard', () => {
-	it('renders the name, activation text, priority and sub-prompts', () => {
+describe('category window', () => {
+	it('is a window named after the category, with the commands in its header and the texts in its body', () => {
 		seed();
-		renderCard();
+		renderWindows();
 
-		expect(screen.getByRole('button', { name: 'Category name: Hair' })).toBeInTheDocument();
-		expect(screen.getByRole('button', { name: 'Activation text: girl' })).toBeInTheDocument();
-		expect(screen.getByRole('textbox', { name: 'Priority' })).toHaveValue('2');
-		const rows = within(screen.getByRole('list', { name: 'Sub-prompts' })).getAllByRole('listitem');
+		const window = hairWindow();
+		expect(within(window).getByRole('button', { name: 'Category name: Hair' })).toBeInTheDocument();
+		expect(within(window).getByRole('button', { name: 'Activation text: girl' })).toBeInTheDocument();
+		const commands = within(header()).getByRole('group', { name: 'Category actions' });
+		expect(within(commands).getByRole('textbox', { name: 'Priority' })).toHaveValue('2');
+		for (const name of ['Edit all sub-prompts', 'Add sub-prompt', 'Skip category', 'Delete category']) {
+			expect(within(commands).getByRole('button', { name })).toBeInTheDocument();
+		}
+		// The name is not repeated as a header title: the header holds commands only.
+		expect(within(header()).queryByText('Hair')).not.toBeInTheDocument();
+		const rows = within(within(window).getByRole('list', { name: 'Sub-prompts' })).getAllByRole('listitem');
 		expect(rows.map((row) => row.textContent)).toEqual(['red hair', 'blue hair']);
 	});
 
 	it('shows placeholders for an empty activation text and an empty sub-prompt', () => {
 		seed({ ...HAIR, activation_text: '', subPrompts: [{ text: '', state: 'normal', extraLoraIds: [] }] });
-		renderCard();
+		renderWindows();
 
 		expect(screen.getByRole('button', { name: 'Activation text: Activation text (optional)' })).toBeInTheDocument();
 		expect(screen.getByRole('button', { name: 'Sub-prompt: Click to edit' })).toBeInTheDocument();
 	});
 
+	it.each(VISUAL_STATES.filter((state) => state !== 'current' && state !== 'locked'))('shows the window state %s on its frame', (state) => {
+		seed();
+		vi.mocked(useCategoryWindowState).mockReturnValue(state);
+		renderWindows();
+		const classes = stateClasses();
+
+		const window = hairWindow();
+		expect(window).toHaveAttribute('data-visual-state', state);
+		expect(window).toHaveAccessibleDescription(STATE_COLORS[state].label);
+		expect(hasClasses(window, classes.frame.window[state])).toBe(true);
+		expect(hasClasses(header(), classes.frame.header[state])).toBe(true);
+		expect(within(header()).getByRole('img', { name: STATE_COLORS[state].label })).toBeInTheDocument();
+		expect(vi.mocked(useCategoryWindowState)).toHaveBeenCalledWith('hair');
+	});
+
+	it('a plain window has no state', () => {
+		seed();
+		renderWindows();
+
+		expect(hairWindow()).not.toHaveAttribute('data-visual-state');
+		expect(hairWindow()).not.toHaveAttribute('aria-description');
+	});
+
 	it('renames on Enter', async () => {
 		const actions = seed();
-		const { user } = renderCard();
+		const { user } = renderWindows();
 
 		await user.click(screen.getByRole('button', { name: 'Category name: Hair' }));
 		const editor = screen.getByRole('textbox', { name: 'Category name' });
@@ -106,7 +153,7 @@ describe('CategoryCard', () => {
 
 	it('cancels a rename on Escape and returns focus to the name', async () => {
 		const actions = seed();
-		const { user } = renderCard();
+		const { user } = renderWindows();
 
 		await user.click(screen.getByRole('button', { name: 'Category name: Hair' }));
 		await user.type(screen.getByRole('textbox', { name: 'Category name' }), 'XYZ{Escape}');
@@ -117,7 +164,7 @@ describe('CategoryCard', () => {
 
 	it('does not commit an unchanged name', async () => {
 		const actions = seed();
-		const { user } = renderCard();
+		const { user } = renderWindows();
 
 		await user.click(screen.getByRole('button', { name: 'Category name: Hair' }));
 		await user.keyboard('{Enter}');
@@ -127,7 +174,7 @@ describe('CategoryCard', () => {
 
 	it('edits the activation text: Shift+Enter inserts a newline, blur commits', async () => {
 		const actions = seed();
-		const { user } = renderCard();
+		const { user } = renderWindows();
 
 		await user.click(screen.getByRole('button', { name: 'Activation text: girl' }));
 		await user.type(screen.getByRole('textbox', { name: 'Activation text' }), '{Shift>}{Enter}{/Shift}boy');
@@ -140,7 +187,7 @@ describe('CategoryCard', () => {
 
 	it('starts editing from the keyboard', async () => {
 		seed();
-		const { user } = renderCard();
+		const { user } = renderWindows();
 
 		screen.getByRole('button', { name: 'Category name: Hair' }).focus();
 		await user.keyboard('{Enter}');
@@ -150,7 +197,7 @@ describe('CategoryCard', () => {
 
 	it('commits parseable priorities (decimals allowed) and ignores the rest', async () => {
 		const actions = seed();
-		const { user } = renderCard();
+		const { user } = renderWindows();
 		const priority = screen.getByRole('textbox', { name: 'Priority' });
 
 		await user.clear(priority);
@@ -166,7 +213,7 @@ describe('CategoryCard', () => {
 
 	it('resyncs the priority draft when the store value changes', () => {
 		seed();
-		renderCard();
+		renderWindows();
 
 		act(() => {
 			useCategoriesStore.setState({ categories: [{ ...HAIR, priority: 7 }] });
@@ -177,12 +224,13 @@ describe('CategoryCard', () => {
 
 	it('bulk edits all sub-prompts with Ctrl+Enter', async () => {
 		const actions = seed();
-		const { user } = renderCard();
+		const { user } = renderWindows();
 
 		await user.click(screen.getByRole('button', { name: 'Edit all sub-prompts' }));
 		const editor = screen.getByRole('textbox', { name: 'All sub-prompts' });
 		expect(editor).toHaveFocus();
 		expect(editor).toHaveValue('red hair\n|\nblue hair');
+		expect(within(hairWindow()).getByText("Separate sub-prompts with a line containing only '|'. Ctrl+Enter applies, Escape cancels.")).toBeInTheDocument();
 		await user.type(editor, '{Enter}|{Enter}green hair{Control>}{Enter}{/Control}');
 
 		expect(actions.applyBulkText).toHaveBeenCalledTimes(1);
@@ -193,7 +241,7 @@ describe('CategoryCard', () => {
 
 	it('cancels the bulk editor on Escape', async () => {
 		const actions = seed();
-		const { user } = renderCard();
+		const { user } = renderWindows();
 
 		await user.click(screen.getByRole('button', { name: 'Edit all sub-prompts' }));
 		await user.type(screen.getByRole('textbox', { name: 'All sub-prompts' }), 'garbage{Escape}');
@@ -204,7 +252,7 @@ describe('CategoryCard', () => {
 
 	it('applies the bulk editor on blur', async () => {
 		const actions = seed();
-		const { user } = renderCard();
+		const { user } = renderWindows();
 
 		await user.click(screen.getByRole('button', { name: 'Edit all sub-prompts' }));
 		await user.type(screen.getByRole('textbox', { name: 'All sub-prompts' }), '!');
@@ -215,18 +263,20 @@ describe('CategoryCard', () => {
 
 	it('adds a sub-prompt', async () => {
 		const actions = seed();
-		const { user } = renderCard();
+		const { user } = renderWindows();
 
 		await user.click(screen.getByRole('button', { name: 'Add sub-prompt' }));
 
 		expect(actions.addSubPrompt).toHaveBeenCalledWith('hair');
 	});
 
-	it('toggles skip on the category', async () => {
+	it('toggles skip on the category; the active Skip is the filled warning action', async () => {
 		const actions = seed();
-		const { user } = renderCard();
+		const { user } = renderWindows();
+		const classes = stateClasses();
 		const skip = screen.getByRole('button', { name: 'Skip category' });
 		expect(skip).toHaveAttribute('aria-pressed', 'false');
+		expect(hasClasses(skip, classes.actions.filled.warning)).toBe(false);
 
 		await user.click(skip);
 		expect(actions.setCategoryState).toHaveBeenCalledWith('hair', 'skip');
@@ -235,16 +285,20 @@ describe('CategoryCard', () => {
 			useCategoriesStore.setState({ categories: [{ ...HAIR, state: 'skip' }] });
 		});
 		expect(skip).toHaveAttribute('aria-pressed', 'true');
+		expect(hasClasses(skip, classes.actions.filled.warning)).toBe(true);
 		await user.click(skip);
 		expect(actions.setCategoryState).toHaveBeenLastCalledWith('hair', 'normal');
 	});
 
-	it('deletes the category only after confirmation', async () => {
+	it('deletes the category only after confirmation; Delete is the danger action', async () => {
 		const actions = seed();
-		const { user } = renderCard();
+		const { user } = renderWindows();
+		const classes = stateClasses();
+		expect(hasClasses(screen.getByRole('button', { name: 'Delete category' }), classes.actions.subtle.danger)).toBe(true);
 
 		let dialog = await openDialog(user, screen.getByRole('button', { name: 'Delete category' }), 'alertdialog');
 		expect(dialog).toHaveTextContent("Delete category 'Hair'?");
+		expect(dialog).toHaveTextContent('Its sub-prompts and the forbidden rules naming it are deleted too.');
 		await user.click(within(dialog).getByRole('button', { name: 'Cancel' }));
 		await waitForDialogClose('alertdialog');
 		expect(actions.removeCategory).not.toHaveBeenCalled();
@@ -255,40 +309,43 @@ describe('CategoryCard', () => {
 		expect(actions.removeCategory).toHaveBeenCalledWith('hair');
 	});
 
-	it.each<CategoryUiState>(['normal', 'skip', 'indirectly-disabled'])('reflects the category ui state %s', (state) => {
-		seed();
-		vi.mocked(useCategoryUiState).mockReturnValue(state);
-		const { container } = renderCard();
+	it('renders one window per category', () => {
+		useCategoriesStore.setState({ categories: [HAIR, { ...HAIR, text: 'Pose', subPrompts: [] }] });
+		renderWindows();
 
-		expect(container.querySelector('[data-ui-state]')).toHaveAttribute('data-ui-state', state);
+		expect(screen.getByRole('region', { name: 'Hair category' })).toBeInTheDocument();
+		expect(screen.getByRole('region', { name: 'Pose category' })).toBeInTheDocument();
 	});
 
-	it('renders nothing but an empty list for an unknown category', () => {
+	it('the body of an unknown category renders an empty list only', () => {
 		seed();
-		renderWithProviders(<CategoryCard categoryKey="missing" />);
+		renderWithProviders(<CategoryCard categoryKey="missing" bulkEditing={false} onBulkEditorClose={() => undefined} />);
 
 		expect(screen.queryByRole('button', { name: /Category name/ })).not.toBeInTheDocument();
 		expect(screen.queryAllByRole('listitem')).toHaveLength(0);
 	});
 });
 
-describe('SubPromptRow (inside CategoryCard)', () => {
+describe('sub-prompt rows', () => {
 	it('toggles skip', async () => {
 		const actions = seed();
-		const { user } = renderCard();
+		const { user } = renderWindows();
 
 		await user.click(within(rowOf('red hair')).getByRole('button', { name: 'Skip sub-prompt' }));
 
 		expect(actions.setSubPromptState).toHaveBeenCalledWith('hair', 'red-hair', 'skip');
 	});
 
-	it('toggles the lock (aria-pressed reflects the stored state)', async () => {
+	it('toggles the lock (aria-pressed reflects the stored state; the checked lock is purple)', async () => {
 		const actions = seed();
-		const { user } = renderCard();
+		const { user } = renderWindows();
+		const classes = stateClasses();
 		const lockRed = within(rowOf('red hair')).getByRole('button', { name: 'Lock sub-prompt' });
 		const lockBlue = within(rowOf('blue hair')).getByRole('button', { name: 'Lock sub-prompt' });
 		expect(lockRed).toHaveAttribute('aria-pressed', 'false');
 		expect(lockBlue).toHaveAttribute('aria-pressed', 'true');
+		expect(hasClasses(lockBlue, classes.accent.locked)).toBe(true);
+		expect(hasClasses(lockRed, classes.accent.locked)).toBe(false);
 
 		await user.click(lockRed);
 		expect(actions.setSubPromptState).toHaveBeenLastCalledWith('hair', 'red-hair', 'lock');
@@ -296,11 +353,13 @@ describe('SubPromptRow (inside CategoryCard)', () => {
 		expect(actions.setSubPromptState).toHaveBeenLastCalledWith('hair', 'blue-hair', 'normal');
 	});
 
-	it('unskips a skipped sub-prompt', async () => {
+	it('unskips a skipped sub-prompt; the active Skip is the filled warning action', async () => {
 		const actions = seed({ ...HAIR, subPrompts: [{ text: 'red hair', state: 'skip', extraLoraIds: [] }] });
-		const { user } = renderCard();
+		const { user } = renderWindows();
+		const classes = stateClasses();
 		const skip = within(rowOf('red hair')).getByRole('button', { name: 'Skip sub-prompt' });
 		expect(skip).toHaveAttribute('aria-pressed', 'true');
+		expect(hasClasses(skip, classes.actions.filled.warning)).toBe(true);
 
 		await user.click(skip);
 
@@ -309,7 +368,7 @@ describe('SubPromptRow (inside CategoryCard)', () => {
 
 	it('edits the text (Enter commits, Escape cancels)', async () => {
 		const actions = seed();
-		const { user } = renderCard();
+		const { user } = renderWindows();
 
 		await user.click(screen.getByRole('button', { name: 'Sub-prompt: red hair' }));
 		await user.type(screen.getByRole('textbox', { name: 'Sub-prompt' }), ', long{Enter}');
@@ -320,47 +379,59 @@ describe('SubPromptRow (inside CategoryCard)', () => {
 		expect(actions.setSubPromptText).toHaveBeenCalledTimes(1);
 	});
 
-	it('deletes', async () => {
+	it('deletes; Delete is the subtle danger action', async () => {
 		const actions = seed();
-		const { user } = renderCard();
+		const { user } = renderWindows();
+		const classes = stateClasses();
+		const remove = within(rowOf('blue hair')).getByRole('button', { name: 'Delete sub-prompt' });
+		expect(hasClasses(remove, classes.actions.subtle.danger)).toBe(true);
 
-		await user.click(within(rowOf('blue hair')).getByRole('button', { name: 'Delete sub-prompt' }));
+		await user.click(remove);
 
 		expect(actions.removeSubPrompt).toHaveBeenCalledWith('hair', 'blue-hair');
 	});
 
-	it('reflects highlights, the current output and ui states', () => {
-		seed({
-			...HAIR,
-			subPrompts: [
-				{ text: 'a', state: 'normal', extraLoraIds: [] },
-				{ text: 'b', state: 'normal', extraLoraIds: [] },
-				{ text: 'c', state: 'skip', extraLoraIds: [] },
-				{ text: 'd', state: 'normal', extraLoraIds: [] },
-			],
-		});
-		vi.mocked(useForbiddenHighlight).mockImplementation((_key, promptKey) =>
-			promptKey === 'a' ? 'forbidden' : promptKey === 'b' ? 'forbidden-locked' : 'none',
-		);
-		vi.mocked(useIsSubPromptInCurrentOutput).mockImplementation((_key, promptKey) => promptKey === 'd');
-		const uiStates: Record<string, SubPromptUiState> = { c: 'skip', d: 'indirectly-disabled' };
-		vi.mocked(useSubPromptUiState).mockImplementation((_key, promptKey) => uiStates[promptKey] ?? 'normal');
-		renderCard();
+	const ICON_STATES: readonly VisualState[] = ['forbiddenLocked', 'forbidden', 'associated', 'current', 'indirectlyDisabled'];
 
-		const rowElement = (text: string) => rowOf(text).firstElementChild as HTMLElement;
-		expect(rowElement('a')).toHaveAttribute('data-highlight', 'forbidden');
-		expect(rowElement('b')).toHaveAttribute('data-highlight', 'forbidden-locked');
-		expect(rowElement('c')).toHaveAttribute('data-highlight', 'none');
-		expect(rowElement('c')).toHaveAttribute('data-ui-state', 'skip');
-		expect(rowElement('d')).toHaveAttribute('data-ui-state', 'indirectly-disabled');
-		expect(rowElement('d')).toHaveAttribute('aria-current', 'true');
-		expect(rowElement('a')).not.toHaveAttribute('aria-current');
-		expect(vi.mocked(useForbiddenHighlight)).toHaveBeenCalledWith('hair', 'a');
+	it.each(VISUAL_STATES)('shows the row state %s: attribute, surface, text style, description and icon', (state) => {
+		seed();
+		vi.mocked(useSubPromptVisualState).mockImplementation((_key, promptKey) => (promptKey === 'red-hair' ? state : null));
+		renderWindows();
+		const classes = stateClasses();
+
+		const row = rowOf('red hair');
+		expect(row).toHaveAttribute('data-visual-state', state);
+		expect(hasClasses(row, classes.surface[state])).toBe(true);
+		const text = within(row).getByRole('button', { name: 'Sub-prompt: red hair' });
+		expect(hasClasses(text, classes.text[state])).toBe(true);
+		expect(text).toHaveAccessibleDescription(STATE_COLORS[state].label);
+		const icon = row.querySelector(`[data-state-icon="${state}"]`);
+		if (ICON_STATES.includes(state)) {
+			expect(icon).not.toBeNull();
+			expect(icon).toHaveAttribute('aria-hidden', 'true');
+		} else {
+			expect(icon).toBeNull();
+		}
+
+		const plain = rowOf('blue hair');
+		expect(plain).not.toHaveAttribute('data-visual-state');
+		expect(within(plain).getByRole('button', { name: 'Sub-prompt: blue hair' })).not.toHaveAccessibleDescription();
+		expect(vi.mocked(useSubPromptVisualState)).toHaveBeenCalledWith('hair', 'red-hair');
+	});
+
+	it('marks the rows used by the current output (aria-current), whatever their visual state', () => {
+		seed();
+		vi.mocked(useIsSubPromptInCurrentOutput).mockImplementation((_key, promptKey) => promptKey === 'blue-hair');
+		vi.mocked(useSubPromptVisualState).mockImplementation((_key, promptKey) => (promptKey === 'blue-hair' ? 'associated' : null));
+		renderWindows();
+
+		expect(rowOf('blue hair')).toHaveAttribute('aria-current', 'true');
+		expect(rowOf('red hair')).not.toHaveAttribute('aria-current');
 	});
 
 	it('gives every icon-only button an accessible name', () => {
 		seed();
-		renderCard();
+		renderWindows();
 
 		for (const button of screen.getAllByRole('button')) {
 			expect(button).toHaveAccessibleName();

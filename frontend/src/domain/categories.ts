@@ -1,7 +1,7 @@
 // Prompt categories domain model.
 // The types below are the persisted format of the 'categorie-store' (version 0) and are a CONTRACT:
 // do not change them without a persisted-state migration.
-import type { Size, Viewport } from './layout';
+import type { Rect, Size, Viewport } from './layout';
 import { isFiniteNumber, isRecord, parseNumberText, stringOr } from './guards';
 import { comparePriority, sameKey, splitActivationTerms, textContains, toKey, uniqueKey, uniqueStrings } from './text';
 
@@ -206,6 +206,15 @@ export function removeLoraFromCategories(categories: Category[], loraId: string)
 /** Every LoRA id induced by some sub-prompt, unique, in category/sub-prompt order. */
 export function collectLinkedLoraIds(categories: readonly Category[]): string[] {
 	return uniqueStrings(categories.flatMap((category) => category.subPrompts.flatMap((subPrompt) => subPrompt.extraLoraIds)));
+}
+
+// ---------------------------------------------------------------------------
+// Category windows
+// ---------------------------------------------------------------------------
+
+/** Where the window of the category at `index` (categories order) is drawn without a stored layout: cascaded. */
+export function categoryDefaultLayout(index: number): Rect {
+	return { x: 40 + 24 * index, y: 40 + 24 * index, width: 500, height: 300 };
 }
 
 // ---------------------------------------------------------------------------

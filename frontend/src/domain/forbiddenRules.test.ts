@@ -1,14 +1,17 @@
 import { describe, expect, it } from 'vitest';
 import type { Category, SubPrompt } from './categories';
 import {
+	categoryForbiddenHighlight,
 	categoryMatcher,
 	computeForbiddenHighlights,
 	containsMatcher,
 	endpointToMatcher,
+	forbiddenHighlightFor,
 	forbiddenHighlightOf,
 	hasAssociation,
 	isCategoryWideMatcher,
 	isForbiddenPair,
+	isLockedPrompt,
 	makeRule,
 	matcherEquals,
 	matcherMatchesPrompt,
@@ -23,7 +26,10 @@ import {
 	sameAssociationEndpoint,
 	sameAssociationRow,
 	sanitizeRules,
+	sourceDesignatesCategory,
+	sourceDesignatesPrompt,
 	specificMatcher,
+	strongestForbiddenHighlight,
 	tagMatcher,
 	toggleRule,
 	type AssociationEndpoint,
@@ -232,5 +238,93 @@ describe('computeForbiddenHighlights', () => {
 		const source = endpoint('prompt', 'Character', '1girl, silver hair');
 		expect([...computeForbiddenHighlights(categories, rules, source).entries()]).toEqual([['gamma::g2', 'forbidden']]);
 		expect([...computeForbiddenHighlights(categories, rules, source, pinned).entries()]).toEqual([['gamma::g2', 'forbidden-locked']]);
+	});
+});
+
+describe('forbidden highlight helpers', () => {
+	it('forbiddenHighlightFor: purple as soon as the source or the prompt is locked', () => {
+		expect(forbiddenHighlightFor(false, false)).toBe('forbidden');
+		expect(forbiddenHighlightFor(true, false)).toBe('forbidden-locked');
+		expect(forbiddenHighlightFor(false, true)).toBe('forbidden-locked');
+		expect(forbiddenHighlightFor(true, true)).toBe('forbidden-locked');
+	});
+
+	it('strongestForbiddenHighlight: forbidden-locked > forbidden > none', () => {
+		expect(strongestForbiddenHighlight([])).toBe('none');
+		expect(strongestForbiddenHighlight(['none', 'none'])).toBe('none');
+		expect(strongestForbiddenHighlight(['none', 'forbidden', 'none'])).toBe('forbidden');
+		expect(strongestForbiddenHighlight(['forbidden-locked', 'forbidden'])).toBe('forbidden-locked');
+		expect(strongestForbiddenHighlight(['forbidden', 'forbidden-locked', 'none'])).toBe('forbidden-locked');
+	});
+
+	it('isLockedPrompt: a locked sub-prompt of the categories (equivalent category name and prompt text)', () => {
+		const categories = [category('Alpha', ['a1', { text: 'a2, smile', state: 'lock' }])];
+		expect(isLockedPrompt(categories, prompt('alpha', 'Smile,  a2'))).toBe(true);
+		expect(isLockedPrompt(categories, prompt('Alpha', 'a1'))).toBe(false);
+		expect(isLockedPrompt(categories, prompt('Beta', 'a2, smile'))).toBe(false);
+		expect(isLockedPrompt([], prompt('Alpha', 'a2, smile'))).toBe(false);
+	});
+});
+
+describe('categoryForbiddenHighlight', () => {
+	const categories = [
+		category('Alpha', ['a1', { text: 'a2', state: 'lock' }]),
+		category('Beta', ['b1', { text: 'b2', state: 'lock' }, 'b3']),
+		category('Gamma', ['g1']),
+	];
+
+	it('is the strongest highlight of the category sub-prompts', () => {
+		const rules = [makeRule(specificMatcher('Alpha', 'a1'), specificMatcher('Beta', 'b1')), makeRule(specificMatcher('Alpha', 'a1'), specificMatcher('Beta', 'b2'))];
+		const highlights = computeForbiddenHighlights(categories, rules, endpoint('prompt', 'Alpha', 'a1'));
+		expect(categoryForbiddenHighlight(highlights, categories[1])).toBe('forbidden-locked');
+		expect(categoryForbiddenHighlight(highlights, categories[0])).toBe('none');
+		expect(categoryForbiddenHighlight(highlights, categories[2])).toBe('none');
+
+		const onlyB1 = computeForbiddenHighlights(categories, [rules[0]], endpoint('prompt', 'Alpha', 'a1'));
+		expect(categoryForbiddenHighlight(onlyB1, categories[1])).toBe('forbidden');
+	});
+
+	it('is none without highlights', () => {
+		expect(categoryForbiddenHighlight(NO_FORBIDDEN_HIGHLIGHTS, categories[1])).toBe('none');
+	});
+
+	it('a category-wide rule against a category source highlights the whole other category', () => {
+		const rules = [makeRule(categoryMatcher('Gamma'), categoryMatcher('Beta'))];
+		const highlights = computeForbiddenHighlights(categories, rules, endpoint('category', 'Gamma', 'g1'));
+		// b2 is locked: purple wins for the window.
+		expect(categoryForbiddenHighlight(highlights, categories[1])).toBe('forbidden-locked');
+		expect(categoryForbiddenHighlight(highlights, categories[2])).toBe('none');
+	});
+});
+
+describe('association source designation', () => {
+	it('a prompt source designates its own sub-prompt only (equivalent names)', () => {
+		const source = endpoint('prompt', 'Outfit', 'red dress, long');
+		expect(sourceDesignatesPrompt(source, prompt('outfit', 'Long, red dress'))).toBe(true);
+		expect(sourceDesignatesPrompt(source, prompt('Outfit', 'red dress'))).toBe(false);
+		expect(sourceDesignatesPrompt(source, prompt('Background', 'red dress, long'))).toBe(false);
+	});
+
+	it('a category source designates every sub-prompt of its category', () => {
+		const source = endpoint('category', 'Weather effects', 'puddles reflections');
+		expect(sourceDesignatesPrompt(source, prompt('Weather effects', 'lightning bolts'))).toBe(true);
+		expect(sourceDesignatesPrompt(source, prompt('weather-effects', 'puddles reflections'))).toBe(true);
+		expect(sourceDesignatesPrompt(source, prompt('Mood', 'lightning bolts'))).toBe(false);
+	});
+
+	it('a tag source designates the sub-prompts of its category carrying the tag', () => {
+		const source = endpoint('tag', 'Background', 'neon city street, rain', 'Rain');
+		expect(sourceDesignatesPrompt(source, prompt('Background', 'neon city street, rain'))).toBe(true);
+		expect(sourceDesignatesPrompt(source, prompt('Background', 'rain, forest'))).toBe(true);
+		expect(sourceDesignatesPrompt(source, prompt('Background', 'rainbow'))).toBe(false);
+		expect(sourceDesignatesPrompt(source, prompt('Weather effects', 'rain'))).toBe(false);
+	});
+
+	it('the source category window is designated whatever the mode', () => {
+		for (const mode of ['prompt', 'category', 'tag'] as const) {
+			const source = endpoint(mode, 'Weather effects', 'puddles reflections', mode === 'tag' ? 'puddles reflections' : null);
+			expect(sourceDesignatesCategory(source, 'weather effects')).toBe(true);
+			expect(sourceDesignatesCategory(source, 'Mood')).toBe(false);
+		}
 	});
 });

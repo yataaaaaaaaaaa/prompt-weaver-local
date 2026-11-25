@@ -5,6 +5,7 @@ import { create } from 'zustand';
 import { persist } from 'zustand/middleware';
 import { useShallow } from 'zustand/react/shallow';
 import {
+	categoryDefaultLayout,
 	categoryKeyOf,
 	estimateCategorySize,
 	joinBulkText,
@@ -43,7 +44,8 @@ export type CategoriesState = {
 };
 
 export type CategoriesActions = {
-	/** Appends 'new category' (made unique) with one empty sub-prompt; returns its key. */
+	/** Appends 'new category' (made unique) with one empty sub-prompt; its window opens at its cascade position
+	 *  (categoryDefaultLayout) in front of every other window. Returns its key. */
 	addCategory: () => CategoryKey;
 	/** Removes the category, the forbidden rules naming it and its workspace window. */
 	removeCategory: (key: CategoryKey) => void;
@@ -124,7 +126,12 @@ export const useCategoriesStore = create<CategoriesStore>()(
 					const categories = get().categories;
 					const category = makeCategory(newCategoryName(categories));
 					set({ categories: [...categories, category] });
-					return categoryKeyOf(category.text);
+					const key = categoryKeyOf(category.text);
+					// A window without a stored layout is drawn behind every other one: the new window would be hidden.
+					const workspace = useWorkspaceStore.getState();
+					workspace.commitWindowRect(categoryWindowKey(key), categoryDefaultLayout(categories.length));
+					workspace.focusWindow(categoryWindowKey(key));
+					return key;
 				},
 				removeCategory: (key) => {
 					const category = findCategory(get().categories, key);

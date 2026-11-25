@@ -1,6 +1,6 @@
 import { act, renderHook } from '@testing-library/react';
 import { describe, expect, it, vi } from 'vitest';
-import type { Category, SubPrompt } from '../domain/categories';
+import { categoryDefaultLayout, type Category, type SubPrompt } from '../domain/categories';
 import { categoryMatcher, makeRule, specificMatcher, tagMatcher } from '../domain/forbiddenRules';
 import { flushPersistence, hydratePersistedStores } from '../persistence/persist';
 import { createMemoryStoreBackend, setStoreBackend } from '../persistence/storeBackend';
@@ -64,6 +64,16 @@ describe('categories', () => {
 		expect(store().addCategory()).toBe('new-category');
 		expect(store().addCategory()).toBe('new-category-2');
 		expect(categories()[1]).toEqual(category('new-category-2', ['']));
+	});
+
+	it('opens the new window at its cascade position, in front of every other window', () => {
+		seed(category('Alpha', ['a']));
+		useWorkspaceStore.setState({ windows: { 'pane:image': { x: 16, y: 16, width: 400, height: 400, z: 7 } } });
+
+		const key = store().addCategory();
+
+		const layout = useWorkspaceStore.getState().windows[`category:${key}`];
+		expect(layout).toMatchObject({ ...categoryDefaultLayout(1), z: 8 });
 	});
 
 	it('removes a category with its window and its forbidden rules', () => {

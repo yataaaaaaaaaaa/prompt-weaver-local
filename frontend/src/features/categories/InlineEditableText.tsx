@@ -18,8 +18,10 @@ export type InlineEditableTextProps = {
 	variant?: InlineEditableTextVariant;
 	/** Initial height of the editor. */
 	rows?: number;
-	/** Extra classes of the display button (row highlight styling). */
+	/** Extra classes of the display button (row state styling: src/ui/stateStyles.tsx text classes). */
 	displayClassName?: string;
+	/** Accessible description of the display button (e.g. the row's visual state label). */
+	description?: string;
 };
 
 const useStyles = makeStyles({
@@ -36,6 +38,7 @@ const useStyles = makeStyles({
 		paddingRight: tokens.spacingHorizontalS,
 		fontWeight: tokens.fontWeightRegular,
 	},
+	// Typography of each variant, the same while displayed and while edited (the text does not jump on edit).
 	title: {
 		fontSize: tokens.fontSizeBase400,
 		lineHeight: tokens.lineHeightBase400,
@@ -48,6 +51,8 @@ const useStyles = makeStyles({
 	caption: {
 		fontSize: tokens.fontSizeBase200,
 		lineHeight: tokens.lineHeightBase200,
+	},
+	captionDisplay: {
 		color: tokens.colorNeutralForeground2,
 	},
 	placeholder: {
@@ -57,6 +62,12 @@ const useStyles = makeStyles({
 	editor: {
 		width: '100%',
 		minWidth: 0,
+	},
+	// On the <textarea> itself (the element scrolled into view): its field border, its row and the list padding stay
+	// visible around it.
+	editorInput: {
+		scrollMarginTop: tokens.spacingVerticalXL,
+		scrollMarginBottom: tokens.spacingVerticalXL,
 	},
 });
 
@@ -68,6 +79,7 @@ export function InlineEditableText({
 	variant = 'body',
 	rows = 2,
 	displayClassName,
+	description,
 }: InlineEditableTextProps): JSX.Element {
 	const styles = useStyles();
 	const [draft, setDraft] = useState<string | null>(null);
@@ -84,6 +96,8 @@ export function InlineEditableText({
 			if (editor) {
 				editor.focus();
 				editor.setSelectionRange(editor.value.length, editor.value.length);
+				// The editor is taller than the text: keep all of it visible in its scrolling list.
+				editor.scrollIntoView?.({ block: 'nearest' });
 			}
 		} else if (restoreFocusRef.current) {
 			restoreFocusRef.current = false;
@@ -128,6 +142,7 @@ export function InlineEditableText({
 			<Textarea
 				ref={editorRef}
 				className={styles.editor}
+				textarea={{ className: mergeClasses(styles[variant], styles.editorInput) }}
 				aria-label={label}
 				placeholder={placeholder}
 				value={draft}
@@ -144,8 +159,15 @@ export function InlineEditableText({
 		<Button
 			ref={displayRef}
 			appearance="subtle"
-			className={mergeClasses(styles.display, styles[variant], value ? undefined : styles.placeholder, displayClassName)}
+			className={mergeClasses(
+				styles.display,
+				styles[variant],
+				variant === 'caption' && styles.captionDisplay,
+				value ? undefined : styles.placeholder,
+				displayClassName,
+			)}
 			aria-label={`${label}: ${value || placeholder}`}
+			aria-description={description}
 			onClick={begin}
 		>
 			{value || placeholder}
