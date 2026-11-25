@@ -1,5 +1,6 @@
 // Online search results of the catalog store: spinner while searching (the previous results stay visible),
-// error with Retry, empty state, the result cards and 'Load more' while the provider has a next page.
+// error with Retry, empty state, the result cards and 'Load more' (LoadMoreButton) while the provider has a next
+// page.
 import {
 	Body1,
 	Button,
@@ -14,6 +15,7 @@ import {
 import { ArrowClockwiseRegular } from '@fluentui/react-icons';
 import { modelKey } from '../../domain/modelCatalog';
 import { useModelCatalogStore } from '../../stores/modelCatalogStore';
+import { LoadMoreButton } from '../../ui/LoadMoreButton';
 import { ModelResultCard } from './ModelResultCard';
 
 const useStyles = makeStyles({
@@ -33,9 +35,6 @@ const useStyles = makeStyles({
 	},
 	muted: {
 		color: tokens.colorNeutralForeground3,
-	},
-	more: {
-		alignSelf: 'center',
 	},
 });
 
@@ -75,12 +74,8 @@ export function ModelResultList(): JSX.Element {
 			) : searchStatus === 'ready' ? (
 				<Body1 className={styles.muted}>No models match this search.</Body1>
 			) : null}
-			{searchStatus === 'loadingMore' ? (
-				<Spinner size="tiny" label="Loading more models…" />
-			) : hasMore ? (
-				<Button className={styles.more} onClick={() => void loadMore()}>
-					Load more
-				</Button>
+			{hasMore ? (
+				<LoadMoreButton loading={searchStatus === 'loadingMore'} loadingLabel="Loading more models…" onLoadMore={() => void loadMore()} />
 			) : null}
 		</div>
 	);

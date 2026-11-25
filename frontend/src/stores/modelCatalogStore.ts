@@ -32,6 +32,7 @@ import {
 	modelKey,
 	pickedVersion,
 	versionStatusKind,
+	withLocalFile,
 	type CatalogFilters,
 	type InstallOptions,
 	type InstallOutcome,
@@ -170,10 +171,14 @@ export const useModelCatalogStore = create<ModelCatalogStore>()((set, get) => {
 			return { installs };
 		});
 
-	/** The file is local: registered (and selected unless options.select is false) in the library, announced (unless
-	 *  options.announce is false), and its install entry removed. */
+	/** The file is local: registered (and selected unless options.select is false) in the library, marked local in the
+	 *  results (withLocalFile), announced (unless options.announce is false), and its install entry removed. */
 	const completeInstall = (key: string, installed: InstalledModel, options: Required<InstallOptions>): InstallOutcome => {
 		const entryId = useLibraryStore.getState().registerInstalled(installed, { select: options.select });
+		const entry = get().installs[key];
+		if (entry) {
+			set((state) => ({ results: withLocalFile(state.results, entry, installed.path) }));
+		}
 		removeInstall(key);
 		if (options.announce) {
 			const { notify } = useNotificationsStore.getState();

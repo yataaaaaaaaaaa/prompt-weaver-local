@@ -39,18 +39,28 @@ beforeEach(() => {
 });
 
 describe('ModelResultCard', () => {
-	it('shows the picked version preview, name, creator, badges and size', () => {
+	it('shows the picked version preview, name, creator, downloads, badges and size', () => {
 		seedActions();
 		renderWithProviders(<ModelResultCard model={MODEL} />);
 
 		const card = screen.getByRole('group', { name: 'Model One' });
-		expect(within(card).getByText('by alice')).toBeInTheDocument();
+		expect(within(card).getByText('by alice · 1,000 downloads')).toBeInTheDocument();
+		expect(within(card).queryByText('NSFW')).not.toBeInTheDocument();
 		expect(within(card).getByRole('img', { name: 'Model One' })).toHaveAttribute('src', 'https://image.example/v1.jpeg');
 		expect(within(card).getByRole('img', { name: 'Model One' })).toHaveAttribute('loading', 'lazy');
 		expect(within(card).getByText('Checkpoint')).toBeInTheDocument();
 		expect(within(card).getByText('Illustrious')).toBeInTheDocument();
 		expect(within(card).getByText('6.9 GB')).toBeInTheDocument();
 		expect(within(card).getByRole('combobox', { name: 'Version' })).toHaveTextContent('v1.0');
+	});
+
+	it('shows the download count alone without creator, and the NSFW badge of an NSFW model', () => {
+		seedActions();
+		renderWithProviders(<ModelResultCard model={remoteModel({ creator: null, download_count: 48210, nsfw: true })} />);
+
+		const card = screen.getByRole('group', { name: 'Model One' });
+		expect(within(card).getByText('48,210 downloads')).toBeInTheDocument();
+		expect(within(card).getByText('NSFW')).toBeInTheDocument();
 	});
 
 	it('shows a placeholder without preview image', () => {

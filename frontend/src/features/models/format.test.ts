@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { formatBytes, formatTransfer } from './format';
+import { formatBytes, formatDownloads, formatTransfer, pathSegments } from './format';
 
 const KB = 1024;
 const MB = KB * 1024;
@@ -44,5 +44,33 @@ describe('formatTransfer', () => {
 
 	it('shows only the received size while the total is unknown', () => {
 		expect(formatTransfer(512 * KB, 0)).toBe('512.0 KB');
+	});
+});
+
+describe('formatDownloads', () => {
+	it('shows the count with thousands separators', () => {
+		expect(formatDownloads(48210)).toBe('48,210 downloads');
+		expect(formatDownloads(120400)).toBe('120,400 downloads');
+		expect(formatDownloads(1)).toBe('1 download');
+	});
+
+	it('shows 0 for missing or invalid counts', () => {
+		expect(formatDownloads(0)).toBe('0 downloads');
+		expect(formatDownloads(-5)).toBe('0 downloads');
+		expect(formatDownloads(Number.NaN)).toBe('0 downloads');
+	});
+});
+
+describe('pathSegments', () => {
+	it('cuts after every separator and joins back to the path', () => {
+		const path = 'C:/Users/me/models/loras/watercolor_wash.safetensors';
+		expect(pathSegments(path)).toEqual(['C:/', 'Users/', 'me/', 'models/', 'loras/', 'watercolor_wash.safetensors']);
+		expect(pathSegments(path).join('')).toBe(path);
+	});
+
+	it('handles backslashes, trailing separators and paths without separator', () => {
+		expect(pathSegments('D:\\models\\checkpoints\\')).toEqual(['D:\\', 'models\\', 'checkpoints\\']);
+		expect(pathSegments('model.safetensors')).toEqual(['model.safetensors']);
+		expect(pathSegments('')).toEqual([]);
 	});
 });

@@ -1,14 +1,17 @@
 // Local library tab: checkpoints and LoRAs of the library store with their provenance (preview, base model,
-// version, trigger words) or a 'Local file' badge, selection for generation, LoRA removal, and the model
-// folders reported by the backend (catalog store info).
-import { Badge, Body1, Button, Checkbox, makeStyles, tokens, Tooltip } from '@fluentui/react-components';
+// version, trigger words) or a 'Local file' badge, their file path (wrapping between folder names), selection for
+// generation, LoRA removal (danger action), and the model folders reported by the backend (catalog store info).
+import { Body1, Button, Checkbox, makeStyles, tokens, Tooltip } from '@fluentui/react-components';
 import { CheckmarkRegular, DeleteRegular } from '@fluentui/react-icons';
 import type { ModelKind, ModelSource, ModelSpec } from '../../api/types';
 import { MODEL_KIND_LABELS } from '../../domain/modelCatalog';
 import { selectIsEntrySelected, useLibraryStore, useLoraRows, type LoraRow } from '../../stores/libraryStore';
 import { useModelCatalogStore } from '../../stores/modelCatalogStore';
 import { PaneSection } from '../../ui/PaneLayout';
+import { useActionClasses } from '../../ui/stateStyles';
+import { BaseModelBadge, LocalFileBadge, SelectedBadge, VersionNameBadge } from './ModelBadges';
 import { ModelEntryCard } from './ModelEntryCard';
+import { PathText } from './PathText';
 import { TriggerWords } from './TriggerWords';
 
 const useStyles = makeStyles({
@@ -55,24 +58,12 @@ const useStyles = makeStyles({
 /** Provenance badges (base model, version) or 'Local file' for entries added from disk. */
 function SourceBadges({ source }: { source: ModelSource | null }): JSX.Element {
 	if (!source) {
-		return (
-			<Badge appearance="outline" color="subtle">
-				Local file
-			</Badge>
-		);
+		return <LocalFileBadge />;
 	}
 	return (
 		<>
-			{source.base_model ? (
-				<Badge appearance="outline" color="informative">
-					{source.base_model}
-				</Badge>
-			) : null}
-			{source.version_name ? (
-				<Badge appearance="outline" color="subtle">
-					{source.version_name}
-				</Badge>
-			) : null}
+			{source.base_model ? <BaseModelBadge baseModel={source.base_model} /> : null}
+			{source.version_name ? <VersionNameBadge name={source.version_name} /> : null}
 		</>
 	);
 }
@@ -88,7 +79,7 @@ function LibraryEntry({ entry, actions }: LibraryEntryProps): JSX.Element {
 		<li>
 			<ModelEntryCard
 				name={entry.name}
-				description={entry.path}
+				description={<PathText path={entry.path} />}
 				previewUrl={entry.source?.preview_url ?? null}
 				badges={<SourceBadges source={entry.source} />}
 			>
@@ -107,9 +98,7 @@ function CheckpointEntry({ model }: { model: ModelSpec }): JSX.Element {
 			entry={model}
 			actions={
 				selected ? (
-					<Badge appearance="filled" color="brand" icon={<CheckmarkRegular />}>
-						Selected
-					</Badge>
+					<SelectedBadge />
 				) : (
 					<Button appearance="primary" icon={<CheckmarkRegular />} onClick={() => selectModel(model.id)}>
 						Use
@@ -121,6 +110,7 @@ function CheckpointEntry({ model }: { model: ModelSpec }): JSX.Element {
 }
 
 function LoraEntry({ row }: { row: LoraRow }): JSX.Element {
+	const actionClasses = useActionClasses();
 	const setLoraSelected = useLibraryStore((state) => state.setLoraSelected);
 	const removeLora = useLibraryStore((state) => state.removeLora);
 	const { lora, selected } = row;
@@ -132,7 +122,13 @@ function LoraEntry({ row }: { row: LoraRow }): JSX.Element {
 				<>
 					<Checkbox label="Use by default" checked={selected} onChange={(_event, data) => setLoraSelected(lora.id, data.checked === true)} />
 					<Tooltip content={removeLabel} relationship="label">
-						<Button appearance="subtle" icon={<DeleteRegular />} aria-label={removeLabel} onClick={() => removeLora(lora.id)} />
+						<Button
+							appearance="subtle"
+							className={actionClasses.subtle.danger}
+							icon={<DeleteRegular />}
+							aria-label={removeLabel}
+							onClick={() => removeLora(lora.id)}
+						/>
 					</Tooltip>
 				</>
 			}
@@ -152,7 +148,9 @@ function ModelFolders(): JSX.Element {
 			{kinds.map(([kind, label]) => (
 				<div key={kind} className={styles.folderRow}>
 					<dt className={styles.term}>{label}</dt>
-					<dd className={styles.value}>{modelDirs[kind]}</dd>
+					<dd className={styles.value}>
+						<PathText path={modelDirs[kind]} />
+					</dd>
 				</div>
 			))}
 		</dl>

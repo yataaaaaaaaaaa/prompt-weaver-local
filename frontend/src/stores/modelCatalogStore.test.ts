@@ -310,6 +310,19 @@ describe('install', () => {
 		]);
 	});
 
+	it('marks the installed file local in the results: an embedding card then shows it on disk', async () => {
+		vi.spyOn(api, 'installModel').mockResolvedValue(installedAnswer(INSTALLED_EMBEDDING));
+		useModelCatalogStore.setState({ results: [EMBEDDING_MODEL, LORA_MODEL] });
+
+		await catalog().install(EMBEDDING_MODEL, EMBEDDING_VERSION);
+
+		const [embedding, lora] = catalog().results;
+		expect(embedding.versions[0].files.find((file) => file.id === EMBEDDING_VERSION.default_file_id)?.local_path).toBe(INSTALLED_EMBEDDING.path);
+		expect(lora).toBe(LORA_MODEL);
+		const { result } = renderHook(() => useVersionStatus(embedding, embedding.versions[0]));
+		expect(result.current.kind).toBe('on_disk');
+	});
+
 	it('downloads, follows the task, then installs again and registers', async () => {
 		const registering = deferred<InstallResponse>();
 		const installModel = vi

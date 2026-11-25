@@ -56,6 +56,31 @@ export function installFile(version: RemoteModelVersion, fileId: string | null =
 	return id == null ? null : (version.files.find((file) => file.id === id) ?? null);
 }
 
+/** What an install targets: a file of a version of a provider's model (InstallEntry of the catalog store). */
+export type InstallTarget = { provider: string; modelId: string; versionId: string; fileId: string | null };
+
+/** `results` with the install file of `target` (its fileId, or the version's default file) marked local at `path`, as
+ *  the backend reports it on the next search: a result whose version has no library entry (an embedding) then shows
+ *  it on disk. The same array when no result has that file (or it is already local there). */
+export function withLocalFile(results: RemoteModel[], target: InstallTarget, path: string): RemoteModel[] {
+	let changed = false;
+	const next = results.map((model) => {
+		if (model.provider !== target.provider || model.id !== target.modelId) {
+			return model;
+		}
+		const versions = model.versions.map((version) => {
+			const file = version.id === target.versionId ? installFile(version, target.fileId) : null;
+			if (!file || file.local_path === path) {
+				return version;
+			}
+			changed = true;
+			return { ...version, files: version.files.map((item) => (item === file ? { ...item, local_path: path } : item)) };
+		});
+		return versions.some((version, index) => version !== model.versions[index]) ? { ...model, versions } : model;
+	});
+	return changed ? next : results;
+}
+
 /** Prompt text that uses an installed embedding file: 'embedding:<file name without extension>'
  *  (diffusion-lora-runtime resolves it against the embeddings folder). */
 export function embeddingPromptToken(path: string): string {

@@ -4,7 +4,6 @@
 // character (characters store startCreateFromImage). The pane renders it keyed by the image, and moves the focus to
 // Back when it opens.
 import {
-	Badge,
 	Body1,
 	Button,
 	Caption1,
@@ -26,6 +25,7 @@ import type { ImageGenerationParams, RemoteImage } from '../../api/types';
 import { useCharactersStore } from '../../stores/charactersStore';
 import { selectImage, selectIsFavorite, useImageLibraryStore } from '../../stores/imageLibraryStore';
 import { PaneGrid, PaneSection } from '../../ui/PaneLayout';
+import { BaseModelBadge, NotSupportedLocallyBadge, NsfwBadge } from '../models/ModelBadges';
 import { imageLabel, siteName } from './imageLabels';
 import { ImageCheckpointSection, ImageLorasSection } from './ImageResources';
 import { ImageTagsSection } from './ImageTagsSection';
@@ -172,21 +172,9 @@ function Overview({ image, imageKey }: { image: RemoteImage; imageKey: string })
 			<div className={styles.facts}>
 				<Body1>{image.username ? `by ${image.username}` : 'Anonymous upload'}</Body1>
 				<div className={styles.badges}>
-					{image.base_model ? (
-						<Badge appearance="outline" color="informative">
-							{image.base_model}
-						</Badge>
-					) : null}
-					{image.architecture == null ? (
-						<Badge appearance="tint" color="warning">
-							Not supported locally
-						</Badge>
-					) : null}
-					{image.nsfw ? (
-						<Badge appearance="tint" color="danger">
-							NSFW
-						</Badge>
-					) : null}
+					{image.base_model ? <BaseModelBadge baseModel={image.base_model} /> : null}
+					{image.architecture == null ? <NotSupportedLocallyBadge /> : null}
+					{image.nsfw ? <NsfwBadge /> : null}
 				</div>
 				<div className={styles.actions}>
 					<FavoriteButton imageKey={imageKey} />

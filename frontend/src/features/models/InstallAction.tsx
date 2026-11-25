@@ -3,7 +3,7 @@
 // installing -> progress + Cancel; failed -> error with Retry / Dismiss; unavailable -> disabled with the reason.
 // Every action is a catalog store action (install also registers and selects the model).
 import { Button, Caption1, makeStyles, MessageBar, MessageBarActions, MessageBarBody, MessageBarTitle, tokens } from '@fluentui/react-components';
-import { ArrowDownloadRegular, CheckmarkRegular, CopyRegular } from '@fluentui/react-icons';
+import { ArrowClockwiseRegular, ArrowDownloadRegular, CheckmarkRegular, CopyRegular } from '@fluentui/react-icons';
 import type { RemoteModel, RemoteModelVersion } from '../../api/types';
 import { installFile } from '../../domain/modelCatalog';
 import { useModelCatalogStore, type VersionStatus } from '../../stores/modelCatalogStore';
@@ -76,7 +76,7 @@ export function InstallAction({ model, version, status }: InstallActionProps): J
 						{status.reason}
 					</MessageBarBody>
 					<MessageBarActions>
-						<Button size="small" onClick={runInstall}>
+						<Button size="small" icon={<ArrowClockwiseRegular />} onClick={runInstall}>
 							Retry
 						</Button>
 						<Button size="small" appearance="subtle" onClick={() => dismissInstallError(status.installKey)}>

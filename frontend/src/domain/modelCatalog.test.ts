@@ -20,6 +20,7 @@ import {
 	pickedVersion,
 	RUNNING_INSTALL_PHASES,
 	versionStatusKind,
+	withLocalFile,
 	type CatalogFilters,
 } from './modelCatalog';
 
@@ -92,6 +93,36 @@ describe('versions and files', () => {
 		expect(installFile(version(), '44320')).toBe(PICKLE);
 		expect(installFile(version(), 'unknown')).toBeNull();
 		expect(installFile(version({ default_file_id: null }))).toBeNull();
+	});
+});
+
+describe('withLocalFile', () => {
+	const older = version({ id: '1', name: 'v0.9' });
+	const newer = version({ id: '2', name: 'v1.0' });
+	const results = [model('a', [newer, older]), model('b')];
+	const PATH = 'D:/models/loras/add_detail.safetensors';
+
+	it("marks the target's default file local, keeping everything else (same objects)", () => {
+		const next = withLocalFile(results, { provider: 'civitai', modelId: 'a', versionId: '1', fileId: null }, PATH);
+		expect(next).not.toBe(results);
+		expect(installFile(next[0].versions[1])?.local_path).toBe(PATH);
+		expect(next[0].versions[1].files.find((file) => file.id === PICKLE.id)?.local_path).toBeNull();
+		expect(next[0].versions[0]).toBe(newer);
+		expect(next[1]).toBe(results[1]);
+		expect(installFile(older)?.local_path).toBeNull();
+	});
+
+	it('marks an explicitly chosen file', () => {
+		const next = withLocalFile(results, { provider: 'civitai', modelId: 'b', versionId: DETAIL_TWEAKER_VERSION.id, fileId: PICKLE.id }, PATH);
+		expect(next[1].versions[0].files.map((file) => file.local_path)).toEqual([null, PATH]);
+	});
+
+	it('returns the same results when nothing matches or the file is already local there', () => {
+		expect(withLocalFile(results, { provider: 'civitai', modelId: 'unknown', versionId: '1', fileId: null }, PATH)).toBe(results);
+		expect(withLocalFile(results, { provider: 'other', modelId: 'a', versionId: '1', fileId: null }, PATH)).toBe(results);
+		expect(withLocalFile(results, { provider: 'civitai', modelId: 'a', versionId: 'deleted', fileId: null }, PATH)).toBe(results);
+		const local = withLocalFile(results, { provider: 'civitai', modelId: 'a', versionId: '1', fileId: null }, PATH);
+		expect(withLocalFile(local, { provider: 'civitai', modelId: 'a', versionId: '1', fileId: null }, PATH)).toBe(local);
 	});
 });
 

@@ -142,7 +142,7 @@ function LoraRow({ row }: { row: ImageResourceRow }): JSX.Element {
 				<ResourceName row={row} />
 				<span className={styles.badges}>
 					{row.weight !== null ? (
-						<Badge appearance="outline" color={row.weightPublished ? 'brand' : 'subtle'}>
+						<Badge appearance="outline" color={row.weightPublished ? 'brand' : 'informative'}>
 							{row.weightPublished ? `Weight ${formatWeight(row.weight)}` : `Weight ${formatWeight(row.weight)} (unpublished, default)`}
 						</Badge>
 					) : null}

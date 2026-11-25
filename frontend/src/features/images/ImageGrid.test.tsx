@@ -142,7 +142,7 @@ describe('SearchResultsGrid', () => {
 		useImageLibraryStore.setState({ searchStatus: 'loadingMore', results: RESULTS, nextCursor: 'page-2' });
 		renderWithProviders(<SearchResultsGrid />);
 
-		expect(screen.getByText('Loading more images…')).toBeInTheDocument();
+		expect(screen.getByRole('button', { name: 'Loading more images…' })).toHaveAttribute('aria-disabled', 'true');
 		expect(screen.queryByRole('button', { name: 'Load more' })).not.toBeInTheDocument();
 		io.intersect(sentinel());
 		expect(actions.loadMore).not.toHaveBeenCalled();

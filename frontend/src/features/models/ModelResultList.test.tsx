@@ -96,12 +96,12 @@ describe('ModelResultList', () => {
 		expect(actions.loadMore).toHaveBeenCalledTimes(1);
 	});
 
-	it('shows a spinner while loading more, keeping the results', () => {
+	it('shows the Load more button busy while loading more (focus kept), keeping the results', () => {
 		seedActions();
 		useModelCatalogStore.setState({ searchStatus: 'loadingMore', results: RESULTS, nextCursor: 'cursor-2' });
 		renderWithProviders(<ModelResultList />);
 
-		expect(screen.getByText('Loading more models…')).toBeInTheDocument();
+		expect(screen.getByRole('button', { name: 'Loading more models…' })).toHaveAttribute('aria-disabled', 'true');
 		expect(screen.queryByRole('button', { name: 'Load more' })).not.toBeInTheDocument();
 		expect(within(screen.getByRole('list', { name: 'Search results' })).getAllByRole('listitem')).toHaveLength(2);
 	});

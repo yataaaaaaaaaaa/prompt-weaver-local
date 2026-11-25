@@ -1,5 +1,5 @@
-// Card frame shared by the online result cards and the local library entries: preview image (or a
-// placeholder), name heading, description, badges row and the entry's own content. Pure layout view.
+// Card frame shared by the online result cards and the local library entries: preview image (or a centered
+// placeholder icon), name heading, description, badges row and the entry's own content. Pure layout view.
 import { Body1Strong, Caption1, Card, CardHeader, CardPreview, Image, makeStyles, tokens, useId } from '@fluentui/react-components';
 import { ImageOffRegular } from '@fluentui/react-icons';
 import type { ReactNode } from 'react';
@@ -8,18 +8,42 @@ const useStyles = makeStyles({
 	card: {
 		minWidth: 0,
 	},
+	// The horizontal Card centers its children: the preview stretches to the card height (any content height) and
+	// its picture covers it, bleeding to the card's left edges (rounded like the card).
 	preview: {
+		position: 'relative',
+		display: 'flex',
+		alignSelf: 'stretch',
 		flexShrink: 0,
 		width: '112px',
 		minHeight: '112px',
+		overflow: 'hidden',
+		borderTopLeftRadius: tokens.borderRadiusMedium,
+		borderBottomLeftRadius: tokens.borderRadiusMedium,
 		backgroundColor: tokens.colorNeutralBackground3,
 	},
+	picture: {
+		position: 'absolute',
+		top: 0,
+		left: 0,
+		width: '100%',
+		height: '100%',
+	},
+	// CardPreview makes its direct children blocks: the placeholder covers the preview and its inner box centers the
+	// icon.
 	placeholder: {
+		position: 'absolute',
+		top: 0,
+		left: 0,
+		width: '100%',
+		height: '100%',
+	},
+	placeholderIcon: {
 		display: 'flex',
 		alignItems: 'center',
 		justifyContent: 'center',
 		height: '100%',
-		color: tokens.colorNeutralForeground4,
+		color: tokens.colorNeutralForeground3,
 		fontSize: tokens.fontSizeHero700,
 	},
 	body: {
@@ -45,8 +69,8 @@ const useStyles = makeStyles({
 
 export type ModelEntryCardProps = {
 	name: string;
-	/** Secondary line under the name (creator, path...). */
-	description?: string | null;
+	/** Secondary line under the name (creator and downloads, file path...); inline content. */
+	description?: ReactNode;
 	previewUrl: string | null;
 	badges?: ReactNode;
 	children?: ReactNode;
@@ -59,10 +83,12 @@ export function ModelEntryCard({ name, description, previewUrl, badges, children
 		<Card orientation="horizontal" className={styles.card} aria-labelledby={nameId}>
 			<CardPreview className={styles.preview}>
 				{previewUrl ? (
-					<Image src={previewUrl} alt={name} fit="cover" loading="lazy" />
+					<Image className={styles.picture} src={previewUrl} alt={name} fit="cover" loading="lazy" />
 				) : (
 					<div className={styles.placeholder}>
-						<ImageOffRegular aria-hidden />
+						<span className={styles.placeholderIcon}>
+							<ImageOffRegular aria-hidden />
+						</span>
 					</div>
 				)}
 			</CardPreview>

@@ -1,15 +1,15 @@
-// One online search result: preview of the picked version, name and creator, kind / base model / status
-// badges, version picker, install file size, trigger words and the status-dependent install action.
+// One online search result: preview of the picked version, name, creator and download count, kind / base model /
+// NSFW / status badges, version picker, install file size, trigger words and the status-dependent install action.
 // Thin view over the catalog store (usePickedVersion, useVersionStatus, pickVersion) and the library store
 // (selection state of the matching library entry).
-import { Badge, Caption1, Dropdown, Field, makeStyles, Option, tokens } from '@fluentui/react-components';
-import { CheckmarkCircleRegular } from '@fluentui/react-icons';
+import { Caption1, Dropdown, Field, makeStyles, Option, tokens } from '@fluentui/react-components';
 import type { RemoteModel, RemoteModelVersion } from '../../api/types';
-import { MODEL_KIND_LABELS, modelKey } from '../../domain/modelCatalog';
+import { modelKey } from '../../domain/modelCatalog';
 import { selectIsEntrySelected, useLibraryStore } from '../../stores/libraryStore';
 import { useModelCatalogStore, usePickedVersion, useVersionStatus, type VersionStatus } from '../../stores/modelCatalogStore';
-import { formatBytes } from './format';
+import { formatBytes, formatDownloads } from './format';
 import { InstallAction } from './InstallAction';
+import { BaseModelBadge, ModelKindBadge, NsfwBadge, SelectedBadge } from './ModelBadges';
 import { ModelEntryCard } from './ModelEntryCard';
 import { TriggerWords } from './TriggerWords';
 import { VersionStatusBadge } from './VersionStatusBadge';
@@ -40,8 +40,10 @@ const useStyles = makeStyles({
 	},
 });
 
-function creatorText(model: RemoteModel): string | null {
-	return model.creator ? `by ${model.creator}` : null;
+/** 'by <creator> · <n> downloads' (the creator part only when known). */
+function descriptionText(model: RemoteModel): string {
+	const downloads = formatDownloads(model.download_count);
+	return model.creator ? `by ${model.creator} · ${downloads}` : downloads;
 }
 
 /** The shared VersionStatusBadge, except: no badge for 'remote' (the card offers 'Download and use'), and 'Selected'
@@ -52,11 +54,7 @@ function ResultStatusBadge({ model, status }: { model: RemoteModel; status: Vers
 		return null;
 	}
 	if (status.kind === 'in_library' && selected) {
-		return (
-			<Badge appearance="filled" color="brand" icon={<CheckmarkCircleRegular />}>
-				Selected
-			</Badge>
-		);
+		return <SelectedBadge />;
 	}
 	return <VersionStatusBadge kind={status.kind} />;
 }
@@ -93,18 +91,13 @@ function VersionCard({ model, version }: { model: RemoteModel; version: RemoteMo
 	return (
 		<ModelEntryCard
 			name={model.name}
-			description={creatorText(model)}
+			description={descriptionText(model)}
 			previewUrl={version.images[0]?.url ?? null}
 			badges={
 				<>
-					<Badge appearance="outline" color="informative">
-						{MODEL_KIND_LABELS[model.kind]}
-					</Badge>
-					{version.base_model ? (
-						<Badge appearance="outline" color="subtle">
-							{version.base_model}
-						</Badge>
-					) : null}
+					<ModelKindBadge kind={model.kind} />
+					{version.base_model ? <BaseModelBadge baseModel={version.base_model} /> : null}
+					{model.nsfw ? <NsfwBadge /> : null}
 					<ResultStatusBadge model={model} status={status} />
 				</>
 			}
@@ -128,12 +121,13 @@ export function ModelResultCard({ model }: { model: RemoteModel }): JSX.Element 
 		return (
 			<ModelEntryCard
 				name={model.name}
-				description={creatorText(model)}
+				description={descriptionText(model)}
 				previewUrl={null}
 				badges={
-					<Badge appearance="outline" color="informative">
-						{MODEL_KIND_LABELS[model.kind]}
-					</Badge>
+					<>
+						<ModelKindBadge kind={model.kind} />
+						{model.nsfw ? <NsfwBadge /> : null}
+					</>
 				}
 			>
 				<Caption1 className={styles.muted}>No version available.</Caption1>

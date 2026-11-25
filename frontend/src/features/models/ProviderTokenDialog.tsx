@@ -1,5 +1,5 @@
 // API token of the active provider (e.g. Civitai): trigger button + 'Token set' badge, and a dialog to save or
-// remove the token through modelCatalogStore.setProviderToken. The token only lives in the local draft of the
+// remove (danger action) the token through modelCatalogStore.setProviderToken. The token only lives in the local draft of the
 // open dialog (cleared on close); the backend stores it and only reports token_set.
 import {
 	Badge,
@@ -17,9 +17,10 @@ import {
 	makeStyles,
 	tokens,
 } from '@fluentui/react-components';
-import { KeyRegular } from '@fluentui/react-icons';
+import { CheckmarkCircleRegular, DeleteRegular, KeyRegular } from '@fluentui/react-icons';
 import { useState, type FormEvent } from 'react';
 import { selectActiveProvider, useModelCatalogStore } from '../../stores/modelCatalogStore';
+import { useActionClasses } from '../../ui/stateStyles';
 
 const useStyles = makeStyles({
 	trigger: {
@@ -36,6 +37,7 @@ const useStyles = makeStyles({
 
 export function ProviderTokenDialog(): JSX.Element | null {
 	const styles = useStyles();
+	const actionClasses = useActionClasses();
 	const provider = useModelCatalogStore(selectActiveProvider);
 	const setProviderToken = useModelCatalogStore((state) => state.setProviderToken);
 	const [open, setOpen] = useState(false);
@@ -70,7 +72,7 @@ export function ProviderTokenDialog(): JSX.Element | null {
 	return (
 		<div className={styles.trigger}>
 			{provider.token_set ? (
-				<Badge appearance="tint" color="success">
+				<Badge appearance="tint" color="success" icon={<CheckmarkCircleRegular />}>
 					Token set
 				</Badge>
 			) : null}
@@ -110,7 +112,13 @@ export function ProviderTokenDialog(): JSX.Element | null {
 							</DialogContent>
 							{provider.token_set ? (
 								<DialogActions position="start">
-									<Button disabled={busy} onClick={() => void submit(null)}>
+									<Button
+										appearance="subtle"
+										className={actionClasses.subtle.danger}
+										icon={<DeleteRegular />}
+										disabled={busy}
+										onClick={() => void submit(null)}
+									>
 										Remove token
 									</Button>
 								</DialogActions>

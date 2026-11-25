@@ -20,3 +20,17 @@ export function formatBytes(bytes: number): string {
 export function formatTransfer(current: number, total: number): string {
 	return total > 0 ? `${formatBytes(current)} of ${formatBytes(total)}` : formatBytes(current);
 }
+
+const COUNT_FORMAT = new Intl.NumberFormat('en-US');
+
+/** A download count with thousands separators ('48,210 downloads'; '1 download'). */
+export function formatDownloads(count: number): string {
+	const value = Number.isFinite(count) && count > 0 ? Math.round(count) : 0;
+	return `${COUNT_FORMAT.format(value)} ${value === 1 ? 'download' : 'downloads'}`;
+}
+
+/** A file system path cut after each separator ('/' or '\'): the views put a line break opportunity (<wbr>) between
+ *  the segments, so a long path wraps between folder names instead of inside one. Joined, they are the path. */
+export function pathSegments(path: string): string[] {
+	return path.split(/(?<=[\\/])/).filter((segment) => segment !== '');
+}

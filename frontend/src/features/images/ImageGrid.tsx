@@ -1,7 +1,7 @@
 // Thumbnail grids of the image library store: the search results (spinner, error with Retry, empty state, infinite
-// scroll with a visible 'Load more' fallback) and the favorites (no paging). Each thumbnail is a button opening the
-// image in the detail view (openImage); arrow keys move between thumbnails (Fluent arrow navigation group, one Tab
-// stop). Thin views: paging, guards and the favorites collection stay in the store.
+// scroll with a visible, focus-keeping 'Load more' fallback: LoadMoreButton) and the favorites (no paging). Each
+// thumbnail is a button opening the image in the detail view (openImage); arrow keys move between thumbnails (Fluent
+// arrow navigation group, one Tab stop). Thin views: paging, guards and the favorites collection stay in the store.
 import {
 	Body1,
 	Button,
@@ -23,6 +23,7 @@ import { imageKey } from '../../domain/imageLibrary';
 import { useImageLibraryStore } from '../../stores/imageLibraryStore';
 import { ownsKeysProps } from '../../ui/keyboard';
 import { useInfiniteScroll } from '../../ui/useInfiniteScroll';
+import { LoadMoreButton } from '../../ui/LoadMoreButton';
 import { imageLabel } from './imageLabels';
 
 /** Attribute naming the image of a thumbnail button (the pane moves the focus back to it after the detail view). */
@@ -46,14 +47,16 @@ const useStyles = makeStyles({
 	item: {
 		minWidth: 0,
 	},
+	// Positioned and not clipping: Fluent's focus ring (createFocusOutlineStyle) is a pseudo element drawn around the
+	// thumbnail, outside its box. The picture rounds its own corners.
 	thumbnail: {
+		position: 'relative',
 		display: 'block',
 		width: '100%',
 		aspectRatio: '3 / 4',
 		padding: 0,
 		border: 'none',
 		borderRadius: tokens.borderRadiusMedium,
-		overflow: 'hidden',
 		backgroundColor: tokens.colorNeutralBackground3,
 		boxShadow: tokens.shadow2,
 		cursor: 'pointer',
@@ -68,11 +71,14 @@ const useStyles = makeStyles({
 		},
 		...createFocusOutlineStyle(),
 	},
+	// A block picture: an inline one adds its baseline gap under the image, making the thumbnail taller than 3:4.
+	picture: {
+		display: 'block',
+		width: '100%',
+		height: '100%',
+	},
 	muted: {
 		color: tokens.colorNeutralForeground3,
-	},
-	more: {
-		alignSelf: 'center',
 	},
 });
 
@@ -88,7 +94,7 @@ function Thumbnail({ image }: { image: RemoteImage }): JSX.Element {
 			{...{ [THUMBNAIL_KEY_ATTRIBUTE]: key }}
 			onClick={() => openImage(key)}
 		>
-			<Image src={image.thumbnail_url} alt="" fit="cover" loading="lazy" />
+			<Image className={styles.picture} src={image.thumbnail_url} alt="" fit="cover" shape="rounded" loading="lazy" />
 		</button>
 	);
 }
@@ -159,12 +165,8 @@ export function SearchResultsGrid(): JSX.Element {
 					</MessageBarActions>
 				</MessageBar>
 			) : null}
-			{status === 'loadingMore' ? (
-				<Spinner size="tiny" label="Loading more images…" />
-			) : hasMore && status === 'ready' ? (
-				<Button className={styles.more} onClick={() => void loadMore()}>
-					Load more
-				</Button>
+			{hasMore && (status === 'ready' || status === 'loadingMore') ? (
+				<LoadMoreButton loading={status === 'loadingMore'} loadingLabel="Loading more images…" onLoadMore={() => void loadMore()} />
 			) : null}
 		</div>
 	);
