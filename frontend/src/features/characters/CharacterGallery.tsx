@@ -1,5 +1,6 @@
 // Gallery of the characters store (useSortedCharacters): a spinner while the collection loads, the error with Retry
-// (load), an empty state explaining the entry points, else one card per character.
+// (load), an empty state explaining the entry points, else one card per character (a list named 'Characters'; the
+// columns are as wide as a card footer needs: Active switch, Edit and Delete on one row).
 import {
 	Body1,
 	Body1Strong,
@@ -25,7 +26,7 @@ const useStyles = makeStyles({
 	},
 	grid: {
 		display: 'grid',
-		gridTemplateColumns: 'repeat(auto-fill, minmax(168px, 1fr))',
+		gridTemplateColumns: 'repeat(auto-fill, minmax(184px, 1fr))',
 		gap: tokens.spacingHorizontalM,
 		margin: 0,
 		padding: tokens.spacingHorizontalXXS,

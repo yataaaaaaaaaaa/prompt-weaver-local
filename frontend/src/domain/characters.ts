@@ -30,6 +30,10 @@ import type { Character } from '../api/types';
 import { categoryKeyOf, makeCategory, makeSubPrompt, type Category } from './categories';
 import { joinPromptTags, normalizeTagId, promptTagIds, uniqueKey } from './text';
 
+/** Id of the Characters pane (src/workspace/paneRegistry.tsx, through src/stores/charactersStore.ts): window layouts
+ *  are persisted by id, never rename. */
+export const CHARACTERS_PANE_ID = 'characters';
+
 /** The character fields prompt building reads. */
 export type CharacterGenerationInput = Pick<
 	Character,

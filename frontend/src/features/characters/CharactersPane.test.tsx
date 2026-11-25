@@ -7,6 +7,7 @@ import { currentDialog, openDialog, waitForDialogClose } from '../../test/dialog
 import { renderWithProviders } from '../../test/render';
 import { CharactersPane } from './CharactersPane';
 import { editorState, seedCharacterActions, seedIpAdapterActions } from '../../test/characterStores';
+import { hasActionIntent } from '../../test/stateClasses';
 
 const ALICE = character();
 
@@ -64,8 +65,9 @@ describe('CharactersPane gallery', () => {
 		const alice = card('Alice');
 		expect(within(alice).getByRole('img', { name: 'Thumbnail of Alice' })).toHaveAttribute('src', characterImageUrl(ALICE_ID, THUMBNAIL_IMAGE_ID));
 		expect(within(alice).getByText('1girl, silver hair, blue eyes')).toBeInTheDocument();
-		// Without a thumbnail: a placeholder, no image.
-		expect(within(card('Bob')).queryByRole('img')).not.toBeInTheDocument();
+		// Without a thumbnail: a named placeholder, no picture.
+		expect(within(card('Bob')).getByRole('img', { name: 'No thumbnail for Bob' })).toBeInTheDocument();
+		expect(card('Bob').querySelector('img')).toBeNull();
 		expect(within(card('Bob')).getByText('1boy, black hair')).toBeInTheDocument();
 	});
 
@@ -125,6 +127,42 @@ describe('CharactersPane gallery', () => {
 		expect(within(card('Bob')).getByRole('switch', { name: 'Active' })).toBeEnabled();
 	});
 
+	it('marks the active character, and gives Delete the danger intent', () => {
+		useCharactersStore.setState({ loadStatus: 'ready', characters: [ALICE, BOB], activeId: BOB_ID, busyIds: { [ALICE_ID]: true } });
+		renderWithProviders(<CharactersPane />);
+
+		expect(hasActionIntent(within(card('Bob')).getByRole('button', { name: 'Delete Bob' }), 'subtle', 'danger')).toBe(true);
+		// Busy: disabled; the danger classes color enabled buttons only, so it keeps Fluent's disabled look.
+		expect(within(card('Alice')).getByRole('button', { name: 'Delete Alice' })).toBeDisabled();
+		expect(hasActionIntent(within(card('Alice')).getByRole('button', { name: 'Delete Alice' }), 'subtle', 'danger')).toBe(true);
+		expect(hasActionIntent(within(card('Bob')).getByRole('button', { name: 'Edit Bob' }), 'subtle', 'danger')).toBe(false);
+		// The active card is the one whose switch is on (the frame color is not the only cue).
+		expect(within(card('Bob')).getByRole('switch', { name: 'Active' })).toBeChecked();
+		expect(card('Bob').className).not.toBe(card('Alice').className);
+	});
+
+	it('names no region or heading after the pane window (Characters)', () => {
+		useCharactersStore.setState({ loadStatus: 'ready', characters: [ALICE, BOB] });
+		renderWithProviders(<CharactersPane />);
+
+		expect(screen.queryAllByRole('region', { name: 'Characters' })).toEqual([]);
+		expect(screen.queryAllByRole('heading', { name: 'Characters' })).toEqual([]);
+		const gallery = screen.getByRole('region', { name: 'Character gallery' });
+		expect(within(gallery).getByRole('list', { name: 'Characters' })).toBeInTheDocument();
+		expect(within(gallery).getByRole('button', { name: 'New character' })).toBeInTheDocument();
+	});
+
+	it('shows the full identity tags of a card (clamped on screen only)', () => {
+		const long = character({ id: 'chr-000000000009', name: 'Long', identity_tags: Array.from({ length: 30 }, (_value, index) => `tag ${index}`) });
+		useCharactersStore.setState({ loadStatus: 'ready', characters: [long] });
+		renderWithProviders(<CharactersPane />);
+
+		expect(within(card('Long')).getByText(/^tag 0, tag 1, .*tag 29$/)).toBeInTheDocument();
+		// Without identity tags: says so.
+		act(() => useCharactersStore.setState({ characters: [character({ identity_tags: [] })] }));
+		expect(within(card('Alice')).getByText('No identity tags')).toBeInTheDocument();
+	});
+
 	it('creates a new character', async () => {
 		useCharactersStore.setState({ loadStatus: 'ready' });
 		const { user } = renderWithProviders(<CharactersPane />);
@@ -143,7 +181,7 @@ describe('CharactersPane editor', () => {
 
 		act(() => useCharactersStore.setState({ editor: editorState() }));
 		const headings = screen.getAllByRole('heading').map((heading) => heading.textContent);
-		expect(headings.slice(0, 2)).toEqual(['New character', 'Characters']);
+		expect(headings.slice(0, 2)).toEqual(['New character', 'Character gallery']);
 		expect(screen.getByRole('textbox', { name: /^Name/ })).toHaveFocus();
 
 		act(() => useCharactersStore.setState({ editor: editorState({ characterId: ALICE_ID }) }));

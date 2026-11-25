@@ -130,7 +130,10 @@ describe('IpAdapterSection support', () => {
 		const { user } = renderWithProviders(<ReferenceSupportHint focus="face" />);
 
 		expect(screen.queryByRole('button', { name: 'Download' })).not.toBeInTheDocument();
+		expect(screen.getByText(`Downloading ${downloading.label}: reference images apply once it is installed.`)).toBeInTheDocument();
 		const downloads = screen.getByRole('list', { name: `Downloads of ${downloading.label}` });
+		// Each bar is named on screen by its file.
+		expect(within(downloads).getByText(ADAPTER_NAME)).toBeVisible();
 		const bar = within(downloads).getByRole('progressbar', { name: `Downloading ${ADAPTER_NAME}` });
 		expect(bar).toHaveAttribute('aria-valuenow', '0.25');
 		expect(bar).toHaveAttribute('aria-valuetext', '192.6 MB of 770.6 MB');
@@ -151,6 +154,33 @@ describe('IpAdapterSection support', () => {
 		expect(screen.getByRole('button', { name: 'Cancel' })).toBeDisabled();
 	});
 
+	it('shows a failed install with what failed and Retry, until it installs again', async () => {
+		seedStatus(ipAdapterStatus(), { installFailures: { 'sdxl-face': { [ipAdapterFile().id]: 'Size mismatch: expected 847517512 bytes, received 6291456' } } });
+		const { user } = renderWithProviders(<ReferenceSupportHint focus="face" />);
+
+		expect(screen.getByText(`${ipAdapterVariant().label} could not be downloaded`)).toBeInTheDocument();
+		expect(screen.getByText(`${ADAPTER_NAME}: Size mismatch: expected 847517512 bytes, received 6291456.`)).toBeInTheDocument();
+		expect(screen.queryByText(MISSING_REASON)).not.toBeInTheDocument();
+		expect(screen.queryByRole('button', { name: 'Download' })).not.toBeInTheDocument();
+		await user.click(screen.getByRole('button', { name: 'Retry' }));
+		expect(actions.install).toHaveBeenCalledWith('sdxl-face');
+
+		// Installing again: the progress replaces the failure.
+		act(() => useIpAdapterStore.setState({ installing: { 'sdxl-face': true } }));
+		expect(screen.queryByRole('button', { name: 'Retry' })).not.toBeInTheDocument();
+		expect(screen.getByRole('button', { name: 'Cancel' })).toBeInTheDocument();
+	});
+
+	it('shows no failure once the failed file is on disk', () => {
+		seedStatus(ipAdapterStatus({ variants: [READY_SDXL_FACE], support: [referenceSupport({ ready: true, reason: null })] }), {
+			installFailures: { 'sdxl-face': { [ipAdapterFile().id]: 'Size mismatch.' } },
+		});
+		renderWithProviders(<ReferenceSupportHint focus="face" />);
+
+		expect(screen.getByText(`Reference images apply with ${READY_SDXL_FACE.label}.`)).toBeInTheDocument();
+		expect(screen.queryByRole('button', { name: 'Retry' })).not.toBeInTheDocument();
+	});
+
 	it('shows nothing before the status is known', () => {
 		useIpAdapterStore.setState({ status: null, loadStatus: 'loading' });
 		const { container } = renderWithProviders(<ReferenceSupportHint focus="face" />);
@@ -163,6 +193,24 @@ describe('IpAdapterSection support', () => {
 });
 
 describe('IpAdapterSection files', () => {
+	it('shows a failed file download as Failed', () => {
+		seedStatus(ipAdapterStatus(), { installFailures: { 'sdxl-face': { [ipAdapterFile().id]: 'Size mismatch.' } } });
+		renderWithProviders(<IpAdapterSection />);
+
+		const files = within(screen.getByRole('list', { name: `Files of ${ipAdapterVariant().label}` })).getAllByRole('listitem');
+		expect(within(files[0]).getByText('Failed')).toBeInTheDocument();
+		expect(within(files[1]).getByText('Available to download')).toBeInTheDocument();
+	});
+
+	it('names the selected model above its reference support', () => {
+		seedStatus();
+		renderWithProviders(<IpAdapterSection />);
+
+		expect(screen.getByRole('heading', { name: `With the selected model ${SDXL_MODEL.name}` })).toBeInTheDocument();
+		// No heading or region repeats the section's own name.
+		expect(screen.getAllByRole('region', { name: 'Reference images (IP-Adapter)' })).toHaveLength(1);
+	});
+
 	it('lists every variant with the shared status of each file, and the folders', () => {
 		const general = ipAdapterVariant({
 			id: 'sdxl-general',
@@ -186,6 +234,7 @@ describe('IpAdapterSection files', () => {
 		expect(within(generalFiles[0]).getByText('Downloading')).toBeInTheDocument();
 		expect(within(generalFiles[1]).getByText('Available to download')).toBeInTheDocument();
 
+		expect(screen.getByRole('heading', { name: 'IP-Adapter files' })).toBeInTheDocument();
 		const folders = within(screen.getByLabelText('IP-Adapter folders'));
 		expect(folders.getByText('Adapter folder').closest('dt')?.nextElementSibling).toHaveTextContent('D:/models/ipadapter');
 		expect(folders.getByText('Image encoder folder').closest('dt')?.nextElementSibling).toHaveTextContent('D:/models/clip_vision');

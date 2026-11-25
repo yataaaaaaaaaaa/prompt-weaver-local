@@ -12,6 +12,7 @@ import { ALICE_ID, character, characterImage, ipAdapterStatus, READY_SDXL_FACE, 
 import { renderWithProviders } from '../../test/render';
 import { CharacterEditor } from './CharacterEditor';
 import { characterForm, editorState, seedCharacterActions, seedIpAdapterActions } from '../../test/characterStores';
+import { hasActionIntent } from '../../test/stateClasses';
 
 const LORA_A: LoRASpec = { id: 'a', name: 'Lora A', path: 'C:/loras/a.safetensors', source: null };
 const LORA_B: LoRASpec = { id: 'b', name: 'Lora B', path: 'C:/loras/b.safetensors', source: null };
@@ -172,8 +173,14 @@ describe('CharacterEditor LoRAs', () => {
 		await user.keyboard('{ArrowUp}');
 		expect(actions.setFormLoraWeight).toHaveBeenLastCalledWith('a', 0.85);
 
-		await user.click(within(rows[0]).getByRole('button', { name: 'Remove Lora A' }));
+		const remove = within(rows[0]).getByRole('button', { name: 'Remove Lora A' });
+		expect(hasActionIntent(remove, 'subtle', 'danger')).toBe(true);
+		await user.click(remove);
 		expect(actions.removeFormLora).toHaveBeenCalledWith('a');
+		// The rows and the picker are one group, named by its visible label.
+		const group = screen.getByRole('group', { name: 'LoRAs' });
+		expect(within(group).getByRole('list', { name: 'Character LoRAs' })).toBeInTheDocument();
+		expect(within(group).getByRole('combobox', { name: 'Add a LoRA' })).toHaveAccessibleDescription(/Character LoRAs apply first/);
 	});
 
 	it('adds a library LoRA from the combobox (filtered by the typed text; present ones not pickable)', async () => {
@@ -226,7 +233,14 @@ describe('CharacterEditor reference images', () => {
 		// Saved-character actions are not offered before the character exists.
 		expect(screen.queryByRole('button', { name: 'Add image file' })).not.toBeInTheDocument();
 
-		await user.click(within(list).getByRole('button', { name: 'Remove reference image 2' }));
+		// The first one becomes the thumbnail when saved.
+		const tiles = within(list).getAllByRole('listitem');
+		expect(within(tiles[0]).getByText('Thumbnail')).toBeInTheDocument();
+		expect(within(tiles[1]).queryByText('Thumbnail')).not.toBeInTheDocument();
+
+		const remove = within(list).getByRole('button', { name: 'Remove reference image 2' });
+		expect(hasActionIntent(remove, 'subtle', 'danger')).toBe(true);
+		await user.click(remove);
 		expect(actions.removePendingSource).toHaveBeenCalledWith(1);
 	});
 
@@ -237,18 +251,26 @@ describe('CharacterEditor reference images', () => {
 	});
 
 	it('edits the saved reference images of a character', async () => {
-		useCharactersStore.setState({ characters: [character()] });
+		const second = characterImage({ id: 'img-0000000000a2' });
+		useCharactersStore.setState({ characters: [character({ reference_images: [characterImage(), second] })] });
 		useOutputsStore.setState({ currentId: '0000000042' });
 		const { user } = renderEditor(editorState({ characterId: ALICE_ID }));
 
 		expect(screen.getByRole('heading', { name: 'Edit Alice' })).toBeInTheDocument();
 		const list = screen.getByRole('list', { name: 'Saved reference images' });
-		expect(within(list).getByRole('img', { name: 'Reference image 1' })).toHaveAttribute('src', characterImageUrl(ALICE_ID, REFERENCE_IMAGE_ID));
-		expect(screen.getByText(`1 of ${REFERENCE_DEFAULTS.max_images} images`)).toBeInTheDocument();
+		const [first, other] = within(list).getAllByRole('listitem');
+		expect(within(first).getByRole('img', { name: 'Reference image 1' })).toHaveAttribute('src', characterImageUrl(ALICE_ID, REFERENCE_IMAGE_ID));
+		expect(screen.getByText(`2 of ${REFERENCE_DEFAULTS.max_images} images`)).toBeInTheDocument();
+		// The thumbnail was made from image 1: marked, and not offered again.
+		expect(within(first).getByText('Thumbnail')).toBeInTheDocument();
+		expect(within(first).getByRole('button', { name: 'Reference image 1 is the thumbnail' })).toBeDisabled();
+		expect(within(other).queryByText('Thumbnail')).not.toBeInTheDocument();
 
-		await user.click(within(list).getByRole('button', { name: 'Use reference image 1 as thumbnail' }));
-		expect(actions.setThumbnailFromReference).toHaveBeenCalledWith(ALICE_ID, REFERENCE_IMAGE_ID);
-		await user.click(within(list).getByRole('button', { name: 'Remove reference image 1' }));
+		await user.click(within(other).getByRole('button', { name: 'Use reference image 2 as thumbnail' }));
+		expect(actions.setThumbnailFromReference).toHaveBeenCalledWith(ALICE_ID, second.id);
+		const remove = within(first).getByRole('button', { name: 'Remove reference image 1' });
+		expect(hasActionIntent(remove, 'subtle', 'danger')).toBe(true);
+		await user.click(remove);
 		expect(actions.removeReference).toHaveBeenCalledWith(ALICE_ID, REFERENCE_IMAGE_ID);
 		await user.click(screen.getByRole('button', { name: 'Add current output' }));
 		expect(actions.addReferenceFromCurrentOutput).toHaveBeenCalledWith(ALICE_ID);
@@ -283,6 +305,8 @@ describe('CharacterEditor actions', () => {
 	it('saves and cancels through the store', async () => {
 		const { user } = renderEditor();
 
+		expect(hasActionIntent(saveButton(), 'filled', 'primary')).toBe(true);
+		expect(screen.getByRole('group', { name: 'Character editor actions' })).toContainElement(saveButton());
 		await user.click(saveButton());
 		expect(actions.saveEditor).toHaveBeenCalledTimes(1);
 		await user.click(screen.getByRole('button', { name: 'Cancel' }));
@@ -292,7 +316,12 @@ describe('CharacterEditor actions', () => {
 	it('disables Save while saving and shows why the last save failed', () => {
 		renderEditor(editorState({ saving: true, error: 'The backend refused the character.' }));
 
-		expect(saveButton()).toBeDisabled();
+		// Disabled but focusable: the focus stays in the editor while it saves.
+		expect(saveButton()).toHaveAttribute('aria-disabled', 'true');
+		expect(saveButton()).not.toHaveAttribute('disabled');
+		// The primary intent stays on: its classes color enabled buttons only (src/ui/stateStyles.tsx), so a disabled
+		// button keeps Fluent's disabled look.
+		expect(hasActionIntent(saveButton(), 'filled', 'primary')).toBe(true);
 		expect(within(saveButton()).getByRole('progressbar')).toBeInTheDocument();
 		expect(screen.getByRole('button', { name: 'Cancel' })).toBeDisabled();
 		expect(screen.getByText('Could not save the character')).toBeInTheDocument();

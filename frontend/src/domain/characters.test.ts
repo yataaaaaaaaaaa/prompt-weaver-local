@@ -4,6 +4,7 @@ import { makeCategory, type Category } from './categories';
 import {
 	CHARACTER_CATEGORY_NAME,
 	CHARACTER_OUTFIT_CATEGORY_NAME,
+	CHARACTERS_PANE_ID,
 	characterCategories,
 	characterNegativePrompt,
 	lockedCharacterSeed,
@@ -69,5 +70,11 @@ describe('lockedCharacterSeed', () => {
 		expect(lockedCharacterSeed(character({ seed: 1234, seed_locked: false }))).toBeNull();
 		expect(lockedCharacterSeed(character({ seed: null, seed_locked: true }))).toBeNull();
 		expect(lockedCharacterSeed(null)).toBeNull();
+	});
+});
+
+describe('CHARACTERS_PANE_ID', () => {
+	it('keeps the id window layouts are persisted under (pane:characters)', () => {
+		expect(CHARACTERS_PANE_ID).toBe('characters');
 	});
 });

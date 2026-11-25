@@ -1,11 +1,25 @@
 // The character active for generation, in the controls (characters store selectActiveCharacter). Active: thumbnail
-// and name, its identity tags and seed lock, Deactivate (toggleActive), and, when it has reference images, the
-// strength (setReferenceStrength) with the reference support of its focus for the selected model. None: a Dropdown of
-// the characters to activate (setActive) and New character (startCreate).
-import { Avatar, Body1Strong, Button, Caption1, Dropdown, Field, makeStyles, Option, tokens } from '@fluentui/react-components';
-import { PersonAddRegular, PersonDeleteRegular } from '@fluentui/react-icons';
+// and name, its identity tags and locked seed (lockedCharacterSeed, with a lock icon), Deactivate (toggleActive), and,
+// when it has reference images, the strength (setReferenceStrength) with the reference support of its focus for the
+// selected model. None: a Dropdown of the characters to activate (setActive) and New character (startCreate, the
+// focus returns to it when the editor closes).
+import {
+	Avatar,
+	Body1Strong,
+	Button,
+	Caption1,
+	Dropdown,
+	Field,
+	makeStyles,
+	mergeClasses,
+	Option,
+	tokens,
+	useRestoreFocusTarget,
+} from '@fluentui/react-components';
+import { LockClosedRegular, PersonAddRegular, PersonDeleteRegular } from '@fluentui/react-icons';
 import { characterImageUrl } from '../../api/config';
 import type { Character } from '../../api/types';
+import { lockedCharacterSeed } from '../../domain/characters';
 import { joinPromptTags } from '../../domain/text';
 import { selectActiveCharacter, selectIsCharacterBusy, useCharactersStore, useSortedCharacters } from '../../stores/charactersStore';
 import { PaneSection } from '../../ui/PaneLayout';
@@ -32,6 +46,11 @@ const useStyles = makeStyles({
 		color: tokens.colorNeutralForeground3,
 		overflowWrap: 'anywhere',
 	},
+	seed: {
+		display: 'inline-flex',
+		alignItems: 'center',
+		gap: tokens.spacingHorizontalXXS,
+	},
 	picker: {
 		display: 'flex',
 		alignItems: 'flex-end',
@@ -54,6 +73,7 @@ function ActiveCharacter({ character }: { character: Character }): JSX.Element {
 	const toggleActive = useCharactersStore((state) => state.toggleActive);
 	const setReferenceStrength = useCharactersStore((state) => state.setReferenceStrength);
 	const tags = joinPromptTags(character.identity_tags);
+	const lockedSeed = lockedCharacterSeed(character);
 	return (
 		<>
 			<div className={styles.identity}>
@@ -66,7 +86,12 @@ function ActiveCharacter({ character }: { character: Character }): JSX.Element {
 				<div className={styles.text}>
 					<Body1Strong className={styles.wrap}>{character.name}</Body1Strong>
 					<Caption1 className={styles.muted}>{tags || 'No identity tags'}</Caption1>
-					{character.seed_locked && character.seed !== null ? <Caption1 className={styles.muted}>Seed locked to {character.seed}</Caption1> : null}
+					{lockedSeed !== null ? (
+						<Caption1 className={mergeClasses(styles.muted, styles.seed)}>
+							<LockClosedRegular aria-hidden />
+							Seed locked to {lockedSeed}
+						</Caption1>
+					) : null}
 				</div>
 				<Button icon={<PersonDeleteRegular />} disabled={busy} onClick={() => void toggleActive(character.id)}>
 					Deactivate
@@ -89,6 +114,8 @@ function CharacterPicker(): JSX.Element {
 	const characters = useSortedCharacters();
 	const setActive = useCharactersStore((state) => state.setActive);
 	const startCreate = useCharactersStore((state) => state.startCreate);
+	// The focus comes back here when the editor it opened (in the Characters pane) closes.
+	const restoreFocusTarget = useRestoreFocusTarget();
 	const empty = characters.length === 0;
 	return (
 		<>
@@ -113,7 +140,7 @@ function CharacterPicker(): JSX.Element {
 						))}
 					</Dropdown>
 				</Field>
-				<Button icon={<PersonAddRegular />} onClick={() => startCreate()}>
+				<Button icon={<PersonAddRegular />} onClick={() => startCreate()} {...restoreFocusTarget}>
 					New character
 				</Button>
 			</div>

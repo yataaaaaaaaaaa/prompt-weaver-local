@@ -28,6 +28,7 @@ import {
 	type CharacterFormErrors,
 	type CharacterValues,
 } from '../domain/characterDrafts';
+import { CHARACTERS_PANE_ID } from '../domain/characters';
 import { addLorasToSelection, withLoraWeight } from '../domain/loraSelection';
 import { namedProblemsText } from '../domain/text';
 import { desktop } from '../services/desktop';
@@ -39,8 +40,9 @@ import { useOutputsStore } from './outputsStore';
 import type { LoadStatus } from './pagedSearch';
 import { useWorkspaceStore } from './workspaceStore';
 
-/** Id of the Characters pane (src/workspace/paneRegistry.tsx): window layouts are persisted by id, never rename. */
-export const CHARACTERS_PANE_ID = 'characters';
+/** Re-exported for the views and the pane registry (defined in the pure domain module, which Node-side e2e helpers
+ *  can import too). */
+export { CHARACTERS_PANE_ID };
 
 export type CharacterEditorState = {
 	/** The character being edited; null while creating a new one. */
@@ -416,6 +418,19 @@ export const selectIsCharacterBusy =
 	(characterId: string) =>
 	(state: CharactersState): boolean =>
 		state.busyIds[characterId] === true;
+
+/** The reference image the character's thumbnail was made from (thumbnail source {kind: 'character_image'}), when it
+ *  is still one of its reference images; null otherwise (no thumbnail, another source, or the image was removed). */
+export const selectThumbnailReferenceId =
+	(characterId: string | null) =>
+	(state: CharactersState): string | null => {
+		const character = selectCharacter(characterId)(state);
+		const source = character?.thumbnail?.source;
+		if (!character || source?.kind !== 'character_image') {
+			return null;
+		}
+		return character.reference_images.some((image) => image.id === source.image_id) ? source.image_id : null;
+	};
 
 /** The gallery order: by name (case-insensitive, locale order), then creation order. Memoized on the list. */
 export function useSortedCharacters(): Character[] {

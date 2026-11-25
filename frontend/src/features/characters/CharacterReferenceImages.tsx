@@ -1,15 +1,19 @@
-// Reference images of the character in the editor. A saved character: its images (characterImageUrl) with "Use as
-// thumbnail" (setThumbnailFromReference) and Remove (removeReference), plus "Add current output"
-// (addReferenceFromCurrentOutput) and "Add image file" (addReferenceFromFile) up to REFERENCE_DEFAULTS.max_images;
-// disabled while a request runs for it. A new character: the images it will import when saved (editor
-// pendingSources: imageSourcePreviewUrl previews, a file icon without one) with Remove (removePendingSource).
+// Reference images of the character in the editor. A saved character: its images (characterImageUrl), the one its
+// thumbnail was made from marked 'Thumbnail' (selectThumbnailReferenceId), each with "Use as thumbnail"
+// (setThumbnailFromReference; not offered again for the thumbnail's own image) and Remove (danger intent;
+// removeReference), plus "Add current output" (addReferenceFromCurrentOutput) and "Add image file"
+// (addReferenceFromFile) up to REFERENCE_DEFAULTS.max_images; disabled while a request runs for it. A new character:
+// the images it will import when saved (editor pendingSources: imageSourcePreviewUrl previews, a file icon without
+// one), the first one marked 'Thumbnail' (the backend makes it the thumbnail), with Remove (removePendingSource).
 import {
+	Badge,
 	Body1,
 	Body1Strong,
 	Button,
 	Caption1,
 	Image,
 	makeStyles,
+	mergeClasses,
 	tokens,
 	Tooltip,
 	useId,
@@ -20,8 +24,9 @@ import { REFERENCE_DEFAULTS } from '../../api/defaults.gen';
 import type { CharacterImageSource } from '../../api/types';
 import { imageSourcePreviewUrl } from '../../domain/characterDrafts';
 import { basename } from '../../domain/paths';
-import { selectCharacter, selectIsCharacterBusy, useCharactersStore } from '../../stores/charactersStore';
+import { selectCharacter, selectIsCharacterBusy, selectThumbnailReferenceId, useCharactersStore } from '../../stores/charactersStore';
 import { useOutputsStore } from '../../stores/outputsStore';
+import { useActionClasses } from '../../ui/stateStyles';
 
 const NO_SOURCES: CharacterImageSource[] = [];
 
@@ -47,6 +52,7 @@ const useStyles = makeStyles({
 		minWidth: 0,
 	},
 	preview: {
+		position: 'relative',
 		display: 'flex',
 		flexDirection: 'column',
 		alignItems: 'center',
@@ -62,6 +68,12 @@ const useStyles = makeStyles({
 		width: '100%',
 		height: '100%',
 		objectPosition: 'top',
+	},
+	// Over the top left corner of the preview.
+	thumbnailBadge: {
+		position: 'absolute',
+		top: tokens.spacingVerticalXS,
+		left: tokens.spacingHorizontalXS,
 	},
 	fileIcon: {
 		fontSize: tokens.fontSizeHero700,
@@ -90,10 +102,21 @@ const useStyles = makeStyles({
 	},
 });
 
+function ThumbnailBadge(): JSX.Element {
+	const styles = useStyles();
+	return (
+		<Badge className={styles.thumbnailBadge} appearance="filled" color="brand" size="small">
+			Thumbnail
+		</Badge>
+	);
+}
+
 function SavedReferenceImages({ characterId }: { characterId: string }): JSX.Element | null {
 	const styles = useStyles();
+	const intents = useActionClasses();
 	const character = useCharactersStore(selectCharacter(characterId));
 	const busy = useCharactersStore(selectIsCharacterBusy(characterId));
+	const thumbnailReferenceId = useCharactersStore(selectThumbnailReferenceId(characterId));
 	const hasOutput = useOutputsStore((state) => state.currentId !== null);
 	const addReferenceFromCurrentOutput = useCharactersStore((state) => state.addReferenceFromCurrentOutput);
 	const addReferenceFromFile = useCharactersStore((state) => state.addReferenceFromFile);
@@ -111,19 +134,22 @@ function SavedReferenceImages({ characterId }: { characterId: string }): JSX.Ele
 				<ul className={styles.grid} aria-label="Saved reference images">
 					{images.map((image, index) => {
 						const name = `Reference image ${index + 1}`;
+						const isThumbnail = image.id === thumbnailReferenceId;
+						const useLabel = isThumbnail ? `${name} is the thumbnail` : `Use ${name.toLowerCase()} as thumbnail`;
 						return (
 							<li key={image.id} className={styles.tile}>
 								<div className={styles.preview}>
 									<Image className={styles.image} src={characterImageUrl(characterId, image.id)} alt={name} fit="cover" loading="lazy" />
+									{isThumbnail ? <ThumbnailBadge /> : null}
 								</div>
 								<div className={styles.tileActions}>
-									<Tooltip content={`Use ${name.toLowerCase()} as thumbnail`} relationship="label">
+									<Tooltip content={useLabel} relationship="label">
 										<Button
 											appearance="subtle"
 											size="small"
 											icon={<ImageRegular />}
-											aria-label={`Use ${name.toLowerCase()} as thumbnail`}
-											disabled={busy}
+											aria-label={useLabel}
+											disabled={busy || isThumbnail}
 											onClick={() => void setThumbnailFromReference(characterId, image.id)}
 										/>
 									</Tooltip>
@@ -131,6 +157,7 @@ function SavedReferenceImages({ characterId }: { characterId: string }): JSX.Ele
 										<Button
 											appearance="subtle"
 											size="small"
+											className={intents.subtle.danger}
 											icon={<DeleteRegular />}
 											aria-label={`Remove ${name.toLowerCase()}`}
 											disabled={busy}
@@ -160,11 +187,12 @@ function SavedReferenceImages({ characterId }: { characterId: string }): JSX.Ele
 	);
 }
 
-function PendingPreview({ source, name }: { source: CharacterImageSource; name: string }): JSX.Element {
+function PendingPreview({ source, name, isThumbnail }: { source: CharacterImageSource; name: string; isThumbnail: boolean }): JSX.Element {
 	const styles = useStyles();
 	const url = imageSourcePreviewUrl(source);
 	return (
 		<div className={styles.preview}>
+			{isThumbnail ? <ThumbnailBadge /> : null}
 			{url ? (
 				<Image className={styles.image} src={url} alt={name} fit="cover" />
 			) : (
@@ -179,6 +207,7 @@ function PendingPreview({ source, name }: { source: CharacterImageSource; name: 
 
 function PendingReferenceImages(): JSX.Element {
 	const styles = useStyles();
+	const intents = useActionClasses();
 	const sources = useCharactersStore((state) => state.editor?.pendingSources ?? NO_SOURCES);
 	const removePendingSource = useCharactersStore((state) => state.removePendingSource);
 	if (sources.length === 0) {
@@ -192,12 +221,13 @@ function PendingReferenceImages(): JSX.Element {
 					return (
 						// Pending sources have no id; their order is their identity until saved.
 						<li key={index} className={styles.tile}>
-							<PendingPreview source={source} name={name} />
+							<PendingPreview source={source} name={name} isThumbnail={index === 0} />
 							<div className={styles.tileActions}>
 								<Tooltip content={`Remove ${name.toLowerCase()}`} relationship="label">
 									<Button
 										appearance="subtle"
 										size="small"
+										className={intents.subtle.danger}
 										icon={<DeleteRegular />}
 										aria-label={`Remove ${name.toLowerCase()}`}
 										onClick={() => removePendingSource(index)}

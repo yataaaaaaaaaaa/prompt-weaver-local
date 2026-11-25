@@ -3,7 +3,15 @@ import { ApiError, api } from '../api/client';
 import type { IpAdapterInstallResponse, IpAdapterStatus, ModelSpec } from '../api/types';
 import { IMAGE_ENCODER_FILE, ipAdapterFile, ipAdapterStatus, ipAdapterVariant, READY_SDXL_FACE, referenceSupport } from '../test/characterData';
 import { downloadEvent } from '../test/modelLibraryData';
-import { ipAdapterFileStatus, selectIpAdapterVariant, selectIsVariantInstalling, selectReferenceSupport, useIpAdapterStore } from './ipAdapterStore';
+import {
+	ipAdapterFileStatus,
+	selectFileFailure,
+	selectIpAdapterVariant,
+	selectIsVariantInstalling,
+	selectReferenceSupport,
+	selectVariantFailure,
+	useIpAdapterStore,
+} from './ipAdapterStore';
 import { useLibraryStore } from './libraryStore';
 import { useNotificationsStore } from './notificationsStore';
 import { useTasksStore } from './tasksStore';
@@ -202,7 +210,7 @@ describe('ipAdapterStore.install', () => {
 		expect(notifications()).toEqual([{ intent: 'success', title: null, message: `${LABEL} is ready: reference images can be used.` }]);
 	});
 
-	it('names the failed and cancelled downloads', async () => {
+	it('keeps and names the failed downloads; a cancelled one is no failure', async () => {
 		selectModel('sdxl');
 		vi.spyOn(api, 'installIpAdapter').mockResolvedValue({ state: 'downloading', task_ids: [ADAPTER_TASK, ENCODER_TASK] });
 		vi.spyOn(api, 'ipAdapterStatus').mockResolvedValueOnce(DOWNLOADING).mockResolvedValue(ipAdapterStatus());
@@ -216,13 +224,51 @@ describe('ipAdapterStore.install', () => {
 		await store().install('sdxl-face');
 
 		expect(store().installing).toEqual({});
+		expect(store().installFailures).toEqual({ 'sdxl-face': { [ipAdapterFile().id]: 'HTTP 500 from huggingface.co.' } });
+		expect(selectVariantFailure('sdxl-face')(store())).toBe(`${ipAdapterFile().name}: HTTP 500 from huggingface.co.`);
 		expect(notifications()).toEqual([
-			{
-				intent: 'error',
-				title: `${LABEL} could not be installed`,
-				message: `${ipAdapterFile().name}: HTTP 500 from huggingface.co; ${IMAGE_ENCODER_FILE.name}: The download was cancelled.`,
-			},
+			{ intent: 'error', title: `${LABEL} could not be installed`, message: `${ipAdapterFile().name}: HTTP 500 from huggingface.co.` },
 		]);
+	});
+
+	it('notifies nothing when the downloads were cancelled (the user cancelled)', async () => {
+		selectModel('sdxl');
+		vi.spyOn(api, 'installIpAdapter').mockResolvedValue({ state: 'downloading', task_ids: [ADAPTER_TASK, ENCODER_TASK] });
+		vi.spyOn(api, 'ipAdapterStatus').mockResolvedValueOnce(DOWNLOADING).mockResolvedValue(ipAdapterStatus());
+		useTasksStore.setState({
+			events: {
+				[ADAPTER_TASK]: downloadEvent(ADAPTER_TASK, { stage: 'cancelled' }),
+				[ENCODER_TASK]: downloadEvent(ENCODER_TASK, { stage: 'complete' }),
+			},
+		});
+
+		await store().install('sdxl-face');
+
+		expect(store()).toMatchObject({ installing: {}, installFailures: {}, status: ipAdapterStatus() });
+		expect(selectVariantFailure('sdxl-face')(store())).toBeNull();
+		expect(notifications()).toEqual([]);
+	});
+
+	it('removes the failures of the variant when its install starts again (other variants keep theirs)', async () => {
+		selectModel('sdxl');
+		const general = { [IMAGE_ENCODER_FILE.id]: 'HTTP 404.' };
+		useIpAdapterStore.setState({
+			status: ipAdapterStatus(),
+			modelPath: SDXL_PATH,
+			loadStatus: 'ready',
+			installFailures: { 'sdxl-face': { [ipAdapterFile().id]: 'Size mismatch.', [IMAGE_ENCODER_FILE.id]: 'Size mismatch.' }, 'sdxl-general': general },
+		});
+		const answer = deferred<IpAdapterInstallResponse>();
+		vi.spyOn(api, 'installIpAdapter').mockReturnValue(answer.promise);
+		vi.spyOn(api, 'ipAdapterStatus').mockResolvedValue(READY);
+
+		const installing = store().install('sdxl-face');
+		// Retrying: the variant shows no failure while it installs.
+		expect(store().installFailures).toEqual({ 'sdxl-general': general });
+		answer.resolve({ state: 'installed', task_ids: [] });
+		await installing;
+
+		expect(store().installFailures).toEqual({ 'sdxl-general': general });
 	});
 
 	it('names a download by its task title when the status does not list it', async () => {
@@ -236,6 +282,9 @@ describe('ipAdapterStore.install', () => {
 		expect(notifications()).toEqual([
 			{ intent: 'error', title: `${LABEL} could not be installed`, message: 'adapter.safetensors: The download failed.' },
 		]);
+		// No file of the status to keep the failure for.
+		expect(store().installFailures).toEqual({});
+		expect(selectVariantFailure('sdxl-face')(store())).toBeNull();
 	});
 
 	it('reports a refused install', async () => {
@@ -305,10 +354,44 @@ describe('ipAdapterStore selectors', () => {
 });
 
 describe('ipAdapterFileStatus', () => {
-	it('reads a file as downloading, on disk or to download (a running download wins)', () => {
+	it('reads a file as downloading, on disk, failed or to download (a running download wins)', () => {
 		expect(ipAdapterFileStatus(ipAdapterFile())).toBe('remote');
 		expect(ipAdapterFileStatus(ipAdapterFile({ local_path: 'D:/models/ipadapter/a.safetensors' }))).toBe('on_disk');
 		expect(ipAdapterFileStatus(ipAdapterFile({ task_id: 'task-1' }))).toBe('installing');
 		expect(ipAdapterFileStatus(ipAdapterFile({ task_id: 'task-1', local_path: 'D:/models/ipadapter/a.safetensors' }))).toBe('installing');
+		expect(ipAdapterFileStatus(ipAdapterFile(), 'Size mismatch.')).toBe('failed');
+		// A failure does not hide a running retry or a file found on disk since.
+		expect(ipAdapterFileStatus(ipAdapterFile({ task_id: 'task-1' }), 'Size mismatch.')).toBe('installing');
+		expect(ipAdapterFileStatus(ipAdapterFile({ local_path: 'D:/models/ipadapter/a.safetensors' }), 'Size mismatch.')).toBe('on_disk');
+	});
+});
+
+describe('ipAdapterStore failure selectors', () => {
+	it('read the failure of a file and the still failed files of a variant', () => {
+		useIpAdapterStore.setState({
+			status: ipAdapterStatus({
+				variants: [ipAdapterVariant({ files: [ipAdapterFile(), { ...IMAGE_ENCODER_FILE, local_path: 'D:/models/clip_vision/e.safetensors' }] })],
+			}),
+			installFailures: { 'sdxl-face': { [ipAdapterFile().id]: 'Size mismatch: expected 847517512 bytes.', [IMAGE_ENCODER_FILE.id]: 'HTTP 500.' } },
+		});
+
+		expect(selectFileFailure(ipAdapterFile().id)(store())).toBe('Size mismatch: expected 847517512 bytes.');
+		expect(selectFileFailure('unknown')(store())).toBeNull();
+		// The encoder is on disk now: no longer failed.
+		expect(selectVariantFailure('sdxl-face')(store())).toBe(`${ipAdapterFile().name}: Size mismatch: expected 847517512 bytes.`);
+		expect(selectVariantFailure('sd15-face')(store())).toBeNull();
+		expect(selectVariantFailure(null)(store())).toBeNull();
+	});
+
+	it('shows a shared file as failed everywhere, but the failure only for the variant whose install failed', () => {
+		const general = ipAdapterVariant({ id: 'sdxl-general', label: 'SDXL general (IP-Adapter Plus ViT-H)', focus: 'general' });
+		useIpAdapterStore.setState({
+			status: ipAdapterStatus({ variants: [ipAdapterVariant(), general] }),
+			installFailures: { 'sdxl-face': { [IMAGE_ENCODER_FILE.id]: 'Size mismatch.' } },
+		});
+
+		expect(selectFileFailure(IMAGE_ENCODER_FILE.id)(store())).toBe('Size mismatch.');
+		expect(selectVariantFailure('sdxl-face')(store())).toBe(`${IMAGE_ENCODER_FILE.name}: Size mismatch.`);
+		expect(selectVariantFailure('sdxl-general')(store())).toBeNull();
 	});
 });

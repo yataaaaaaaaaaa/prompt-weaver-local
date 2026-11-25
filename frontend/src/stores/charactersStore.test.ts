@@ -18,6 +18,7 @@ import {
 	CHARACTERS_PANE_ID,
 	selectActiveCharacter,
 	selectIsCharacterBusy,
+	selectThumbnailReferenceId,
 	useCharacterFormErrors,
 	useCharactersStore,
 	useSortedCharacters,
@@ -640,6 +641,41 @@ describe('charactersStore.setReferenceStrength', () => {
 // ---------------------------------------------------------------------------
 // Selectors / hooks
 // ---------------------------------------------------------------------------
+
+describe('charactersStore selectors', () => {
+	it('selectThumbnailReferenceId reads the reference image the thumbnail was made from', () => {
+		const second = characterImage({ id: 'img-0000000000a2' });
+		const fromSecond = characterImage({ id: 'img-0000000000f2', source: { kind: 'character_image', image_id: second.id } });
+		seedCharacters([
+			character({ reference_images: [characterImage(), second], thumbnail: fromSecond }),
+			// Its thumbnail came from an output, not from a reference image.
+			character({ id: 'chr-000000000005', name: 'Carl', thumbnail: characterImage({ id: 'img-0000000000f3' }) }),
+			// Its thumbnail's reference image was removed since.
+			character({ id: 'chr-000000000006', name: 'Dana', reference_images: [second] }),
+			BOB,
+		]);
+
+		expect(selectThumbnailReferenceId(ALICE_ID)(store())).toBe(second.id);
+		expect(selectThumbnailReferenceId('chr-000000000005')(store())).toBeNull();
+		expect(selectThumbnailReferenceId('chr-000000000006')(store())).toBeNull();
+		expect(selectThumbnailReferenceId(BOB_ID)(store())).toBeNull();
+		expect(selectThumbnailReferenceId('chr-000000000404')(store())).toBeNull();
+		expect(selectThumbnailReferenceId(null)(store())).toBeNull();
+	});
+
+	it('selectIsCharacterBusy and selectActiveCharacter read the flags and the active id', () => {
+		seedCharacters();
+		expect(selectActiveCharacter(store())).toBeNull();
+		useCharactersStore.setState({ activeId: BOB_ID, busyIds: { [ALICE_ID]: true } });
+
+		expect(selectActiveCharacter(store())).toEqual(BOB);
+		expect(selectIsCharacterBusy(ALICE_ID)(store())).toBe(true);
+		expect(selectIsCharacterBusy(BOB_ID)(store())).toBe(false);
+		// An active id the list does not hold (not loaded yet): none.
+		useCharactersStore.setState({ activeId: 'chr-000000000404' });
+		expect(selectActiveCharacter(store())).toBeNull();
+	});
+});
 
 describe('charactersStore hooks', () => {
 	it('useSortedCharacters sorts by name (case-insensitive), memoized on the list', () => {
