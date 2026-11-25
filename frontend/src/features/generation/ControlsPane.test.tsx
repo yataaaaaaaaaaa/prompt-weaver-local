@@ -11,6 +11,7 @@ import { useSessionStore } from '../../stores/sessionStore';
 import { ALICE_ID, BOB, character } from '../../test/characterData';
 import { renderWithProviders } from '../../test/render';
 import { seedCharacterActions, seedIpAdapterActions } from '../../test/characterStores';
+import { hasActionIntent } from '../../test/stateClasses';
 import { ControlsPane } from './ControlsPane';
 
 const MODEL: ModelSpec = { id: 'm1', name: 'Model One', path: 'C:/models/one.safetensors', default_width: 1024, default_height: 1024, torch_dtype: 'float16', source: null };
@@ -129,6 +130,37 @@ describe('ControlsPane - generation actions', () => {
 		expect(screen.getByText('Categories: 2')).toBeInTheDocument();
 		await user.click(screen.getByRole('button', { name: 'Add category' }));
 		expect(addCategory).toHaveBeenCalledTimes(1);
+	});
+
+	it('colors the actions by intent (disabled buttons keep the Fluent disabled look)', () => {
+		seedGeneration();
+		renderWithProviders(<ControlsPane />);
+		const generate = screen.getByRole('button', { name: 'Generate' });
+		const continuous = screen.getByRole('button', { name: 'Continuous' });
+		const cancel = screen.getByRole('button', { name: 'Cancel' });
+
+		// Idle: Generate is the primary action; Cancel is the (disabled) warning action, the unchecked toggle is plain.
+		expect(hasActionIntent(generate, 'filled', 'primary')).toBe(true);
+		expect(hasActionIntent(continuous, 'filled', 'primary')).toBe(false);
+		expect(cancel).toBeDisabled();
+		expect(hasActionIntent(cancel, 'subtle', 'warning')).toBe(true);
+
+		// A continuous run: the checked toggle is primary, Cancel is the warning action, Generate is disabled.
+		act(() => useGenerationStore.setState({ continuous: true, generating: true }));
+		expect(screen.getByRole('button', { name: 'Generating…' })).toBeDisabled();
+		expect(hasActionIntent(continuous, 'filled', 'primary')).toBe(true);
+		expect(hasActionIntent(cancel, 'subtle', 'warning')).toBe(true);
+	});
+
+	it('keeps the data directory on one line and names it in full', () => {
+		seedGeneration();
+		const dataDir = `C:/Users/someone/AppData/Local/Temp/${'very-long-folder-name/'.repeat(6)}data`;
+		useSessionStore.setState({ dataDir });
+		renderWithProviders(<ControlsPane />);
+
+		const caption = screen.getByText(`Data directory: ${dataDir}`);
+		expect(getComputedStyle(caption).whiteSpace).toBe('nowrap');
+		expect(getComputedStyle(caption).textOverflow).toBe('ellipsis');
 	});
 
 	it('renders the progress view', () => {

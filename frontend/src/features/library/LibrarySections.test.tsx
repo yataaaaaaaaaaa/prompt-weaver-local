@@ -5,6 +5,7 @@ import type { LoRASpec, ModelSpec } from '../../api/types';
 import { useCategoriesStore } from '../../stores/categoriesStore';
 import { useLibraryStore, useLoraRows, useLoraSummary, type LoraRow } from '../../stores/libraryStore';
 import { renderWithProviders } from '../../test/render';
+import { hasActionIntent } from '../../test/stateClasses';
 import { LoraSection } from './LoraSection';
 import { ModelSection } from './ModelSection';
 
@@ -158,6 +159,41 @@ describe('LoraSection', () => {
 		expect(actions.clearSelectedLoras).toHaveBeenCalledTimes(1);
 		expect(actions.addLoraFiles).toHaveBeenCalledTimes(1);
 		expect(actions.addLoraDirectory).toHaveBeenCalledTimes(1);
+	});
+
+	it('shows Clear as a warning action, disabled without a selection to clear', () => {
+		seedLibraryActions();
+		seedLoras([row(LORA_A, 1)]);
+		const { unmount } = renderWithProviders(<LoraSection />);
+		expect(hasActionIntent(screen.getByRole('button', { name: 'Clear' }), 'subtle', 'warning')).toBe(true);
+		unmount();
+
+		seedLoras([row(LORA_A, null)]);
+		renderWithProviders(<LoraSection />);
+		expect(screen.getByRole('button', { name: 'Clear' })).toBeDisabled();
+		expect(hasActionIntent(screen.getByRole('button', { name: 'Clear' }), 'subtle', 'warning')).toBe(true);
+	});
+
+	it('lays the rows out as one grid (aligned weight and delete columns) and truncates long names', () => {
+		const long: LoRASpec = { id: 'long', name: `Very long LoRA name ${'x'.repeat(80)}`, path: 'C:/loras/long.safetensors', source: null };
+		seedLibraryActions();
+		seedLoras([row(LORA_A, 0.6), row(long, null, true)]);
+		renderWithProviders(<LoraSection />);
+
+		const list = screen.getByRole('list', { name: 'LoRA library' });
+		expect(getComputedStyle(list).display).toBe('grid');
+		const items = within(list).getAllByRole('listitem');
+		for (const item of items) {
+			expect(getComputedStyle(item).gridTemplateColumns).toBe('subgrid');
+		}
+		// name | weight | delete; without a weight the name cell spans the weight column too.
+		expect(items[0].children).toHaveLength(3);
+		expect(items[1].children).toHaveLength(2);
+		expect(getComputedStyle(items[1].children[0]).gridColumn.replace(/\s/g, '')).toBe('1/span2');
+		const label = within(items[1]).getByText(long.name);
+		expect(getComputedStyle(label).textOverflow).toBe('ellipsis');
+		expect(getComputedStyle(label).whiteSpace).toBe('nowrap');
+		expect(within(items[1]).getByRole('checkbox', { name: long.name })).toBeInTheDocument();
 	});
 
 	it('names every icon-only button', () => {

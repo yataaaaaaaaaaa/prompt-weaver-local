@@ -11,6 +11,7 @@ import { selectGenerationSettings, selectSeedSnapshot, useGenerationSettingsStor
 import { selectSelectedModel, useLibraryStore } from './libraryStore';
 import { reportError, useNotificationsStore } from './notificationsStore';
 import { useOutputsStore } from './outputsStore';
+import { selectGenerationEvent, useTasksStore } from './tasksStore';
 import { useUndoStore } from './undoStore';
 
 export type GenerationState = {
@@ -38,6 +39,9 @@ export const GENERATION_FAILED_TITLE = 'Generation failed';
 let abortController: AbortController | null = null;
 /** Incremented to stop the running continuous loop (a new loop never sees an older stop request). */
 let continuousRun = 0;
+/** A request was abandoned (Cancel, or stopping continuous generation): the backend may still finish that generation
+ *  (it was already saving), and its output then has to be listed. */
+let abandonedRequest = false;
 
 function isAbortError(error: unknown): boolean {
 	return isRecord(error) && error.name === 'AbortError';
@@ -82,6 +86,9 @@ export const useGenerationStore = create<GenerationStore>()((set, get) => {
 	};
 
 	const stopCurrentRequest = async (): Promise<void> => {
+		if (abortController) {
+			abandonedRequest = true;
+		}
 		abortController?.abort();
 		abortController = null;
 		await api.cancelGeneration().catch(() => undefined);
@@ -135,6 +142,16 @@ export const useGenerationStore = create<GenerationStore>()((set, get) => {
 			await stopCurrentRequest();
 		},
 	};
+});
+
+// The output of an abandoned request that the backend still completed is listed (the Output browser's position and
+// Last reach it), from the generation's 'complete' progress event.
+useTasksStore.subscribe((state, previous) => {
+	const event = selectGenerationEvent(state);
+	if (abandonedRequest && event?.stage === 'complete' && event !== selectGenerationEvent(previous)) {
+		abandonedRequest = false;
+		void useOutputsStore.getState().refreshIds();
+	}
 });
 
 /** A model is selected and no single generation is running. */

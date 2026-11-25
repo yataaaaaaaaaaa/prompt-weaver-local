@@ -9,6 +9,8 @@ import {
 	filterSelectionLoraIds,
 	loraAtDefaultWeight,
 	resolveLoraSelection,
+	weightedLoraParts,
+	weightedLoraText,
 	weightedLorasText,
 	withLoraWeight,
 } from './loraSelection';
@@ -136,6 +138,9 @@ describe('clampLoraWeight', () => {
 			'Detail Tweaker LoRA - v1.0 (1), Kim LoRA - v1 (0.6)',
 		);
 		expect(weightedLorasText([])).toBe('');
+		expect(weightedLoraText({ name: 'Watercolor Wash v1.2', weight: -0.5 })).toBe('Watercolor Wash v1.2 (-0.5)');
+		expect(weightedLoraText({ name: 'Kim', weight: 0.333 })).toBe('Kim (0.33)');
+		expect(weightedLoraParts({ name: 'Kim', weight: -1.25 })).toEqual({ name: 'Kim', weight: '(-1.25)' });
 	});
 
 });

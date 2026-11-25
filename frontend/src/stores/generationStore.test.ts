@@ -12,6 +12,7 @@ import { GENERATION_FAILED_TITLE, useCanGenerate, useCanToggleContinuous, useGen
 import { useLibraryStore } from './libraryStore';
 import { useNotificationsStore } from './notificationsStore';
 import { useOutputsStore } from './outputsStore';
+import { useTasksStore } from './tasksStore';
 import { useUndoStore } from './undoStore';
 
 const MODEL: ModelSpec = { id: 'model', name: 'model.safetensors', path: 'D:/m/model.safetensors', default_width: 1024, default_height: 1024, torch_dtype: 'float16', source: null };
@@ -291,6 +292,36 @@ describe('continuous generation and cancel', () => {
 		expect(showGenerated).not.toHaveBeenCalled();
 		expect(store().generating).toBe(false);
 		expect(notifications()).toEqual([]);
+	});
+});
+
+describe('an abandoned generation that the backend completes', () => {
+	const generationEvent = (stage: 'sampling' | 'cancelled' | 'complete') =>
+		({ type: 'generation', task_id: 'generation', stage, message: '', current: 12, total: 12 }) as const;
+
+	it('lists its output once its complete event arrives, not for the generations the client waited for', async () => {
+		setup();
+		const refreshIds = vi.fn().mockResolvedValue([]);
+		useOutputsStore.setState({ refreshIds });
+		const generate = vi.spyOn(api, 'generate').mockImplementation((_request, signal) => untilAborted(signal));
+
+		const running = store().generate();
+		await vi.waitFor(() => expect(generate).toHaveBeenCalledOnce());
+		await store().cancel();
+		await running;
+
+		// The backend reports the cancel request, then completes the generation it was already saving.
+		useTasksStore.getState().applyEvent(generationEvent('cancelled'));
+		expect(refreshIds).not.toHaveBeenCalled();
+		useTasksStore.getState().applyEvent(generationEvent('complete'));
+		expect(refreshIds).toHaveBeenCalledOnce();
+
+		// A generation the client waited for: its output is shown from the response, no extra listing.
+		generate.mockImplementation(async (request) => record(request, '0000000005'));
+		await store().generate();
+		useTasksStore.getState().applyEvent(generationEvent('sampling'));
+		useTasksStore.getState().applyEvent(generationEvent('complete'));
+		expect(refreshIds).toHaveBeenCalledOnce();
 	});
 });
 

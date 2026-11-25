@@ -1,17 +1,7 @@
 // Output browser: first/previous/next/last/delete, generation progress and the metadata of the output
-// being viewed (with its character), Copy prompt and Create character (prefilled from the output). Thin view over the
-// outputs store and the characters store.
-import {
-	Body1,
-	Button,
-	buttonClassNames,
-	Caption1,
-	makeStyles,
-	mergeClasses,
-	Spinner,
-	tokens,
-	Tooltip,
-} from '@fluentui/react-components';
+// being viewed (with its character, one line per LoRA), Copy prompt and Create character (prefilled from the output).
+// Thin view over the outputs store and the characters store. Delete is the danger action (src/ui/stateColors.ts).
+import { Body1, Button, Caption1, makeStyles, mergeClasses, Spinner, tokens, Tooltip } from '@fluentui/react-components';
 import {
 	ArrowNextRegular,
 	ArrowPreviousRegular,
@@ -21,15 +11,16 @@ import {
 	DeleteRegular,
 	PersonAddRegular,
 } from '@fluentui/react-icons';
-import type { ReactElement } from 'react';
+import type { ReactElement, ReactNode } from 'react';
 import { useShallow } from 'zustand/react/shallow';
 import type { AppCommand } from '../../app/commands';
-import { weightedLorasText } from '../../domain/loraSelection';
+import { weightedLoraParts, weightedLoraText } from '../../domain/loraSelection';
 import { outputCharacterText } from '../../domain/outputs';
 import { useCharactersStore } from '../../stores/charactersStore';
 import { selectNavigation, useCurrentOutputDetails, useOutputsStore, type CurrentOutputDetails } from '../../stores/outputsStore';
 import { ariaKeyShortcuts, withShortcut } from '../../ui/keyboard';
 import { PaneContent } from '../../ui/PaneLayout';
+import { useActionClasses } from '../../ui/stateStyles';
 import { GenerationProgress } from '../generation/GenerationProgress';
 
 const useStyles = makeStyles({
@@ -41,24 +32,6 @@ const useStyles = makeStyles({
 	},
 	delete: {
 		marginLeft: 'auto',
-	},
-	danger: {
-		color: tokens.colorStatusDangerForeground1,
-		[`& .${buttonClassNames.icon}`]: {
-			color: tokens.colorStatusDangerForeground1,
-		},
-		':hover': {
-			color: tokens.colorStatusDangerForeground1,
-			[`& .${buttonClassNames.icon}`]: {
-				color: tokens.colorStatusDangerForeground1,
-			},
-		},
-		':hover:active': {
-			color: tokens.colorStatusDangerForeground1,
-			[`& .${buttonClassNames.icon}`]: {
-				color: tokens.colorStatusDangerForeground1,
-			},
-		},
 	},
 	hint: {
 		color: tokens.colorNeutralForeground3,
@@ -83,6 +56,28 @@ const useStyles = makeStyles({
 		fontSize: tokens.fontSizeBase300,
 		lineHeight: tokens.lineHeightBase300,
 		overflowWrap: 'anywhere',
+	},
+	list: {
+		margin: 0,
+		padding: 0,
+		listStyleType: 'none',
+		minWidth: 0,
+	},
+	// One LoRA per line: a long name is truncated (full text in the tooltip), its weight always stays visible.
+	lora: {
+		display: 'flex',
+		columnGap: tokens.spacingHorizontalXS,
+		minWidth: 0,
+	},
+	loraName: {
+		minWidth: 0,
+		overflow: 'hidden',
+		textOverflow: 'ellipsis',
+		whiteSpace: 'nowrap',
+	},
+	loraWeight: {
+		flexShrink: 0,
+		whiteSpace: 'nowrap',
 	},
 	muted: {
 		color: tokens.colorNeutralForeground3,
@@ -118,7 +113,7 @@ function NavigationButton({ label, icon, disabled, onClick, command }: Navigatio
 
 function DetailsList({ details, position }: { details: CurrentOutputDetails; position: string }): JSX.Element {
 	const styles = useStyles();
-	const rows: Array<[string, string]> = [
+	const rows: Array<[string, ReactNode]> = [
 		['Output', `#${details.outputId}`],
 		['Position', position],
 		['Image name', details.imageName],
@@ -128,7 +123,26 @@ function DetailsList({ details, position }: { details: CurrentOutputDetails; pos
 		['Seed', String(details.seed)],
 		['Prompt seed', details.promptSeed === null ? '—' : String(details.promptSeed)],
 		['Model', details.modelName || '—'],
-		['LoRAs', details.loras.length > 0 ? weightedLorasText(details.loras) : 'None'],
+		[
+			'LoRAs',
+			details.loras.length > 0 ? (
+				<ul className={styles.list}>
+					{details.loras.map((lora, index) => {
+						const parts = weightedLoraParts(lora);
+						return (
+							<li key={`${index}:${lora.name}`} className={styles.lora}>
+								<Tooltip content={weightedLoraText(lora)} relationship="inaccessible">
+									<span className={styles.loraName}>{parts.name}</span>
+								</Tooltip>{' '}
+								<span className={styles.loraWeight}>{parts.weight}</span>
+							</li>
+						);
+					})}
+				</ul>
+			) : (
+				'None'
+			),
+		],
 	];
 	if (details.character) {
 		rows.push(['Character', outputCharacterText(details.character)]);
@@ -147,6 +161,7 @@ function DetailsList({ details, position }: { details: CurrentOutputDetails; pos
 
 export function OutputBrowserPane(): JSX.Element {
 	const styles = useStyles();
+	const actions = useActionClasses();
 	const navigation = useOutputsStore(useShallow(selectNavigation));
 	const loadingRecord = useOutputsStore((state) => state.loadingRecord);
 	const first = useOutputsStore((state) => state.first);
@@ -175,7 +190,8 @@ export function OutputBrowserPane(): JSX.Element {
 				<NavigationButton label="Last output" icon={<ArrowNextRegular />} disabled={!navigation.canLast} onClick={() => void last()} />
 				<Tooltip content="Move this output to the app trash (undo restores it)" relationship="description">
 					<Button
-						className={mergeClasses(styles.delete, hasCurrent && styles.danger)}
+						appearance="primary"
+						className={mergeClasses(styles.delete, actions.filled.danger)}
 						icon={<DeleteRegular />}
 						disabled={!hasCurrent}
 						onClick={() => void deleteCurrent()}
@@ -193,7 +209,7 @@ export function OutputBrowserPane(): JSX.Element {
 			) : loadingRecord ? (
 				<Spinner size="tiny" label="Loading output details…" />
 			) : (
-				<Body1 className={styles.muted}>No output yet.</Body1>
+				<Body1 className={styles.muted}>{navigation.count === 0 ? 'No outputs yet: generate an image to see its details here.' : 'No output selected.'}</Body1>
 			)}
 			<div className={styles.actions}>
 				<Button icon={<CopyRegular />} disabled={!details?.prompt} onClick={() => void copyCurrentPrompt()}>

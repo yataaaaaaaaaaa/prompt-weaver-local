@@ -19,10 +19,22 @@ export function clampLoraWeight(weight: number): number {
 	return clamp(weight, LORA_WEIGHT_DEFAULTS.min, LORA_WEIGHT_DEFAULTS.max);
 }
 
-/** Display text of named LoRAs with their weights: 'name (formatWeight)' joined with ', ' (output browser,
- *  "Use these LoRAs" notification). */
+/** The two parts of weightedLoraText: the name and the weight label '(formatWeight)' (the output browser shows them
+ *  apart, so a long name can be truncated while its weight stays visible). */
+export function weightedLoraParts({ name, weight }: { name: string; weight: number }): { name: string; weight: string } {
+	return { name, weight: `(${formatWeight(weight)})` };
+}
+
+/** Display text of one named LoRA with its weight: 'name (formatWeight)'. */
+export function weightedLoraText(item: { name: string; weight: number }): string {
+	const { name, weight } = weightedLoraParts(item);
+	return `${name} ${weight}`;
+}
+
+/** Display text of named LoRAs with their weights: weightedLoraText joined with ', ' ("Use these LoRAs"
+ *  notification). */
 export function weightedLorasText(items: readonly { name: string; weight: number }[]): string {
-	return items.map(({ name, weight }) => `${name} (${formatWeight(weight)})`).join(', ');
+	return items.map(weightedLoraText).join(', ');
 }
 
 /** The LoRA at LORA_WEIGHT_DEFAULTS.weight: how a LoRA enters the selection without an explicit weight (checkbox,

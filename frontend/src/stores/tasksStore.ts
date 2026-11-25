@@ -73,6 +73,9 @@ export const selectGenerationEvent = (state: TasksState): GenerationTaskEvent | 
 	return event ?? null;
 };
 
+/** How the latest generation stands: nothing yet / idle, running, or its terminal outcome. */
+export type GenerationOutcome = 'idle' | 'running' | 'complete' | 'error' | 'cancelled';
+
 export type GenerationProgress = {
 	stage: GenerationStage | null;
 	message: string;
@@ -82,6 +85,11 @@ export type GenerationProgress = {
 	ratio: number;
 	/** loading_model | loading_loras | sampling | saving */
 	active: boolean;
+	outcome: GenerationOutcome;
+	/** Fill of a progress bar (0..1); undefined = indeterminate (loading, step count not known yet). Saving and complete
+	 *  are full; error and cancelled are full too so their status color shows (the bar never ends up empty and
+	 *  colorless after a failure). */
+	value: number | undefined;
 };
 
 const ACTIVE_GENERATION_STAGES: ReadonlySet<GenerationStage> = new Set<GenerationStage>([
@@ -91,7 +99,36 @@ const ACTIVE_GENERATION_STAGES: ReadonlySet<GenerationStage> = new Set<Generatio
 	'saving',
 ]);
 
-export const IDLE_GENERATION_PROGRESS: GenerationProgress = { stage: null, message: '', current: 0, total: 0, ratio: 0, active: false };
+const TERMINAL_GENERATION_OUTCOMES: Readonly<Partial<Record<GenerationStage, GenerationOutcome>>> = {
+	complete: 'complete',
+	error: 'error',
+	cancelled: 'cancelled',
+};
+
+export const IDLE_GENERATION_PROGRESS: GenerationProgress = {
+	stage: null,
+	message: '',
+	current: 0,
+	total: 0,
+	ratio: 0,
+	active: false,
+	outcome: 'idle',
+	value: 0,
+};
+
+function generationOutcomeOf(stage: GenerationStage): GenerationOutcome {
+	return ACTIVE_GENERATION_STAGES.has(stage) ? 'running' : (TERMINAL_GENERATION_OUTCOMES[stage] ?? 'idle');
+}
+
+function progressValueOf(stage: GenerationStage, outcome: GenerationOutcome, total: number, ratio: number): number | undefined {
+	if (outcome === 'idle') {
+		return 0;
+	}
+	if (outcome !== 'running' || stage === 'saving') {
+		return 1;
+	}
+	return total > 0 ? ratio : undefined;
+}
 
 /** Progress view model of a generation event (null = no generation seen yet). */
 export function generationProgressOf(event: GenerationTaskEvent | null): GenerationProgress {
@@ -99,13 +136,16 @@ export function generationProgressOf(event: GenerationTaskEvent | null): Generat
 		return IDLE_GENERATION_PROGRESS;
 	}
 	const ratio = event.total > 0 ? Math.max(0, Math.min(1, event.current / event.total)) : 0;
+	const outcome = generationOutcomeOf(event.stage);
 	return {
 		stage: event.stage,
 		message: event.message,
 		current: event.current,
 		total: event.total,
 		ratio,
-		active: ACTIVE_GENERATION_STAGES.has(event.stage),
+		active: outcome === 'running',
+		outcome,
+		value: progressValueOf(event.stage, outcome, event.total, ratio),
 	};
 }
 

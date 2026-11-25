@@ -4,6 +4,7 @@ import { useCharactersStore } from '../../stores/charactersStore';
 import { useCurrentOutputDetails, useOutputsStore, type CurrentOutputDetails } from '../../stores/outputsStore';
 import { outputCharacter } from '../../test/characterData';
 import { renderWithProviders } from '../../test/render';
+import { hasActionIntent } from '../../test/stateClasses';
 import { OutputBrowserPane } from './OutputBrowserPane';
 
 // The details derivation (record + library names) is the outputs store's; this view only renders it.
@@ -74,7 +75,27 @@ describe('OutputBrowserPane navigation', () => {
 		for (const name of ['First output', 'Previous output', 'Next output', 'Last output', 'Delete', 'Copy prompt']) {
 			expect(button(name)).toBeDisabled();
 		}
-		expect(screen.getByText('No output yet.')).toBeInTheDocument();
+		expect(screen.getByText('No outputs yet: generate an image to see its details here.')).toBeInTheDocument();
+	});
+
+	it('says when outputs exist but none is selected', () => {
+		useOutputsStore.setState({ ids: ['0000000001'], currentId: null });
+		renderWithProviders(<OutputBrowserPane />);
+
+		expect(screen.getByText('No output selected.')).toBeInTheDocument();
+		expect(button('Delete')).toBeDisabled();
+	});
+
+	it('shows Delete as the danger action, disabled without an output', () => {
+		useOutputsStore.setState({ ids: ['0000000001'], currentId: '0000000001' });
+		const { unmount } = renderWithProviders(<OutputBrowserPane />);
+		expect(hasActionIntent(button('Delete'), 'filled', 'danger')).toBe(true);
+		unmount();
+
+		useOutputsStore.setState({ ids: [], currentId: null });
+		renderWithProviders(<OutputBrowserPane />);
+		expect(button('Delete')).toBeDisabled();
+		expect(hasActionIntent(button('Delete'), 'filled', 'danger')).toBe(true);
 	});
 
 	it('calls the outputs store actions', async () => {
@@ -125,7 +146,13 @@ describe('OutputBrowserPane details', () => {
 		expect(value('Seed')).toBe('123456');
 		expect(value('Prompt seed')).toBe('77');
 		expect(value('Model')).toBe('Noobai v50');
-		expect(value('LoRAs')).toBe('Detail tweaker (0.6), Film grain (-1.25)');
+		// One line per LoRA: a name and its weight never wrap apart from the next LoRA.
+		const loras = within(list.getByText('LoRAs').nextElementSibling as HTMLElement).getAllByRole('listitem');
+		expect(loras.map((item) => item.textContent)).toEqual(['Detail tweaker (0.6)', 'Film grain (-1.25)']);
+		// A long name is truncated, its weight never is.
+		const name = within(loras[1]).getByText('Film grain');
+		expect(getComputedStyle(name).textOverflow).toBe('ellipsis');
+		expect(getComputedStyle(within(loras[1]).getByText('(-1.25)')).flexShrink).toBe('0');
 		expect(button('Copy prompt')).toBeEnabled();
 	});
 

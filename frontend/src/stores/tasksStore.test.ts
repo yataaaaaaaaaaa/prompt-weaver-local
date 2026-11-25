@@ -124,6 +124,8 @@ describe('generation progress', () => {
 			total: 30,
 			ratio: 0.1,
 			active: true,
+			outcome: 'running',
+			value: 0.1,
 		});
 		expect(generationProgressOf(generationEvent({ current: 40 })).ratio).toBe(1);
 		expect(generationProgressOf(generationEvent({ current: -2 })).ratio).toBe(0);
@@ -134,6 +136,25 @@ describe('generation progress', () => {
 		for (const stage of ['idle', 'complete', 'error', 'cancelled'] as const) {
 			expect(generationProgressOf(generationEvent({ stage })).active).toBe(false);
 		}
+	});
+
+	it('maps every stage to its outcome and progress bar fill', () => {
+		const cases = [
+			// stage, current, total, outcome, value
+			['idle', 0, 0, 'idle', 0],
+			['loading_model', 0, 0, 'running', undefined],
+			['loading_loras', 0, 0, 'running', undefined],
+			['sampling', 0, 0, 'running', undefined],
+			['sampling', 5, 12, 'running', 5 / 12],
+			['saving', 0, 0, 'running', 1],
+			['complete', 12, 12, 'complete', 1],
+			['error', 0, 0, 'error', 1],
+			['cancelled', 0, 0, 'cancelled', 1],
+		] as const;
+		for (const [stage, current, total, outcome, value] of cases) {
+			expect(generationProgressOf(generationEvent({ stage, current, total })), stage).toMatchObject({ outcome, value, active: outcome === 'running' });
+		}
+		expect(IDLE_GENERATION_PROGRESS).toMatchObject({ outcome: 'idle', value: 0, active: false });
 	});
 
 	it('useGenerationProgress follows the store and is memoized on the event', () => {
