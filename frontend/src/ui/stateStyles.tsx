@@ -2,7 +2,7 @@
 // (src/ui/stateColors.ts). Views apply these classes (mergeClasses) and never pick state tokens themselves.
 //
 //   const surface = useStateSurfaceClasses();      // rows, chips, list items: border + tinted background + text
-//   const frame = useStateFrameClasses();          // windows: frame.window[state] (border) + frame.header[state]
+//   const frame = useStateFrameClasses();          // category cards: frame.card[state] (border) + frame.header[state]
 //   const text = useStateTextClasses();            // text only: color, italic (indirectly disabled), line-through
 //   const accent = useStateAccentClasses();        // icons, checked toggles: the accent color
 //   const badge = useStateBadgeClasses();          // badges: accent outline and icon, readable text
@@ -73,7 +73,7 @@ const useSurfaceStyles = makeStyles(
 	})),
 );
 
-const useFrameWindowStyles = makeStyles(
+const useFrameCardStyles = makeStyles(
 	byState((colors) => ({
 		border: `${tokens.strokeWidthThick} ${colors.borderStyle} ${colors.border}`,
 	})),
@@ -151,9 +151,10 @@ export function useStateSurfaceClasses(): Record<VisualState, string> {
 	return useSurfaceStyles();
 }
 
-/** Windows (FloatingPane frameState): `window` for the frame border, `header` for the tinted header. */
-export function useStateFrameClasses(): { window: Record<VisualState, string>; header: Record<VisualState, string> } {
-	return { window: useFrameWindowStyles(), header: useFrameHeaderStyles() };
+/** Category cards of the prompt board (their category's state): `card` for the frame border, `header` for the tinted
+ *  header. */
+export function useStateFrameClasses(): { card: Record<VisualState, string>; header: Record<VisualState, string> } {
+	return { card: useFrameCardStyles(), header: useFrameHeaderStyles() };
 }
 
 /** Text only: color, plus italic (indirectly disabled) and line-through (skipped). */

@@ -30,6 +30,15 @@ export function ariaKeyShortcuts(command: AppCommand): string | undefined {
 	return keys.length > 0 ? keys.join(' ') : undefined;
 }
 
+/** The keymap label of a command ("Cycle the Create layout"): the name of a control that runs it. */
+export function commandLabel(command: AppCommand): string {
+	const binding = KEY_BINDINGS.find((candidate) => candidate.command === command);
+	if (!binding) {
+		throw new Error(`No key binding for '${command}'`);
+	}
+	return binding.label;
+}
+
 /** Tooltip text with the shortcut hint: "Reorganize categories (Ctrl+O)". */
 export function withShortcut(label: string, command: AppCommand): string {
 	const shortcut = shortcutLabel(command);

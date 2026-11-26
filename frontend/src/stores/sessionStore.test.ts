@@ -15,7 +15,8 @@ import { useNotificationsStore } from './notificationsStore';
 import { useOutputsStore } from './outputsStore';
 import { BOOTSTRAP_TIMEOUT_MS, useSessionStore } from './sessionStore';
 import { useTasksStore } from './tasksStore';
-import { useWorkspaceStore } from './workspaceStore';
+import { useBoardStore } from './boardStore';
+import { useLayoutStore } from './layoutStore';
 
 const legacyState = {
 	categories: [
@@ -87,14 +88,16 @@ function spyOnSeeding() {
 		categories: vi.fn(),
 		rules: vi.fn(),
 		settings: vi.fn((settings: Partial<GenerationSettingsState>) => useGenerationSettingsStore.setState(settings)),
-		windows: vi.fn(),
+		layout: vi.fn(),
+		board: vi.fn(),
 		connect: vi.fn(),
 	};
 	useLibraryStore.setState({ replaceAll: spies.library });
 	useCategoriesStore.setState({ replaceAll: spies.categories });
 	useForbiddenRulesStore.setState({ replaceAll: spies.rules });
 	useGenerationSettingsStore.setState({ replaceAll: spies.settings });
-	useWorkspaceStore.setState({ replaceWindows: spies.windows });
+	useLayoutStore.setState({ importLegacyWorkspace: spies.layout });
+	useBoardStore.setState({ importLegacyWorkspace: spies.board });
 	useTasksStore.setState({ connect: spies.connect });
 	return spies;
 }
@@ -140,17 +143,22 @@ describe('sessionStore.start', () => {
 		expect(spies.settings).toHaveBeenCalledWith(
 			expect.objectContaining({ width: 832, guidanceScale: 5, promptSeedInput: '94', seedInput: '', promptCategorySeedState: {} }),
 		);
-		expect(spies.windows).toHaveBeenCalledWith({
-			'pane:image': { x: 420, y: 8, width: 542, height: 928, z: 228 },
-			'pane:controls': { x: 43, y: 34, width: 359, height: 752, z: 230 },
-			'pane:used': { x: 690, y: 320, width: 790, height: 420, z: 6 },
-			'category:main': { x: 24, y: 24, width: 760, height: 190, z: 210 },
-		});
+		const legacyWorkspace = {
+			windows: {
+				'pane:image': { x: 420, y: 8, width: 542, height: 928, z: 228 },
+				'pane:controls': { x: 43, y: 34, width: 359, height: 752, z: 230 },
+				'pane:used': { x: 690, y: 320, width: 790, height: 420, z: 6 },
+				'category:main': { x: 24, y: 24, width: 760, height: 190, z: 210 },
+			},
+			hiddenPaneIds: [],
+		};
+		expect(spies.layout).toHaveBeenCalledWith(legacyWorkspace);
+		expect(spies.board).toHaveBeenCalledWith(legacyWorkspace);
 		expect(useOutputsStore.getState()).toMatchObject({ ids: payload().output_ids, currentId: '0000000002' });
 		expect(spies.connect).toHaveBeenCalledTimes(1);
 	});
 
-	it('does not seed stores that were already persisted, nor the workspace when a legacy layout store exists', async () => {
+	it('does not seed stores that were already persisted, nor the layout and board when a legacy layout store exists', async () => {
 		vi.spyOn(api, 'bootstrap').mockResolvedValue(
 			payload({ persisted_stores: ['categorie-store', 'library-store', 'settings-store', 'panel-layouts-store'] }),
 		);
@@ -162,8 +170,40 @@ describe('sessionStore.start', () => {
 		expect(spies.library).not.toHaveBeenCalled();
 		expect(spies.categories).not.toHaveBeenCalled();
 		expect(spies.settings).not.toHaveBeenCalled();
-		expect(spies.windows).not.toHaveBeenCalled();
+		expect(spies.layout).not.toHaveBeenCalled();
+		expect(spies.board).not.toHaveBeenCalled();
 		expect(spies.rules).toHaveBeenCalledTimes(1);
+	});
+
+	it("derives the Create layout and the board order from app_state.json's pane and category windows", async () => {
+		vi.spyOn(api, 'bootstrap').mockResolvedValue(payload());
+		const spies = spyOnSeeding();
+		// The real layout and board stores this time (their seeding is what is checked).
+		useLayoutStore.setState({ importLegacyWorkspace: useLayoutStore.getInitialState().importLegacyWorkspace });
+		useBoardStore.setState({ importLegacyWorkspace: useBoardStore.getInitialState().importLegacyWorkspace });
+
+		await session().start();
+
+		expect(spies.connect).toHaveBeenCalledTimes(1);
+		expect(useLayoutStore.getState()).toMatchObject({
+			widths: { viewer: 542, generation: 359 },
+			collapsed: { board: false, viewer: false, generation: false },
+			details: { open: true, tab: 'details' },
+		});
+		expect(useBoardStore.getState().order).toEqual(['main']);
+	});
+
+	it('keeps a persisted layout store as it is and never reads app_state.json windows then', async () => {
+		const own = { widths: { viewer: 900, generation: 500 }, collapsed: { board: false, viewer: false, generation: true }, details: { open: false, tab: 'used' } };
+		setStoreBackend(createMemoryStoreBackend({ 'layout-store': { state: own, version: 0 } }));
+		vi.spyOn(api, 'bootstrap').mockResolvedValue(payload({ persisted_stores: ['layout-store'] }));
+		const spies = spyOnSeeding();
+		useLayoutStore.setState({ importLegacyWorkspace: useLayoutStore.getInitialState().importLegacyWorkspace });
+
+		await session().start();
+
+		expect(useLayoutStore.getState()).toMatchObject(own);
+		expect(spies.board).not.toHaveBeenCalled();
 	});
 
 	it('prefers the persisted current output over the bootstrap one', async () => {
@@ -281,7 +321,7 @@ describe('sessionStore.start', () => {
 		await flushPersistence();
 
 		setStoreBackend({ ...memory, write: async () => Promise.reject(new Error('disk full')) });
-		useWorkspaceStore.getState().setPaneVisible('used', false);
+		useLayoutStore.getState().toggleRegionCollapsed('board');
 		await flushPersistence();
 
 		expect(useNotificationsStore.getState().notifications).toMatchObject([

@@ -1,20 +1,35 @@
 // Notifications domain: the single place where user-facing errors/warnings/info live.
 // Every store reports problems through `notify` / `reportError`; the NotificationsHost view renders them.
 import { create } from 'zustand';
+import type { SectionId } from '../app/sections';
 
 export type NotificationIntent = 'error' | 'warning' | 'success' | 'info';
+
+/** A follow-up the user can take from a notification in one click (e.g. 'Go to Create' after an image's LoRAs were
+ *  selected: navigationStore goToSectionAction). `run` calls store actions only; the notification is dismissed once it
+ *  ran. */
+export type NotificationAction = {
+	label: string;
+	run: () => void;
+	/** The section the action shows (a 'Go to <section>' action): it is not offered while that section is shown
+	 *  (navigationStore useApplicableAction). */
+	section?: SectionId;
+};
 
 export type AppNotification = {
 	id: number;
 	intent: NotificationIntent;
 	title: string | null;
 	message: string;
+	action: NotificationAction | null;
 };
 
 export type NotifyOptions = {
 	title?: string;
 	/** Auto-dismiss delay; errors and warnings stay until dismissed when omitted. */
 	timeoutMs?: number;
+	/** One follow-up action shown as a button of the notification. */
+	action?: NotificationAction;
 };
 
 export type NotificationsState = {
@@ -27,6 +42,8 @@ export type NotificationsActions = {
 	 *  delay restarts) and its id is returned. */
 	notify: (intent: NotificationIntent, message: string, options?: NotifyOptions) => number;
 	dismiss: (id: number) => void;
+	/** Runs the notification's action, then dismisses it (no-op for an unknown id or a notification without action). */
+	runAction: (id: number) => void;
 	clear: () => void;
 };
 
@@ -69,21 +86,36 @@ export const useNotificationsStore = create<NotificationsStore>()((set, get) => 
 		notifications: [],
 		notify: (intent, message, options = {}) => {
 			const title = options.title ?? null;
+			const action = options.action ?? null;
 			const timeoutMs = options.timeoutMs ?? DEFAULT_TIMEOUT_MS[intent];
 			const notifications = get().notifications;
 			const latest = notifications[notifications.length - 1];
-			if (latest && latest.intent === intent && latest.title === title && latest.message === message) {
+			if (
+				latest &&
+				latest.intent === intent &&
+				latest.title === title &&
+				latest.message === message &&
+				latest.action?.label === action?.label
+			) {
 				scheduleDismiss(latest.id, timeoutMs);
 				return latest.id;
 			}
 			const id = nextId++;
-			set((state) => ({ notifications: [...state.notifications, { id, intent, title, message }] }));
+			set((state) => ({ notifications: [...state.notifications, { id, intent, title, message, action }] }));
 			scheduleDismiss(id, timeoutMs);
 			return id;
 		},
 		dismiss: (id) => {
 			cancelTimer(id);
 			set((state) => ({ notifications: state.notifications.filter((item) => item.id !== id) }));
+		},
+		runAction: (id) => {
+			const action = get().notifications.find((item) => item.id === id)?.action;
+			if (!action) {
+				return;
+			}
+			get().dismiss(id);
+			action.run();
 		},
 		clear: () => {
 			for (const id of dismissTimers.keys()) {

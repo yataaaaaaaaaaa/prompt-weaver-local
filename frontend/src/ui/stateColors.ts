@@ -1,5 +1,5 @@
 // THE single owner of the app's semantic state colors: every semantic visual state (the states of prompts, of
-// category windows and of the Used sub-prompts pane) and every action intent (primary / danger / warning buttons)
+// category cards and of the Used sub-prompts list) and every action intent (primary / danger / warning buttons)
 // mapped to Fluent 2 palette, status and brand tokens. Views never pick these tokens themselves: they use the
 // classes of src/ui/stateStyles.tsx (built from this table), and the e2e suite (frontend/e2e) reads this table to
 // check the colors the real browser computes.
@@ -29,7 +29,7 @@ export const VISUAL_STATES = [
 /**
  * - forbiddenLocked: forbidden together with the association source, and a locked prompt is involved (purple);
  * - forbidden: forbidden together with the association source (red);
- * - associated: the association source picked in the Used sub-prompts pane (green): what the next pick associates;
+ * - associated: the association source picked in the Used sub-prompts list (green): what the next pick associates;
  * - current: used by the output being viewed (brand blue);
  * - locked: a locked sub-prompt, always selected (purple accent);
  * - indirectlyDisabled: can never be selected (activation text, locks, forbidden rules) (amber, dashed);

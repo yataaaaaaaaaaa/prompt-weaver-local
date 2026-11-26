@@ -18,6 +18,11 @@ describe('PaneLayout', () => {
 		expect(section).toHaveTextContent('Fields');
 	});
 
+	it('takes a level 2 heading in a full-page detail panel', () => {
+		renderWithProviders(<PaneSection title="Mira" level={2} />);
+		expect(screen.getByRole('region', { name: 'Mira' })).toContainElement(screen.getByRole('heading', { name: 'Mira', level: 2 }));
+	});
+
 	it('PaneGrid: two columns by default; with a minimum column width it may stack (the width is a CSS variable)', () => {
 		const { container, rerender } = renderWithProviders(
 			<PaneGrid>

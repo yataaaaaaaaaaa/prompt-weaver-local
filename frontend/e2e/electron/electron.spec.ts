@@ -1,5 +1,5 @@
 // The real Electron app (electron/main.cjs) against the e2e backend and the e2e Vite server: its window shows the
-// app (not a blank, monochrome or covered window) and the app bar fits the real window on one row. Run with
+// app (not a blank, monochrome or covered window) with the navigation rail and the Create section. Run with
 // `npm run test:e2e:electron` (opens a desktop window).
 import { _electron as electron } from '@playwright/test';
 import { AppDriver } from '../support/app';
@@ -9,7 +9,6 @@ import { expect, test } from '../support/fixtures';
 import { routeRemoteRequests } from '../support/network';
 import { saveScreenshot } from '../support/screenshots';
 import { assertAppVisible, expectOnTop } from '../support/visibility';
-import { expectOneRow } from '../workspace/workspace';
 import appConfig from '../../../config/appConfig.cjs';
 
 /** The environment of the launched app: this process's, minus what would turn electron.exe into plain Node (editor
@@ -38,12 +37,12 @@ test('the Electron window shows the app', async ({}, testInfo) => {
 		const window = await electronApp.firstWindow();
 		const diagnostics = new PageDiagnostics(window);
 		const app = new AppDriver(window);
-		await expect(app.workspace()).toBeVisible({ timeout: 60_000 });
+		await expect(app.navigation()).toBeVisible({ timeout: 60_000 });
 		await app.settle();
 		await assertAppVisible(window);
-		await expect(app.pane('Generation')).toBeVisible();
-		await expectOnTop(app.appBar());
-		await expectOneRow(app);
+		await expect(app.createRegion('generation')).toBeVisible();
+		await expectOnTop(app.navigation());
+		await expectOnTop(app.commandBar());
 		await saveScreenshot(window, testInfo, 'electron-window');
 		diagnostics.expectClean();
 	} finally {

@@ -1,11 +1,11 @@
 // Legacy import: maps the backend's legacy app_state.json / library.json (BootstrapResponse.legacy_state /
 // legacy_library) to the state of the stores that were never persisted. Pure; the session store applies
-// the results through each store's replaceAll/replaceWindows action (same mapping as the pre-refactor app).
+// the results through each store's replaceAll / importLegacyWorkspace action (same mapping as the pre-refactor app).
 import type { AppState, LegacyPaneLayout, LegacyPromptCategory, LegacyPromptEntry, LibraryState as LegacyLibrary } from '../api/types';
 import { categoryKeyOf, priorityOr, type Category, type SubPromptState } from './categories';
 import type { ForbiddenRule } from './forbiddenRules';
 import { generationSettingsFromBackend, type GenerationSettings } from './generationRequest';
-import { categoryWindowKey, isCompleteRect, paneWindowKey, sanitizeWindowLayout, type WindowLayouts } from './layout';
+import { isCompleteRect, legacyCategoryWindowKey, legacyPaneWindowKey, sanitizeLegacyWindow, type LegacyWindowLayouts } from './legacyLayout';
 import { lorasFromLegacyIds, type LibraryData } from './library';
 
 function subPromptState(category: LegacyPromptCategory, prompt: LegacyPromptEntry): SubPromptState {
@@ -59,32 +59,32 @@ export function legacyGenerationSettings(state: AppState): GenerationSettings {
 	return generationSettingsFromBackend(state);
 }
 
-/** Legacy app_state workspace entry -> pane id of src/workspace/paneRegistry.tsx. */
+/** Legacy app_state workspace entry -> pane id of the floating workspace (src/domain/legacyLayout.ts). */
 export const LEGACY_WORKSPACE_PANES = { image: 'image', controls: 'controls', used: 'used' } as const;
 
 type LegacyWorkspace = Partial<Record<keyof typeof LEGACY_WORKSPACE_PANES, LegacyPaneLayout | null>>;
 
 /** Legacy geometry has no backend defaults: incomplete rects import nothing (the frontend defaults apply). */
 function windowFrom(rect: Partial<Record<'x' | 'y' | 'width' | 'height', number | null>>, z: number | null | undefined) {
-	return isCompleteRect(rect) ? sanitizeWindowLayout({ ...rect, z: z ?? undefined }) : null;
+	return isCompleteRect(rect) ? sanitizeLegacyWindow({ ...rect, z: z ?? undefined }) : null;
 }
 
-/** Pane layouts (image/controls/used) and every category's position/size/z_index -> workspace windows.
- *  Entries with non-finite coordinates are skipped. */
-export function legacyWorkspaceWindows(state: Pick<AppState, 'categories'> & { workspace?: LegacyWorkspace | null }): WindowLayouts {
-	const windows: WindowLayouts = {};
+/** Pane layouts (image/controls/used) and every category's position/size/z_index -> legacy workspace windows (from
+ *  which the session store seeds the layout and board stores). Entries with non-finite coordinates are skipped. */
+export function legacyWorkspaceWindows(state: Pick<AppState, 'categories'> & { workspace?: LegacyWorkspace | null }): LegacyWindowLayouts {
+	const windows: LegacyWindowLayouts = {};
 	const workspace: LegacyWorkspace = state.workspace ?? {};
 	for (const [legacyName, paneId] of Object.entries(LEGACY_WORKSPACE_PANES) as [keyof LegacyWorkspace, string][]) {
 		const pane = workspace[legacyName];
 		const layout = pane ? windowFrom(pane, pane.z_index) : null;
 		if (layout) {
-			windows[paneWindowKey(paneId)] = layout;
+			windows[legacyPaneWindowKey(paneId)] = layout;
 		}
 	}
 	for (const category of state.categories) {
 		const layout = windowFrom({ ...category.position, ...category.size }, category.z_index);
 		if (layout) {
-			windows[categoryWindowKey(categoryKeyOf(category.name))] = layout;
+			windows[legacyCategoryWindowKey(categoryKeyOf(category.name))] = layout;
 		}
 	}
 	return windows;

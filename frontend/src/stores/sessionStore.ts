@@ -13,16 +13,17 @@ import {
 } from '../domain/legacyImport';
 import { hydratePersistedStores, setPersistErrorHandler } from '../persistence/persist';
 import { LEGACY_STORE_NAMES, STORE_NAMES } from '../persistence/storeNames';
+import { useBoardStore } from './boardStore';
 import { useCategoriesStore } from './categoriesStore';
 import { useCharactersStore } from './charactersStore';
 import { useForbiddenRulesStore } from './forbiddenRulesStore';
 import { useGenerationSettingsStore } from './generationSettingsStore';
+import { useLayoutStore } from './layoutStore';
 import { useLibraryStore } from './libraryStore';
 import { useModelCatalogStore } from './modelCatalogStore';
 import { describeError, useNotificationsStore } from './notificationsStore';
 import { useOutputsStore } from './outputsStore';
 import { useTasksStore } from './tasksStore';
-import { useWorkspaceStore } from './workspaceStore';
 
 export type SessionPhase = 'idle' | 'booting' | 'ready' | 'failed';
 
@@ -38,12 +39,13 @@ export type SessionActions = {
 	 *  1. api.bootstrap() with retry (250 ms, up to 15 s: the backend may still be starting);
 	 *  2. hydratePersistedStores(every persisted store) - failure => phase 'failed';
 	 *  3. seed every store absent from payload.persisted_stores from legacy_state/legacy_library
-	 *     (src/domain/legacyImport.ts), except the workspace when a legacy layout store exists;
+	 *     (src/domain/legacyImport.ts); the layout and board stores only when no layout store at all exists (theirs,
+	 *     or a legacy floating-workspace store, which their own `legacy` option already migrated);
 	 *  4. useOutputsStore.initialize(payload.output_ids, persisted currentId ?? payload.current_output_id);
 	 *  5. useTasksStore.connect(), then useModelCatalogStore.resumeInstalls() in the background (fire and forget:
 	 *     never fails or delays boot); setPersistErrorHandler -> notifications; phase 'ready'.
 	 *  Right after step 2, useCharactersStore.load() starts in the background (fire and forget: it never fails or
-	 *  delays boot; a failure only sets the characters store's loadError, which the Characters pane shows). */
+	 *  delays boot; a failure only sets the characters store's loadError, which the Characters section shows). */
 	start: () => Promise<void>;
 	/** After 'failed': resets and runs start() again. */
 	retry: () => Promise<void>;
@@ -71,11 +73,22 @@ async function bootstrapWithRetry(): Promise<BootstrapResponse> {
 
 /** Every persisted store, hydrated together at boot. */
 function persistedStores() {
-	return [useCategoriesStore, useForbiddenRulesStore, useLibraryStore, useGenerationSettingsStore, useOutputsStore, useWorkspaceStore];
+	return [
+		useCategoriesStore,
+		useForbiddenRulesStore,
+		useLibraryStore,
+		useGenerationSettingsStore,
+		useOutputsStore,
+		useLayoutStore,
+		useBoardStore,
+	];
 }
 
+/** Stores holding a workspace layout: when one exists, app_state.json's window positions are ignored. */
 const WORKSPACE_LAYOUT_STORES: readonly string[] = [
-	STORE_NAMES.workspace,
+	STORE_NAMES.layout,
+	STORE_NAMES.board,
+	LEGACY_STORE_NAMES.workspace,
 	LEGACY_STORE_NAMES.panelLayouts,
 	LEGACY_STORE_NAMES.workspaceZIndex,
 ];
@@ -99,7 +112,9 @@ function seedFromLegacy(payload: BootstrapResponse): void {
 		useGenerationSettingsStore.getState().replaceAll(legacyGenerationSettings(state));
 	}
 	if (!WORKSPACE_LAYOUT_STORES.some((name) => persisted.has(name))) {
-		useWorkspaceStore.getState().replaceWindows(legacyWorkspaceWindows(state));
+		const legacy = { windows: legacyWorkspaceWindows(state), hiddenPaneIds: [] };
+		useLayoutStore.getState().importLegacyWorkspace(legacy);
+		useBoardStore.getState().importLegacyWorkspace(legacy);
 	}
 }
 

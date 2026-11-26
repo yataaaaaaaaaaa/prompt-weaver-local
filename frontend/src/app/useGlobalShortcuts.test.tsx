@@ -36,14 +36,14 @@ afterEach(() => {
 
 describe('useGlobalShortcuts', () => {
 	it('maps window keydown events to commands and runs them', () => {
-		vi.mocked(commandForKeyEvent).mockReturnValue('reorganize-categories');
+		vi.mocked(commandForKeyEvent).mockReturnValue('sort-categories');
 		renderHook(() => useGlobalShortcuts());
 
 		const event = new KeyboardEvent('keydown', { key: 'o', ctrlKey: true, bubbles: true, cancelable: true });
 		document.body.dispatchEvent(event);
 
 		expect(commandForKeyEvent).toHaveBeenCalledWith(event);
-		expect(runCommand).toHaveBeenCalledWith('reorganize-categories', 'keyboard');
+		expect(runCommand).toHaveBeenCalledWith('sort-categories', 'keyboard');
 		expect(event.defaultPrevented).toBe(true);
 	});
 
@@ -65,11 +65,11 @@ describe('useGlobalShortcuts', () => {
 		const bridge = installDesktopBridge();
 		renderHook(() => useGlobalShortcuts());
 
-		bridge.emit('toggle-visibility');
+		bridge.emit('cycle-create-layout');
 		bridge.emit('compute-indirectly-disabled');
 
 		expect(runCommand).toHaveBeenCalledTimes(1);
-		expect(runCommand).toHaveBeenCalledWith('toggle-visibility', 'menu');
+		expect(runCommand).toHaveBeenCalledWith('cycle-create-layout', 'menu');
 	});
 
 	it('removes both listeners on unmount', () => {

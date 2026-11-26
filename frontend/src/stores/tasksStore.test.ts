@@ -6,6 +6,10 @@ import {
 	downloadProgressOf,
 	generationProgressOf,
 	IDLE_GENERATION_PROGRESS,
+	overallDownloadRatio,
+	selectActiveDownloadCount,
+	selectActiveDownloadRatio,
+	selectActiveDownloads,
 	selectDownloadEvent,
 	selectGenerationEvent,
 	TERMINAL_TASK_STAGES,
@@ -269,5 +273,43 @@ describe('waitForTask', () => {
 		useTasksStore.getState().connect();
 		FakeSocket.instances[0].emit(download({ stage: 'cancelled', message: 'Cancelled' }));
 		await expect(waiting).resolves.toMatchObject({ task_id: 'd1', stage: 'cancelled' });
+	});
+});
+
+describe('active downloads', () => {
+	it('lists the queued and downloading downloads only, and counts them', () => {
+		const tasks = useTasksStore.getState();
+		tasks.applyEvent(generationEvent());
+		tasks.applyEvent(buildDownloadEvent('a', { stage: 'queued' }));
+		tasks.applyEvent(buildDownloadEvent('b', { stage: 'downloading' }));
+		tasks.applyEvent(buildDownloadEvent('c', { stage: 'complete' }));
+		tasks.applyEvent(buildDownloadEvent('d', { stage: 'error' }));
+		tasks.applyEvent(buildDownloadEvent('e', { stage: 'cancelled' }));
+
+		const state = useTasksStore.getState();
+		expect(selectActiveDownloads(state).map((event) => event.task_id)).toEqual(['a', 'b']);
+		expect(selectActiveDownloadCount(state)).toBe(2);
+	});
+
+	it('is referentially stable until an event arrives', () => {
+		useTasksStore.getState().applyEvent(buildDownloadEvent('a'));
+		const first = selectActiveDownloads(useTasksStore.getState());
+		expect(selectActiveDownloads(useTasksStore.getState())).toBe(first);
+
+		useTasksStore.getState().applyEvent(buildDownloadEvent('a', { stage: 'complete' }));
+		expect(selectActiveDownloads(useTasksStore.getState())).toEqual([]);
+		expect(selectActiveDownloadCount(useTasksStore.getState())).toBe(0);
+	});
+
+	it('sums the progress of the downloads whose size is known', () => {
+		const sized = (taskId: string, current: number, total: number) => buildDownloadEvent(taskId, { current, total });
+		expect(overallDownloadRatio([])).toBeUndefined();
+		expect(overallDownloadRatio([sized('a', 5, 0)])).toBeUndefined();
+		expect(overallDownloadRatio([sized('a', 1, 4), sized('b', 3, 4), sized('c', 9, 0)])).toBe(0.5);
+		expect(overallDownloadRatio([sized('a', 9, 4)])).toBe(1);
+
+		useTasksStore.getState().applyEvent(sized('a', 1, 4));
+		useTasksStore.getState().applyEvent(buildDownloadEvent('b', { stage: 'complete', current: 4, total: 4 }));
+		expect(selectActiveDownloadRatio(useTasksStore.getState())).toBe(0.25);
 	});
 });

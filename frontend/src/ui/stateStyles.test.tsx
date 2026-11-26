@@ -32,7 +32,7 @@ describe('state styles', () => {
 		for (const state of VISUAL_STATES) {
 			for (const classes of [
 				result.current.surface,
-				result.current.frame.window,
+				result.current.frame.card,
 				result.current.frame.header,
 				result.current.text,
 				result.current.accent,

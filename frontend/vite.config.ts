@@ -22,5 +22,8 @@ export default defineConfig({
 		setupFiles: ['./src/test/setup.ts'],
 		include: ['src/**/*.test.{ts,tsx}', 'electron/**/*.test.ts'],
 		restoreMocks: true,
+		// Fluent components (popovers with focus traps, menus, dialogs) render slowly in jsdom while many test files run
+		// in parallel: one generous limit for every test instead of per-file overrides.
+		testTimeout: 20_000,
 	},
 });

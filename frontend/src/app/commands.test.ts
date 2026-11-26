@@ -4,7 +4,8 @@ import { useGenerationStore } from '../stores/generationStore';
 import { useNotificationsStore } from '../stores/notificationsStore';
 import { useOutputsStore } from '../stores/outputsStore';
 import { useUndoStore } from '../stores/undoStore';
-import { useWorkspaceStore } from '../stores/workspaceStore';
+import { useLayoutStore } from '../stores/layoutStore';
+import { useNavigationStore } from '../stores/navigationStore';
 import {
 	APP_COMMANDS,
 	COMMAND_DEDUPE_MS,
@@ -21,6 +22,7 @@ import {
 	type AppCommand,
 	type KeyLike,
 } from './commands';
+import { SECTION_COMMANDS } from './sections';
 
 const key = (value: string, modifiers: Partial<Omit<KeyLike, 'key'>> = {}): KeyLike => ({
 	key: value,
@@ -38,6 +40,12 @@ describe('keymap.json', () => {
 		}
 		for (const command of APP_COMMANDS) {
 			expect(KEY_BINDINGS.some((binding) => binding.command === command), command).toBe(true);
+		}
+	});
+
+	it('has a command showing every section', () => {
+		for (const command of Object.values(SECTION_COMMANDS)) {
+			expect(isAppCommand(command), command).toBe(true);
 		}
 	});
 
@@ -65,9 +73,9 @@ describe('keyEventToCommand', () => {
 		[key('g', { metaKey: true }), false, 'generate'],
 		[key('g', { ctrlKey: true }), true, 'generate'],
 		[key('t', { ctrlKey: true }), true, 'toggle-continuous-generate'],
-		[key('h', { ctrlKey: true }), false, 'toggle-visibility'],
+		[key('h', { ctrlKey: true }), false, 'cycle-create-layout'],
 		[key('h', { ctrlKey: true }), true, null],
-		[key('o', { ctrlKey: true }), false, 'reorganize-categories'],
+		[key('o', { ctrlKey: true }), false, 'sort-categories'],
 		[key('z', { ctrlKey: true }), false, 'undo'],
 		[key('z', { ctrlKey: true }), true, null],
 		[key('z', { ctrlKey: true, shiftKey: true }), false, null],
@@ -156,6 +164,21 @@ describe('isKeyOwnedByFocusedWidget', () => {
 		expect(isKeyOwnedByFocusedWidget(keyFrom(menuItem, { ctrlKey: true }))).toBe(false);
 		expect(isKeyOwnedByFocusedWidget({ target: null, ctrlKey: false, metaKey: false, altKey: false })).toBe(false);
 	});
+
+	it('never gives function keys to a widget: F6 cycles the regions from a toolbar or a splitter too', () => {
+		const toolbar = document.createElement('div');
+		toolbar.setAttribute('role', 'toolbar');
+		const toolbarButton = document.createElement('button');
+		toolbar.appendChild(toolbarButton);
+		const splitter = document.createElement('div');
+		splitter.setAttribute(OWNS_KEYS_ATTRIBUTE, '');
+
+		expect(isKeyOwnedByFocusedWidget({ ...keyFrom(toolbarButton), key: 'F6' })).toBe(false);
+		expect(isKeyOwnedByFocusedWidget({ ...keyFrom(splitter), key: 'F6' })).toBe(false);
+		expect(isKeyOwnedByFocusedWidget({ ...keyFrom(splitter), key: 'ArrowLeft' })).toBe(true);
+		expect(commandForKeyEvent({ ...key('F6', { shiftKey: true }), target: toolbarButton })).toBe('previous-region');
+		expect(commandForKeyEvent({ ...key('F6'), target: splitter })).toBe('next-region');
+	});
 });
 
 describe('commandForKeyEvent', () => {
@@ -190,14 +213,18 @@ describe('runCommand', () => {
 		const spies = {
 			generate: vi.fn(async () => undefined),
 			toggleContinuous: vi.fn(async () => undefined),
-			cycleVisibilityMode: vi.fn(),
+			cycleFocusLayout: vi.fn(),
+			showSection: vi.fn(),
+			cycleRegion: vi.fn(),
+			focusSearch: vi.fn(),
 			reorganize: vi.fn(),
 			undo: vi.fn(async () => undefined),
 			previous: vi.fn(async () => undefined),
 			next: vi.fn(async () => undefined),
 		};
 		useGenerationStore.setState({ generate: spies.generate, toggleContinuous: spies.toggleContinuous });
-		useWorkspaceStore.setState({ cycleVisibilityMode: spies.cycleVisibilityMode });
+		useLayoutStore.setState({ cycleFocusLayout: spies.cycleFocusLayout });
+		useNavigationStore.setState({ showSection: spies.showSection, cycleRegion: spies.cycleRegion, focusSearch: spies.focusSearch });
 		useCategoriesStore.setState({ reorganize: spies.reorganize });
 		useUndoStore.setState({ undo: spies.undo });
 		useOutputsStore.setState({ previous: spies.previous, next: spies.next });
@@ -206,19 +233,44 @@ describe('runCommand', () => {
 
 	it('dispatches every command to its store action', () => {
 		const spies = stubActions();
-		const expected: Record<AppCommand, ReturnType<typeof vi.fn>> = {
-			generate: spies.generate,
-			'toggle-continuous-generate': spies.toggleContinuous,
-			'toggle-visibility': spies.cycleVisibilityMode,
-			'reorganize-categories': spies.reorganize,
-			undo: spies.undo,
-			'output-previous': spies.previous,
-			'output-next': spies.next,
+		const expected: Record<AppCommand, [ReturnType<typeof vi.fn>, unknown[]]> = {
+			generate: [spies.generate, []],
+			'toggle-continuous-generate': [spies.toggleContinuous, []],
+			'show-create': [spies.showSection, ['create', { focus: true }]],
+			'show-models': [spies.showSection, ['models', { focus: true }]],
+			'show-images': [spies.showSection, ['images', { focus: true }]],
+			'show-characters': [spies.showSection, ['characters', { focus: true }]],
+			'next-region': [spies.cycleRegion, [1]],
+			'previous-region': [spies.cycleRegion, [-1]],
+			find: [spies.focusSearch, []],
+			'cycle-create-layout': [spies.cycleFocusLayout, []],
+			'sort-categories': [spies.reorganize, []],
+			undo: [spies.undo, []],
+			'output-previous': [spies.previous, []],
+			'output-next': [spies.next, []],
 		};
 		for (const command of APP_COMMANDS) {
+			const [spy, args] = expected[command];
+			spy.mockClear();
+			resetCommandsForTests();
 			runCommand(command);
-			expect(expected[command], command).toHaveBeenCalledTimes(1);
+			expect(spy, command).toHaveBeenCalledTimes(1);
+			expect(spy, command).toHaveBeenCalledWith(...args);
 		}
+	});
+
+	it('browses outputs and cycles the Create layout only while Create is shown (else Ctrl+H shows it)', () => {
+		const spies = stubActions();
+		useNavigationStore.setState({ section: 'models' });
+
+		runCommand('output-next');
+		runCommand('output-previous');
+		runCommand('cycle-create-layout');
+
+		expect(spies.next).not.toHaveBeenCalled();
+		expect(spies.previous).not.toHaveBeenCalled();
+		expect(spies.cycleFocusLayout).not.toHaveBeenCalled();
+		expect(spies.showSection).toHaveBeenCalledWith('create');
 	});
 
 	it('ignores the echo of a key press from the other source (keydown + Electron menu) within 200 ms', () => {
@@ -249,27 +301,27 @@ describe('runCommand', () => {
 
 	it('runs every press from the same source, however fast (Ctrl+H twice, a held arrow key)', () => {
 		const spies = stubActions();
-		runCommand('toggle-visibility', 'keyboard');
-		runCommand('toggle-visibility', 'keyboard');
-		expect(spies.cycleVisibilityMode).toHaveBeenCalledTimes(2);
+		runCommand('cycle-create-layout', 'keyboard');
+		runCommand('cycle-create-layout', 'keyboard');
+		expect(spies.cycleFocusLayout).toHaveBeenCalledTimes(2);
 
 		runCommand('output-next');
 		runCommand('output-next');
 		runCommand('output-next');
 		expect(spies.next).toHaveBeenCalledTimes(3);
 
-		runCommand('reorganize-categories', 'menu');
-		runCommand('reorganize-categories', 'menu');
+		runCommand('sort-categories', 'menu');
+		runCommand('sort-categories', 'menu');
 		expect(spies.reorganize).toHaveBeenCalledTimes(2);
 	});
 
 	it('counts an ignored echo as nothing: the next press of the first source still runs', () => {
 		const spies = stubActions();
-		runCommand('toggle-visibility', 'keyboard');
-		runCommand('toggle-visibility', 'menu');
-		runCommand('toggle-visibility', 'keyboard');
-		runCommand('toggle-visibility', 'menu');
-		expect(spies.cycleVisibilityMode).toHaveBeenCalledTimes(2);
+		runCommand('cycle-create-layout', 'keyboard');
+		runCommand('cycle-create-layout', 'menu');
+		runCommand('cycle-create-layout', 'keyboard');
+		runCommand('cycle-create-layout', 'menu');
+		expect(spies.cycleFocusLayout).toHaveBeenCalledTimes(2);
 	});
 
 	it('reports failing commands', async () => {
@@ -280,7 +332,7 @@ describe('runCommand', () => {
 		});
 		useUndoStore.setState({ undo: () => Promise.reject(new Error('async nope')) });
 
-		runCommand('reorganize-categories');
+		runCommand('sort-categories');
 		runCommand('undo');
 		await vi.runAllTimersAsync();
 

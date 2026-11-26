@@ -1,6 +1,6 @@
 // Infinite scroll for any paged list: returns a callback ref for a sentinel element placed after the list; when the
 // sentinel comes within rootMargin of the visible area of its scroll container (the nearest scrollable ancestor,
-// e.g. a pane body; else the viewport) onReach is called. Pure view helper: the paging itself (cursor, requests,
+// e.g. a section's results region; else the viewport) onReach is called. Pure view helper: the paging itself (cursor, requests,
 // "already loading" guards) stays in the owning store. No-op where IntersectionObserver does not exist.
 import { useEffect, useRef, useState } from 'react';
 

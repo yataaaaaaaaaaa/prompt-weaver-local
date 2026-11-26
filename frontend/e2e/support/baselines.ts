@@ -4,10 +4,11 @@
 // caller's own masks, so baselines are stable on any port pair and any machine run.
 import { expect, type Locator, type Page } from '@playwright/test';
 
-/** Content that differs between runs: the data directory (a temp dir per run and reset). Add new volatile content
- *  here, once, instead of masking it in every test. */
+/** Content that differs between runs: the data directory (a temp dir per run and reset) and the backend address (its
+ *  port), both in the rail's About popover. Add new volatile content here, once, instead of masking it in every
+ *  test. */
 function volatileLocators(page: Page): Locator[] {
-	return [page.getByText(/^Data directory:/)];
+	return [page.getByText(/^Data directory:/), page.getByText(/^Backend:/)];
 }
 
 export type BaselineOptions = {

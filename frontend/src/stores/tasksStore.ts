@@ -209,3 +209,40 @@ export function useDownloadProgress(taskId: string | null): DownloadProgress | n
 	const event = useTasksStore(useMemo(() => selectDownloadEvent(taskId), [taskId]));
 	return useMemo(() => downloadProgressOf(event), [event]);
 }
+
+const NO_DOWNLOADS: DownloadTaskEvent[] = [];
+let activeDownloadsMemo: { events: Record<string, TaskEvent>; active: DownloadTaskEvent[] } | null = null;
+
+/** Every download still running (queued or downloading), whatever started it (model library installs, "Use these
+ *  LoRAs", IP-Adapter files), in task order. Memoized on the events record: referentially stable between events. */
+export const selectActiveDownloads = (state: TasksState): DownloadTaskEvent[] => {
+	if (activeDownloadsMemo?.events !== state.events) {
+		const active = Object.values(state.events).filter(
+			(event): event is DownloadTaskEvent => event.type === 'download' && ACTIVE_DOWNLOAD_STAGES.has(event.stage),
+		);
+		activeDownloadsMemo = { events: state.events, active: active.length > 0 ? active : NO_DOWNLOADS };
+	}
+	return activeDownloadsMemo.active;
+};
+
+/** How many downloads are running (the Models navigation badge, the shell's download indicator). */
+export const selectActiveDownloadCount = (state: TasksState): number => selectActiveDownloads(state).length;
+
+/** Overall progress of several downloads (0..1): received bytes over expected bytes of those whose size is known;
+ *  undefined (indeterminate) while no size is known. */
+export function overallDownloadRatio(downloads: readonly DownloadTaskEvent[]): number | undefined {
+	const sized = downloads.filter((event) => event.total > 0);
+	if (sized.length === 0) {
+		return undefined;
+	}
+	const current = sized.reduce((sum, event) => sum + Math.min(event.current, event.total), 0);
+	const total = sized.reduce((sum, event) => sum + event.total, 0);
+	return Math.max(0, Math.min(1, current / total));
+}
+
+/** Overall progress of the running downloads (the rail's downloads indicator); undefined while no size is known. */
+export const selectActiveDownloadRatio = (state: TasksState): number | undefined => overallDownloadRatio(selectActiveDownloads(state));
+
+export function useActiveDownloadCount(): number {
+	return useTasksStore(selectActiveDownloadCount);
+}

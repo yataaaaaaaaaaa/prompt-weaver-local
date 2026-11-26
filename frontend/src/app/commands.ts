@@ -4,16 +4,25 @@
 import keymap from './keymap.json';
 import { useCategoriesStore } from '../stores/categoriesStore';
 import { useGenerationStore } from '../stores/generationStore';
+import { useLayoutStore } from '../stores/layoutStore';
+import { useNavigationStore } from '../stores/navigationStore';
 import { reportError } from '../stores/notificationsStore';
 import { useOutputsStore } from '../stores/outputsStore';
 import { useUndoStore } from '../stores/undoStore';
-import { useWorkspaceStore } from '../stores/workspaceStore';
+import type { SectionId } from './sections';
 
 export const APP_COMMANDS = [
 	'generate',
 	'toggle-continuous-generate',
-	'toggle-visibility',
-	'reorganize-categories',
+	'show-create',
+	'show-models',
+	'show-images',
+	'show-characters',
+	'next-region',
+	'previous-region',
+	'find',
+	'cycle-create-layout',
+	'sort-categories',
 	'undo',
 	'output-previous',
 	'output-next',
@@ -76,8 +85,8 @@ export function isEditableTarget(target: EventTarget | null): boolean {
 // Keys owned by the focused widget
 // ---------------------------------------------------------------------------
 
-/** Marks an element that handles plain (unmodified) keys itself, e.g. the window move/resize handles
- *  (views spread `ownsKeysProps` from src/ui/keyboard.ts). */
+/** Marks an element that handles plain (unmodified) keys itself, e.g. the splitters, the rail and the reorder
+ *  handles of the board (views spread `ownsKeysProps` from src/ui/keyboard.ts). */
 export const OWNS_KEYS_ATTRIBUTE = 'data-owns-keys';
 
 /** ARIA composite widgets that move focus or change values with arrow keys (Fluent menus, toolbars,
@@ -86,10 +95,14 @@ const KEY_OWNER_ROLES = ['combobox', 'grid', 'listbox', 'menu', 'menubar', 'radi
 
 const KEY_OWNER_SELECTOR = [`[${OWNS_KEYS_ATTRIBUTE}]`, ...KEY_OWNER_ROLES.map((role) => `[role="${role}"]`)].join(', ');
 
+/** Function keys (F6 region cycling) belong to the app wherever the focus is: no widget uses them. */
+const FUNCTION_KEY = /^F\d{1,2}$/;
+
 /** True when a plain key press belongs to the focused widget (marked with OWNS_KEYS_ATTRIBUTE or inside a
- *  composite widget) rather than to the global shortcuts. Modified presses (Ctrl/Cmd/Alt) never do. */
-export function isKeyOwnedByFocusedWidget(event: Pick<KeyboardEvent, 'target' | 'ctrlKey' | 'metaKey' | 'altKey'>): boolean {
-	if (event.ctrlKey || event.metaKey || event.altKey) {
+ *  composite widget) rather than to the global shortcuts. Modified presses (Ctrl/Cmd/Alt) and function keys never
+ *  do. */
+export function isKeyOwnedByFocusedWidget(event: Pick<KeyboardEvent, 'target' | 'ctrlKey' | 'metaKey' | 'altKey'> & { key?: string }): boolean {
+	if (event.ctrlKey || event.metaKey || event.altKey || (event.key !== undefined && FUNCTION_KEY.test(event.key))) {
 		return false;
 	}
 	const target = event.target;
@@ -187,14 +200,28 @@ export const COMMAND_DEDUPE_MS = 200;
 /** Where a command comes from: a renderer keydown, or the Electron menu (its accelerator or a click). */
 export type CommandSource = 'keyboard' | 'menu';
 
+const showSection = (section: SectionId) => useNavigationStore.getState().showSection(section);
+/** Ctrl+1..4 and the menu: show the section and move the keyboard focus into it (its first region). */
+const openSection = (section: SectionId) => useNavigationStore.getState().showSection(section, { focus: true });
+const isCreateShown = () => useNavigationStore.getState().section === 'create';
+
 const COMMAND_HANDLERS: Record<AppCommand, () => unknown> = {
 	generate: () => useGenerationStore.getState().generate(),
 	'toggle-continuous-generate': () => useGenerationStore.getState().toggleContinuous(),
-	'toggle-visibility': () => useWorkspaceStore.getState().cycleVisibilityMode(),
-	'reorganize-categories': () => useCategoriesStore.getState().reorganize(),
+	'show-create': () => openSection('create'),
+	'show-models': () => openSection('models'),
+	'show-images': () => openSection('images'),
+	'show-characters': () => openSection('characters'),
+	'next-region': () => useNavigationStore.getState().cycleRegion(1),
+	'previous-region': () => useNavigationStore.getState().cycleRegion(-1),
+	find: () => useNavigationStore.getState().focusSearch(),
+	// The Create layout: Create is shown first when another section is (the cycle then applies to what the user sees).
+	'cycle-create-layout': () => (isCreateShown() ? useLayoutStore.getState().cycleFocusLayout() : showSection('create')),
+	'sort-categories': () => useCategoriesStore.getState().reorganize(),
 	undo: () => useUndoStore.getState().undo(),
-	'output-previous': () => useOutputsStore.getState().previous(),
-	'output-next': () => useOutputsStore.getState().next(),
+	// The output arrows browse the viewer of the Create section only (they never change outputs out of sight).
+	'output-previous': () => (isCreateShown() ? useOutputsStore.getState().previous() : undefined),
+	'output-next': () => (isCreateShown() ? useOutputsStore.getState().next() : undefined),
 };
 
 let lastCommand: { command: AppCommand; source: CommandSource; at: number } | null = null;

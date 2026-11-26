@@ -5,8 +5,8 @@ import { useSessionStore } from '../stores/sessionStore';
 import { renderWithProviders } from '../test/render';
 import { App } from './App';
 
-// The workspace has its own tests; here it only has to appear once the session is ready.
-vi.mock('../workspace/Workspace', () => ({ Workspace: () => <div data-testid="workspace" /> }));
+// The shell has its own tests; here it only has to appear once the session is ready.
+vi.mock('../shell/AppShell', () => ({ AppShell: () => <div data-testid="app-shell" /> }));
 
 function stubSession(phase: 'idle' | 'booting' | 'ready' | 'failed') {
 	const start = vi.fn(async () => undefined);
@@ -23,7 +23,7 @@ describe('App', () => {
 
 		expect(start).toHaveBeenCalledTimes(1);
 		expect(screen.getByText('Connecting to the backend…')).toBeInTheDocument();
-		expect(screen.queryByTestId('workspace')).not.toBeInTheDocument();
+		expect(screen.queryByTestId('app-shell')).not.toBeInTheDocument();
 	});
 
 	it('offers Retry when booting failed', async () => {
@@ -34,13 +34,13 @@ describe('App', () => {
 		expect(retry).toHaveBeenCalledTimes(1);
 	});
 
-	it('shows the workspace once the session is ready', () => {
+	it('shows the app shell once the session is ready', () => {
 		stubSession('booting');
 		renderWithProviders(<App />);
 
 		act(() => useSessionStore.setState({ phase: 'ready' }));
 
-		expect(screen.getByTestId('workspace')).toBeInTheDocument();
+		expect(screen.getByTestId('app-shell')).toBeInTheDocument();
 		expect(screen.queryByText('Connecting to the backend…')).not.toBeInTheDocument();
 	});
 

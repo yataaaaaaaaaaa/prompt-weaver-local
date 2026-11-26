@@ -7,7 +7,7 @@
 import { readFileSync } from 'node:fs';
 import path from 'node:path';
 import { expect, type APIRequestContext, type Page } from '@playwright/test';
-import { STORE_NAMES, type StoreName } from '../../src/persistence/storeNames';
+import { STORE_NAMES, type LegacyStoreName, type StoreName } from '../../src/persistence/storeNames';
 import { BACKEND_DIR } from './env';
 
 /** E2EResetRequest of backend/tests/e2e/options.py (see there for every field and its default). */
@@ -44,8 +44,9 @@ export function storeFile(name: StoreName, state: Record<string, unknown>, versi
 	return { [`stores/${name}/state.json`]: { state, version } };
 }
 
-/** The envelope of a store in the committed fixture data (backend/tests/e2e/fixtures/data/stores/<name>). */
-export function fixtureStore<T>(name: StoreName): StoreEnvelope<T> {
+/** The envelope of a store in the committed fixture data (backend/tests/e2e/fixtures/data/stores/<name>), legacy
+ *  stores included (the migration tests compare them with what the backend holds after the app ran). */
+export function fixtureStore<T>(name: StoreName | LegacyStoreName): StoreEnvelope<T> {
 	const file = path.join(BACKEND_DIR, 'tests', 'e2e', 'fixtures', 'data', 'stores', name, 'state.json');
 	return JSON.parse(readFileSync(file, 'utf8')) as StoreEnvelope<T>;
 }
@@ -54,15 +55,6 @@ export function fixtureStore<T>(name: StoreName): StoreEnvelope<T> {
 export function fixtureStoreFile<T extends Record<string, unknown>>(name: StoreName, change: (state: T) => T): Record<string, unknown> {
 	const { state, version } = fixtureStore<T>(name);
 	return storeFile(name, change(state), version);
-}
-
-type WindowRect = { x: number; y: number; width: number; height: number; z: number };
-type WorkspaceState = { windows: Record<string, WindowRect>; hiddenPaneIds: string[] } & Record<string, unknown>;
-
-/** E2EResetOptions.files replacing the workspace store: the fixture's layout with `windows` overridden (by window key,
- *  e.g. 'pane:models') and exactly `hiddenPaneIds` hidden. */
-export function workspaceLayout(windows: Record<string, WindowRect>, hiddenPaneIds: string[]): Record<string, unknown> {
-	return fixtureStoreFile<WorkspaceState>(STORE_NAMES.workspace, (state) => ({ ...state, windows: { ...state.windows, ...windows }, hiddenPaneIds }));
 }
 
 /**

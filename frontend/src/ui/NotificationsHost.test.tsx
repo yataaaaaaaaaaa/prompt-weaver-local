@@ -1,5 +1,8 @@
 import { act, screen, waitFor, within } from '@testing-library/react';
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
+import { COLLAPSED_REGION_WIDTH } from '../domain/layout';
+import { useLayoutStore } from '../stores/layoutStore';
+import { goToSectionAction, useNavigationStore } from '../stores/navigationStore';
 import { useNotificationsStore } from '../stores/notificationsStore';
 import { renderWithProviders } from '../test/render';
 import { NotificationsHost } from './NotificationsHost';
@@ -9,6 +12,23 @@ describe('NotificationsHost', () => {
 		const { container } = renderWithProviders(<NotificationsHost />);
 		// Only the Fluent provider element of the test wrapper.
 		expect(container.firstElementChild).toBeEmptyDOMElement();
+	});
+
+	it('keeps clear of the generation panel while Create is shown, and takes the corner elsewhere', () => {
+		useLayoutStore.setState({ widths: { viewer: 560, generation: 420 } });
+		act(() => {
+			useNotificationsStore.getState().notify('error', 'Saving failed.');
+		});
+		renderWithProviders(<NotificationsHost />);
+		const region = screen.getByRole('region', { name: 'Notifications' });
+
+		expect(region.style.right).toContain('420px');
+
+		act(() => useLayoutStore.getState().setRegionCollapsed('generation', true));
+		expect(region.style.right).toContain(`${COLLAPSED_REGION_WIDTH}px`);
+
+		act(() => useNavigationStore.getState().showSection('models'));
+		expect(region.style.right).toContain('0px');
 	});
 
 	it('renders every notification with its title and message', () => {
@@ -59,5 +79,34 @@ describe('NotificationsHost', () => {
 
 		expect(useNotificationsStore.getState().notifications).toHaveLength(0);
 		await waitFor(() => expect(screen.queryByText('Careful.')).not.toBeInTheDocument());
+	});
+
+	it('shows the action of a notification as a button that runs it and dismisses the toast', async () => {
+		const run = vi.fn();
+		act(() => {
+			useNotificationsStore.getState().notify('success', 'LoRAs selected.', { action: { label: 'Go to Create', run } });
+		});
+		const { user } = renderWithProviders(<NotificationsHost />);
+
+		await user.click(screen.getByRole('button', { name: 'Go to Create' }));
+
+		expect(run).toHaveBeenCalledTimes(1);
+		expect(useNotificationsStore.getState().notifications).toHaveLength(0);
+	});
+
+	it("does not offer 'Go to <section>' while that section is shown", () => {
+		act(() => {
+			useNavigationStore.getState().showSection('images');
+			useNotificationsStore.getState().notify('success', 'LoRAs selected.', { action: goToSectionAction('create') });
+		});
+		renderWithProviders(<NotificationsHost />);
+		expect(screen.getByRole('button', { name: 'Go to Create' })).toBeInTheDocument();
+
+		act(() => useNavigationStore.getState().showSection('create'));
+		expect(screen.queryByRole('button', { name: 'Go to Create' })).not.toBeInTheDocument();
+		expect(screen.getByText('LoRAs selected.')).toBeInTheDocument();
+
+		act(() => useNavigationStore.getState().showSection('models'));
+		expect(screen.getByRole('button', { name: 'Go to Create' })).toBeInTheDocument();
 	});
 });

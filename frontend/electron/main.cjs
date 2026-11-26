@@ -132,8 +132,9 @@ function createWindow() {
 	const window = new BrowserWindow({
 		width: 1680,
 		height: 1020,
+		// The smallest window the docked layout supports (1280 x 720, e2e SMALL_VIEWPORT): everything fits there.
 		minWidth: 1280,
-		minHeight: 820,
+		minHeight: 720,
 		backgroundColor: windowBackgroundColor(nativeTheme.shouldUseDarkColors),
 		webPreferences: {
 			contextIsolation: true,

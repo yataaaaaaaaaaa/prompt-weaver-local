@@ -19,9 +19,28 @@ describe('notificationsStore', () => {
 		const second = store().notify('warning', 'Careful');
 		expect(second).not.toBe(first);
 		expect(store().notifications).toEqual([
-			{ id: first, intent: 'info', title: 'Greeting', message: 'Hello' },
-			{ id: second, intent: 'warning', title: null, message: 'Careful' },
+			{ id: first, intent: 'info', title: 'Greeting', message: 'Hello', action: null },
+			{ id: second, intent: 'warning', title: null, message: 'Careful', action: null },
 		]);
+	});
+
+	it('runs the action of a notification once, then dismisses it', () => {
+		const run = vi.fn();
+		const id = store().notify('success', 'LoRAs selected', { action: { label: 'Go to Create', run } });
+		expect(store().notifications[0].action?.label).toBe('Go to Create');
+
+		store().runAction(id);
+		store().runAction(id);
+
+		expect(run).toHaveBeenCalledTimes(1);
+		expect(store().notifications).toEqual([]);
+	});
+
+	it('repeats an identical message when its action differs', () => {
+		const first = store().notify('success', 'Done');
+		const second = store().notify('success', 'Done', { action: { label: 'Go to Create', run: () => undefined } });
+		expect(second).not.toBe(first);
+		expect(store().notifications).toHaveLength(2);
 	});
 
 	it('auto-dismisses success and info, keeps errors and warnings until dismissed', () => {

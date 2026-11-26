@@ -1,10 +1,10 @@
-// Application root view: boots the session once, then shows the workspace. Notifications and global
-// keyboard shortcuts are active in every phase.
+// Application root view: boots the session once, then shows the app shell (navigation rail + task sections).
+// Notifications and global keyboard shortcuts are active in every phase.
 import { useEffect } from 'react';
 import { useSessionStore } from '../stores/sessionStore';
 import { BootScreen } from '../ui/BootScreen';
 import { NotificationsHost } from '../ui/NotificationsHost';
-import { Workspace } from '../workspace/Workspace';
+import { AppShell } from '../shell/AppShell';
 import { useGlobalShortcuts } from './useGlobalShortcuts';
 
 export function App(): JSX.Element {
@@ -17,7 +17,7 @@ export function App(): JSX.Element {
 
 	return (
 		<>
-			{ready ? <Workspace /> : <BootScreen />}
+			{ready ? <AppShell /> : <BootScreen />}
 			<NotificationsHost />
 		</>
 	);

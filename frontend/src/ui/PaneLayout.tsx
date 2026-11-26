@@ -1,6 +1,6 @@
-// Layout primitives of the tool panes rendered inside a FloatingPane body (which scrolls but has no padding):
+// Layout primitives of the tool panels (generation panel, detail panels; their scrolling body has no padding):
 // PaneContent = padded column; PaneSection = titled section (heading + optional header actions) separated
-// from the previous one by a divider stroke; PaneGrid = two-column field grid. Shared by every pane view.
+// from the previous one by a divider stroke; PaneGrid = two-column field grid. Shared by every panel view.
 import { makeStyles, mergeClasses, Subtitle2, tokens, useId } from '@fluentui/react-components';
 import type { CSSProperties, ReactNode } from 'react';
 
@@ -64,18 +64,22 @@ export function PaneContent({ children }: { children: ReactNode }): JSX.Element 
 
 export type PaneSectionProps = {
 	title: string;
+	/** Heading level of the title: 3 by default (a part of a panel under its region's or item's h2); 2 for a part of a
+	 *  full-page section's detail panel that has no item heading of its own (under the section's h1). */
+	level?: 2 | 3;
 	/** Buttons shown on the right of the heading. */
 	actions?: ReactNode;
 	children?: ReactNode;
 };
 
-export function PaneSection({ title, actions, children }: PaneSectionProps): JSX.Element {
+export function PaneSection({ title, level = 3, actions, children }: PaneSectionProps): JSX.Element {
 	const styles = useStyles();
 	const headingId = useId('pane-section-');
+	const heading = level === 2 ? 'h2' : 'h3';
 	return (
 		<section className={styles.section} aria-labelledby={headingId}>
 			<div className={styles.header}>
-				<Subtitle2 as="h3" id={headingId} className={styles.title}>
+				<Subtitle2 as={heading} id={headingId} className={styles.title}>
 					{title}
 				</Subtitle2>
 				{actions ? <div className={styles.actions}>{actions}</div> : null}
