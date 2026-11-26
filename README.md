@@ -5,6 +5,7 @@ A local, Windows-first desktop tool for prompt-combinator diffusion generation.
 ## What it does
 
 - Runs fully locally: a FastAPI backend drives the shared `diffusion-lora-runtime` package, and an Electron + React desktop UI built with Fluent UI 2 talks to it.
+- Organizes the work in four docked task sections on a navigation rail: **Create** (prompt board, current image, generation panel), **Models**, **Images** and **Characters**, with one-click hand-offs between them.
 - Keeps the current diffusion model and its loaded LoRAs in memory between generations.
 - Lets you pick:
   - one diffusion model
@@ -26,26 +27,53 @@ Model files live in the ComfyUI models folder, `D:\Anything\ComfyUI\ComfyUI\mode
 
 ## Current behavior
 
-### Workspace
+### Sections and layout
 
-- The workspace holds movable, resizable floating windows: the panes (Image, Output browser, Generation, Used sub-prompts, Model library, Image library, Characters) and one window per prompt category. Every window shares one stacking order; clicking a window brings it to the front. Menus, dialogs, tooltips and notifications always show above the windows.
-- Drag a window by its header and resize it with the bottom-right grip. The grip has its own row at the bottom of the window, so it never covers content. Both handles also work from the keyboard: focus them and use the arrow keys (8 px per press, 40 px with `Shift`).
-- Each window header has a "Send to back" button; panes also have a Close button.
-- The app bar at the top has Add category, Reorganize categories, one toggle per pane to show or hide it, the visibility mode, and Undo. Tooltips show the keyboard shortcuts. The bar always stays on one row: when the window is too narrow, the "Prompt Weaver" title is hidden first (it stays the page heading), then the pane toggles become icon-only, then every item. Names and tooltips stay. The default desktop window shows every label; at 1280 px the pane toggles are icons.
-- A pane toggle is pressed only while its pane is on screen (not in "Categories only"). Showing a pane brings it in front of every window, leaves "Categories only", and scrolls the workspace so the pane is in view (for example a pane stored beyond the right edge of a small window).
-- Notifications (toasts) appear at the bottom-right corner, above the windows and never over the app bar. Errors and warnings stay until dismissed; information and confirmations close after 4 s.
+The app follows the journey Discover -> Collect -> Compose -> Generate -> Review -> Reuse in four task sections, all docked (nothing floats or overlaps):
+
+- **Navigation rail** on the left: **Create** (compose prompts, generate and review outputs), **Models** (find, download and pick checkpoints, LoRAs and embeddings), **Images** (find online images and reuse their LoRAs, tags and checkpoint) and **Characters** (keep the same character across generations). `Ctrl+1`..`Ctrl+4` show them; each item's tooltip says what the section is for, with its shortcut. The Models item has a badge with the number of running downloads. A section loads on its first visit and keeps its state when you switch away.
+- **Bottom of the rail:**
+  - **Downloads**: the overall progress while files download. Its popover lists every running download, whatever started it (Models installs, "Use these LoRAs", IP-Adapter files), with its progress, and offers "Show in Models"; when idle it says "No downloads running."
+  - **About**: the data directory ("Data directory: ...") and the backend address.
+- **Create** has a command bar on top and three docked regions side by side, left to right: **Prompt board** | **Current image** | **Generation**.
+  - The **command bar** ("Generation inputs") shows the current model, the active character and the LoRA count, each one click from changing it: Model (or "No model") opens the Checkpoint picker with Add model file and Browse models; Character (or "No character") opens a menu with None, the characters (the active one checked), New character and Manage characters; "N LoRAs" opens the weight of each selected LoRA and Edit LoRAs (expands the generation panel at its LoRA list). It fits on one row at 1280 px: long names are truncated, with the full name in the tooltip.
+  - Next to it, the **Layout** toolbar has one toggle per region (pressed while the region is expanded) and "Cycle the Create layout" (`Ctrl+H`).
+  - The board takes the remaining width. When the window is small, the image shrinks first, then the generation panel, so everything fits at 1280 x 720 without horizontal scrolling. Minimum widths: board 320, image 320, generation 300 px; maximums: image 1400, generation 640 px (defaults 560 and 380).
+  - **Splitters**: drag the boundary on the left of the image or of the generation panel to resize it (the board gives or takes the room). With the keyboard, focus the splitter ("Resize Current image", "Resize Generation"): `←` / `→` 16 px, with `Shift` 64 px, `Home` / `End` the minimum / maximum, `Enter` collapses that region.
+  - **Collapse**: a collapsed region becomes a 56 px strip with an Expand button and its vertical name. The collapsed generation strip keeps Generate, Continuous and Cancel (icon-only, with tooltips) and a small progress bar. At least one region always stays expanded.
+  - `Ctrl+H` (and "Cycle the Create layout") cycles: everything -> the board alone -> image + generation panel -> everything. From another section it shows Create.
+- **Models**, **Images** and **Characters** are full pages built the same way (`src/ui/SectionLayout.tsx`): a header with the section title and its toolbar (search, filters, commands), the results grid, and a detail panel next to it for the selected item. Opening an item moves the focus to its heading; `Escape` or Close (X, "Close details") clears the selection and returns the focus to the card or thumbnail that opened it.
+- **Keyboard**: `F6` / `Shift+F6` move the focus between regions: the rail, the Create header, the board, the image and the generation panel in Create; the toolbar, the results and the detail panel in the other sections. Each region shows a focus ring. `F6` works from any control, text fields included. `Ctrl+F` focuses the search box of the shown section (in Create, the board's search; a collapsed board is expanded first). Every icon button has a name and a tooltip, and every control a visible focus ring.
+- **Toasts** appear at the bottom-end corner, above the app; while Create is shown they sit left of the generation panel, so they never cover Generate. Errors and warnings stay until dismissed; information and confirmations close after 4 s. A hand-off toast (see below) has a "Go to <section>" button, offered only while another section is shown.
 - Startup shows the app name and a spinner; if the backend cannot be reached, an error card explains why and offers Retry. Delete confirmations have a red Delete button; Cancel has the initial focus, and the focus returns to the button that opened the dialog.
-- Window positions, sizes, stacking order and closed panes are saved. Layouts saved by older versions (`panel-layouts-store` + `workspace-z-index-store`) are migrated into `workspace-store` on first start and left untouched.
-- `Ctrl+H` cycles visibility between everything, categories only, and panes only.
-- `Ctrl+O` sorts the categories by priority, then name, renumbers their priorities and arranges their windows in a grid without overlap.
-- The UI follows Microsoft Fluent 2 (Fluent UI React v9) and switches between light and dark to match the OS setting, live.
+- The UI follows Microsoft Fluent 2 (Fluent UI React v9) and switches between light and dark to match the OS setting, live. The desktop window is at least 1280 x 720.
 - Web links (Civitai model and image pages) open in the system browser, never inside the app window (`frontend/electron/externalLinks.cjs`).
+- The Create layout is saved in `layout-store`: the image and generation widths, the collapsed regions, and whether the output details panel is open and which tab it shows. The board's card order and collapsed cards are saved in `board-store`. See Persistence for how both are derived once from the layouts of the former floating-window versions.
+
+### Hand-offs between sections
+
+Each hand-off is one click and lands in context; nothing navigates by itself:
+
+- In Images, "Use these LoRAs", "Use this checkpoint" and "Add to category" update the Create state at once and announce it with a toast offering "Go to Create". "Add to category" also reveals that category's card on the board (expanded, unfiltered, scrolled into view).
+- In Models, "Download and use" or "Use" makes a checkpoint the current model, or adds a LoRA to the selection, and announces it with "Go to Create" (the local library's "Use" too). Download progress shows on the card, in the detail panel, on the Models rail badge and in the rail's Downloads indicator, from any section.
+- "Create character" on the current output (Create) or on an image's details (Images) opens the Characters editor prefilled; Cancel goes back to where it was opened, and saving offers "Go to <that section>". Activating a character outside Create offers "Go to Create".
+- New character (Character section of the generation panel, command bar menu) and Edit open the editor in Characters; "Manage characters" shows the section.
+
+### First run and empty states
+
+Every region says what to do when it has nothing to show (the board, the viewer and the section pages share one empty-state component, `src/ui/EmptyState.tsx`):
+
+- no model: the generation panel shows "No model yet" with **Add model file** and **Browse models** (Models section); Generate stays disabled ("Pick a checkpoint to generate");
+- no categories: the board explains categories and offers **Add your first category** and **Browse images** (an online image's tags can become a category); when the search or state filter hides every card, it says so with **Clear filter**;
+- no outputs: the viewer says "No outputs yet" and to press Generate (`Ctrl+G`) in the Generation panel; also "No output selected" and a picture that cannot be loaded;
+- the detail panels of Models, Images and Characters say what to pick and what will show; the empty character gallery explains the three ways to create a character, each one click away.
 
 ### Models and LoRAs
 
-- Choose the model from a dropdown in the Generation pane.
-- The LoRA list has one checkbox per LoRA for the default selection, plus Clear (amber: it unselects every LoRA), Add files and Add folder. LoRAs that a sub-prompt pulls in are marked "Prompt-linked" and can be unlinked from every sub-prompt in one click. A summary shows the default-selected, prompt-linked and possibly active counts. The weight fields and delete buttons line up in columns; long names are truncated, with the full name in a tooltip.
-- Every selected LoRA has its own weight, edited with the "Weight of <name>" spin button next to its checkbox (arrow keys step it; typed values are clamped). The range is -10 to 10 in steps of 0.05, default 1 (`LoraWeightDefaults` in `backend/app/schemas.py`). A LoRA enters the selection at weight 1 (checkbox, added files, model library installs); "Use these LoRAs" of the image library sets the image's weights. LoRAs that only a sub-prompt pulls in are applied at weight 1; a LoRA both selected and prompt-linked keeps its selected weight.
+- Choose the model with the Checkpoint picker of the generation panel, or from the command bar's Model button.
+- The LoRA list of the generation panel ("LoRA library") has one checkbox per LoRA for the default selection, plus Clear (amber: it unselects every LoRA). LoRAs that a sub-prompt pulls in are marked "Prompt-linked". The weight fields and delete buttons line up in columns; long names are truncated, with the full name in a tooltip.
+- "More options" at the end of the generation panel (collapsed by default) holds Add model file / Add model folder, Add LoRA files / Add LoRA folder, and the prompt-linked details: a summary of the default-selected, prompt-linked and possibly active counts, and "Remove prompt links to <name>", which unlinks a LoRA from every sub-prompt in one click.
+- Every selected LoRA has its own weight, edited with the "Weight of <name>" spin button next to its checkbox (arrow keys step it; typed values are clamped). The range is -10 to 10 in steps of 0.05, default 1 (`LoraWeightDefaults` in `backend/app/schemas.py`). A LoRA enters the selection at weight 1 (checkbox, added files, Models installs); "Use these LoRAs" of the Images section sets the image's weights. The command bar's LoRA popover has the same weight fields. LoRAs that only a sub-prompt pulls in are applied at weight 1; a LoRA both selected and prompt-linked keeps its selected weight.
 - Add models and LoRAs through Electron file and folder dialogs:
   - model files (`.safetensors`, `.ckpt`) or a Diffusers model directory
   - LoRA files (`.safetensors`, `.bin`, `.pt`, several at once) or LoRA directories
@@ -56,32 +84,35 @@ Model files live in the ComfyUI models folder, `D:\Anything\ComfyUI\ComfyUI\mode
 - The runtime resolves inline `<lora:name:weight>` tags against the ComfyUI `loras` folder and textual-inversion embeddings (`embedding:name`) against the `embeddings` folder (see the model folders above).
 - Library entries installed from the model library keep their provenance (provider, model, version and file ids, SHA-256, preview image, base model, trigger words, page URL). Entries added from disk have none and show as "Local file".
 
-### Model library
+### Models section
 
-The Model library pane (app bar toggle "Model library") has two tabs.
+The Models section (rail item Models, `Ctrl+2`) is a full page with two views, **Online** and **Local library** (a switch at the start of the toolbar).
 
 **Online** searches Civitai:
 
-- A search box (it searches as you type), plus filters:
+- Toolbar, first row: the view switch, the search box (it searches as you type; `Ctrl+F` focuses it) and "Civitai token" on the right. Second row, the filters, each label left of its control:
   - type: Checkpoint (Civitai `Checkpoint`), LoRA (`LORA`, `LoCon`, `DoRA`), Embedding (`TextualInversion`)
   - base model: SD 1.5 / LCM / Hyper, SD 1.4, SDXL 1.0 / Lightning / Hyper / Turbo, Pony, Illustrious, NoobAI. Pony V7, SD 2.1, SD 3.5 and Flux.1 D/S are listed too, marked "Not supported locally", because the runtime cannot load them.
   - sort: Most downloaded, Highest rated, Newest
   - NSFW switch: preview images with a Civitai `nsfwLevel` above 2 are hidden unless it is on
-- Results load page by page ("Load more"; it stays in place and keeps the keyboard focus while the next page loads, in both libraries). Each card shows the preview of the picked version, name, creator and download count, type, base model, an NSFW badge for NSFW models, a version picker, the file size, the trigger words (with a copy button) and a status: On disk, In library / Selected, Downloading, Failed or Not supported. The status labels are shared with the image library and the IP-Adapter files (`frontend/src/features/models/VersionStatusBadge.tsx`).
-- The card action depends on the status:
+- The results are a responsive grid of compact cards, loaded page by page ("Load more"; it stays in place and keeps the keyboard focus while the next page loads, in both libraries). Each card shows the preview, name, creator and download count, the type, base model, NSFW and status badges (On disk, In library / Selected, Downloading, Failed or Not supported; the status labels are shared with the Images section and the IP-Adapter files: `frontend/src/features/models/VersionStatusBadge.tsx`), and its own action, which works without opening the detail panel:
   - "Download and use" for a file that is not on disk;
   - "Use" for a file already on disk or in the library;
   - a progress bar with Cancel while it downloads;
   - Retry / Dismiss after a failure;
   - a disabled button with the reason when the version cannot be installed.
+- Selecting a model's name (or its preview) opens the **Model details** panel next to the grid: the picked version's preview, creator, downloads and badges; the version picker (it also drives what the card shows and installs); the trigger words with a copy button; the same install action with its progress, Cancel, Retry / Dismiss or reason; "Open on civitai.com"; and the version's files with their sizes, the default file marked. With nothing selected, the panel says what to pick.
+- A Downloads area above the grid lists the running installs that no card shows (for example after a reload).
 - Selecting a version always goes through the backend, which first looks for the file on disk: by name and size, or by SHA-256 among files of the same size anywhere under the kind's folder, so renamed or moved copies are found. A file already on disk is never downloaded again.
-  - Checkpoints become the selected model, and LoRAs are added to the selected LoRAs.
+  - Checkpoints become the current model, and LoRAs are added to the selected LoRAs; the toast offers "Go to Create".
   - Embeddings have no library entry: the app tells you the prompt token to use (`embedding:<file name>`), and "Copy prompt token" copies it. The card shows the embedding "On disk" as soon as it is installed.
-- Downloads keep running when the pane is closed. After a reload, the app picks up the downloads still running in the backend; downloads that no card shows are listed in a Downloads section.
+- Downloads keep running whatever section is shown; their progress shows on the Models rail badge and in the rail's Downloads indicator. After a reload, the app picks up the downloads still running in the backend.
 - Only SafeTensors files (Civitai file type Model or Pruned Model) can be downloaded. Pickle files (`.pt`, `.ckpt`) are shown but refused, and so is a version whose base model the runtime cannot load.
 - "Civitai token" stores an optional Civitai API token, which some downloads require. The backend keeps it in `<data dir>/backend_settings.json`. It is never sent back to the UI (only whether one is set), never logged and never included in error messages. When set, it is sent as `Authorization: Bearer` to Civitai only: it is dropped when a download is redirected to Civitai's storage host.
 
-**Local library** lists the checkpoints and LoRAs of the library with their provenance (preview, base model, version, trigger words) or "Local file", and their path (wrapped between folder names). Checkpoints have "Use"; LoRAs have "Use by default" and Remove (red). The tab also shows the three model folders.
+**Local library** shows the checkpoints and LoRAs of the library as card grids, with their provenance (preview, base model, version, trigger words) or "Local file", and their path (wrapped between folder names). "Use" on a checkpoint makes it the current model (with "Go to Create"); LoRAs have "Use by default" and Remove (red). The detail panel shows the three model folders.
+
+At 1280 x 720 the results keep two card columns and the detail panel is 360-560 px wide.
 
 Downloads:
 
@@ -92,26 +123,26 @@ Downloads:
 - Progress, completion, errors and cancellation are `DownloadTaskEvent`s on `/ws/tasks` and `GET /api/tasks`, like generation progress. Their messages never contain URLs (signed storage URLs carry credentials) or headers.
 - The SHA-256 of every model file the backend hashes or downloads is cached in `<data dir>/cache/file_hashes.json`, valid while the file's size and modification time are unchanged, so later checks need no hashing. The cache is derived data and safe to delete.
 
-### Image library
+### Images section
 
-The Image library pane (app bar toggle "Image library") has two tabs, Search and Favorites. Picking a thumbnail opens its detail view in the pane; Back or `Escape` returns to the grid, with the focus on the image you opened.
+The Images section (rail item Images, `Ctrl+3`) has two views, **Search** and **Favorites**. Picking a thumbnail opens the **Image details** panel next to the grid: the grid stays, and the shown thumbnail gets a brand ring. `Escape` or Close clears the selection and returns the focus to the thumbnail. With nothing picked, the panel says "Pick an image to see its tags, LoRAs and checkpoint". The shown image stays shown when you switch between Search and Favorites.
 
-**Search** lists Civitai images in a grid of thumbnails that loads more as you scroll (a "Load more" button does the same):
+**Search** lists Civitai images in a grid of thumbnails that loads more as you scroll (a "Load more" button does the same and keeps the focus):
 
-- A search box (it searches as you type), plus:
+- A search box (it searches as you type; `Ctrl+F` focuses it), plus:
   - sort: Most reactions, Most comments, Most collected, Newest
-  - period: Day, Week, Month, Year, All time. It only applies without a keyword (it is disabled, with a hint, while a keyword is typed).
+  - period: Day, Week, Month, Year, All time. It only applies without a keyword: it is disabled while a keyword is typed, and its hint says so (the filter row never changes height).
   - "Show NSFW" (off by default: only images Civitai rates safe, `nsfwLevel` 1-2, are shown)
   - "Only locally usable models" (on by default: only images made with a base model the local runtime can load)
 - Keywords search the models' galleries. The Civitai images API has no free-text filter (it ignores `query`, and `tags` only takes numeric tag ids), so a keyword is looked up in the model catalog (the model library search: LoRAs and checkpoints, most downloaded, up to 4 models, with the usable base models when that switch is on), and the page interleaves the image galleries of those models, read through each model's newest version made for an allowed base model (Civitai answers version galleries in well under a second, whole-model galleries in up to 20 s). When those galleries run out, the next models of the search are used. An empty keyword browses the Civitai image feed with the sort and period.
 
-**Detail view** of an image:
+**Image details**:
 
 - the large preview, author, base model ("Not supported locally" when the runtime cannot load it), Favorite, "Copy prompt", "Create character" (see Characters) and a link to the image page on civitai.com;
-- **Tags**: the prompt split into tags, inline `<lora:...>` tags removed. "Add to category" adds them, all or only the tags you select, as one new sub-prompt of the category you pick, or of a new category. A sub-prompt that already exists in that category is refused.
-- **LoRAs**: each LoRA with its name (linked to its Civitai page once identified), its weight ("unpublished, default" when the image publishes none) and its status: In library, On disk, Available to download, Downloading (with the progress bar and Cancel of the model library), Failed, Not supported, Not identified or Resolving; the reason is in a tooltip.
-- **Use these LoRAs** makes the selection exactly the image's LoRAs, with the image's weights. LoRAs already in the library are used as they are; missing ones are installed through the model library first (same downloads, progress and checks; a download already running is joined); LoRAs that cannot be identified, downloaded or loaded are skipped with a warning listing why. When none can be used, the selection is left unchanged.
-- **Checkpoint**: the checkpoint the image was made with, its status, and "Use this checkpoint", which selects it, after installing it through the model library when needed.
+- **Tags**: the prompt split into tags, inline `<lora:...>` tags removed. "Add to category" adds them, all or only the tags you select, as one new sub-prompt of the category you pick, or of a new category. A sub-prompt that already exists in that category is refused. The toast offers "Go to Create", where the category's card is revealed.
+- **LoRAs**: each LoRA with its name (linked to its Civitai page once identified), its weight ("unpublished, default" when the image publishes none) and its status: In library, On disk, Available to download, Downloading (with the progress bar and Cancel of the Models section), Failed, Not supported, Not identified or Resolving; the reason is in a tooltip.
+- **Use these LoRAs** makes the selection exactly the image's LoRAs, with the image's weights. LoRAs already in the library are used as they are; missing ones are installed through the model library first (same downloads, progress and checks; a download already running is joined); LoRAs that cannot be identified, downloaded or loaded are skipped with a warning listing why. When none can be used, the selection is left unchanged. The toast offers "Go to Create".
+- **Checkpoint**: the checkpoint the image was made with, its status, and "Use this checkpoint", which makes it the current model, after installing it through the model library when needed (the toast offers "Go to Create").
 - **Generation parameters**: prompt, negative prompt, sampler, steps, CFG, seed, size and clip skip, as published (an em dash when missing).
 
 How an image's models are found:
@@ -126,26 +157,30 @@ How an image's models are found:
 
 A character makes the same person appear across generations. It holds a name and a thumbnail, identity tags (appearance: face, hair, eyes, body), outfit tags (kept separate from the identity), negative tags, optional character LoRAs with their weights (the same `LoraWeight` as the LoRA selection), an optional seed that can be locked, and up to 4 reference images with a reference focus (Face or Whole subject) and a strength (0 to 1, default 0.6; `ReferenceDefaults` in `backend/app/schemas.py`).
 
-Creating a character (each opens the editor in the Characters pane, which comes to the front):
+Creating a character (each opens the editor in the Characters section):
 
-- **New character**, in the Characters pane or in the Character section of the Generation pane.
-- **Create character** in the Output browser, prefilled from the output shown: its selections become the identity tags (a 'Character outfit' selection becomes the outfit tags), its LoRAs with their weights, its image seed (not locked); the output image becomes the first reference image.
-- **Create character** in an image's details (Image library), prefilled from the image: its tags, its LoRAs with their weights (found like "Use these LoRAs": missing ones are installed first, the others are skipped with a warning), its seed; the image becomes the first reference image.
+- **New character**: the Characters toolbar (the section's primary action), the empty gallery, the Character section of the generation panel, the command bar's Character menu.
+- **Create character** in the viewer's output actions (Create), prefilled from the output shown: its selections become the identity tags (a 'Character outfit' selection becomes the outfit tags), its LoRAs with their weights, its image seed (not locked); the output image becomes the first reference image.
+- **Create character** in an image's details (Images section), prefilled from the image: its tags, its LoRAs with their weights (found like "Use these LoRAs": missing ones are installed first, the others are skipped with a warning), its seed; the image becomes the first reference image.
 
-The **Characters pane** (app bar toggle "Characters") shows:
+The **Characters section** (rail item Characters, `Ctrl+4`) is a full page:
 
-- the **editor** while it is open: name, identity / outfit / negative tags (comma-separated), LoRAs (pick from the library, a weight field per LoRA), seed and "Lock seed", reference focus, reference strength, reference images (a new character shows the images it will import; a saved one adds "Add current output" and "Add image file", and has "Use as thumbnail" and Remove per image), Save and Cancel. Save is disabled while a field is invalid;
-- the **Character gallery**: one card per character, with its thumbnail (a placeholder when it has none), name, identity tags (at most 3 lines), the one-click **Active** switch, Edit and Delete (red, after a confirmation; its images are deleted, outputs made with it are kept). In the editor, a "Thumbnail" badge marks the reference image used as thumbnail;
-- **Reference images (IP-Adapter)**: whether reference images can be used with the selected model for each focus (the reason when they cannot, with Download for a missing IP-Adapter, one progress bar per file and Cancel), every IP-Adapter variant with the status of each file (On disk, Downloading, Available to download, Failed), and the two folders. A failed download stays shown, naming each failed file and why, with Retry; Cancel goes back to Download without an error.
+- **Toolbar**: "Search characters" (`Ctrl+F` focuses it) filters by name, identity tags and outfit tags (with comma-separated terms, all must match); a count ("N characters", or "N of M characters" while searching); New character (primary).
+- **Character gallery**: one card per character, sorted by name, with its thumbnail (a placeholder when it has none), an "Active" badge on the active one, name, identity tags (at most 3 lines), the one-click **Active** switch, Edit and Delete (red, after a confirmation; its images are deleted, outputs made with it are kept). Clicking a card (or `Enter` / `Space` on its picture) selects it: it gets a brand frame and its details show in the detail panel. A search that matches nothing says so, with Clear search; a load failure shows the error with Retry. The empty gallery explains the three ways to create a character, each with a button: New character; Create character from an output in Create ("Go to Create"); Create character from an image in Images ("Browse images").
+- **Character details** (the detail panel):
+  - while the editor is open: the **editor** (new, edit, or prefilled from an output or an image): name, identity / outfit / negative tags (comma-separated), LoRAs (pick from the library, a weight field per LoRA), seed and "Lock seed", reference focus, reference strength, reference images (a new character shows the images it will import; a saved one adds "Add current output" and "Add image file", and has "Use as thumbnail" and Remove per image; a "Thumbnail" badge marks the one used as thumbnail), and Save / Cancel, always visible at the bottom while the form scrolls. Save is disabled while a field is invalid;
+  - otherwise the selected character's details: picture, name, Active badge, Activate (primary) or Deactivate, Edit, Delete, its values (tags, LoRAs with weights, seed and its lock, reference focus and strength) and its reference images;
+  - with nothing selected, how to see details;
+  - below, always: **Reference images (IP-Adapter)**: whether reference images can be used with the selected model for each focus (the reason when they cannot, with Download for a missing IP-Adapter, one progress bar per file and Cancel), every IP-Adapter variant with the status of each file (On disk, Downloading, Available to download, Failed), and the two folders. A failed download stays shown, naming each failed file and why, with Retry; Cancel goes back to Download without an error.
+- **Focus**: the name field takes the focus when the editor opens. When it closes, the focus goes back to what opened it, also after Cancel returned to another section; after saving a character opened from elsewhere, to its Activate button; after a deletion, to the selected character's main button, otherwise to New character.
+- **Hand-offs**: an editor opened from another section remembers it: Cancel goes back there. Save stays in Characters and selects the saved character (clearing a search that would hide it); its notification ("X was created." / "X was saved.") offers "Go to <that section>". Activating a character outside Create offers "Go to Create".
 
-Save and Cancel of the editor stay visible at the bottom of the pane while the form scrolls. When the editor or the delete dialog closes, the focus returns to the button that opened it.
-
-The **Character section of the Generation pane** (right under the actions) shows the active character: thumbnail, name, tags, seed lock, Deactivate, its reference strength and whether its references apply with the selected model. Without one, it offers a dropdown to activate a character and "New character". One character at most is active; the backend saves which one.
+The **Character section of the generation panel** shows the active character: thumbnail, name, tags (at most 3 lines), seed lock, Deactivate, Edit (opens the editor in Characters; Cancel returns to Create), its reference strength and whether its references apply with the selected model. Without one, it offers the "Active character" dropdown and "New character". It stays readable at the panel's 300 px minimum. One character at most is active; the backend saves which one. The command bar shows the active character too.
 
 How the active character takes part in a generation (the precedence is documented once, at the top of `frontend/src/domain/characters.ts`):
 
-1. Its identity tags are the locked sub-prompt of a pinned **'Character'** category, its outfit tags the locked sub-prompt of a pinned **'Character outfit'** category. The prompt engine selects them before every user category, whatever the priorities; they never use a cycle counter and draw nothing from the prompt seed, so the same prompt seed still picks the same user sub-prompts. They appear in the Used sub-prompts pane and the output metadata like any category (locked), so forbidden rules can be created with them.
-2. Forbidden rules: the character wins. A user sub-prompt forbidden together with the identity or the outfit is never chosen (another one of its category is, or the category is skipped), and category windows show it as indirectly disabled. The outfit is skipped when a rule forbids it together with the identity.
+1. Its identity tags are the locked sub-prompt of a pinned **'Character'** category, its outfit tags the locked sub-prompt of a pinned **'Character outfit'** category. The prompt engine selects them before every user category, whatever the priorities; they never use a cycle counter and draw nothing from the prompt seed, so the same prompt seed still picks the same user sub-prompts. They appear in the Used sub-prompts tab and the output metadata like any category (locked), so forbidden rules can be created with them.
+2. Forbidden rules: the character wins. A user sub-prompt forbidden together with the identity or the outfit is never chosen (another one of its category is, or the category is skipped), and the board's cards show it as indirectly disabled. The outfit is skipped when a rule forbids it together with the identity.
 3. The character's tags can trigger the activation text of user categories.
 4. Its negative tags are appended to the negative prompt, except those already in it.
 5. LoRAs: the character's LoRAs come first with their weights, then the selected LoRAs, then the prompt-linked ones. A LoRA both in the character and in the selection uses the character's weight. Character LoRAs missing from the library are skipped with a warning, like selected ones.
@@ -162,9 +197,12 @@ IP-Adapters:
 
 Storage: `<data dir>/characters/characters.json` (`{"version": 1, "active_id", "items"}`) and one PNG per image in `<data dir>/characters/images` (reference images at most 1024 px on the long side, thumbnails at most 384 px, EXIF orientation applied). Invalid entries are skipped. A characters file that cannot be read, or has another version, is reported as an error (HTTP 503) and never overwritten.
 
-### Prompt categories
+### Prompt board
 
-- Each category is a window. Its commands are in the window header (priority, Edit all sub-prompts, Add sub-prompt, Skip category, Delete category); the body holds the name, the activation text and the sub-prompts. In a category window you can:
+The Create section's **Prompt board** region holds the prompt categories as cards in a responsive grid (columns of at least 280 px, cards top-aligned, no free positions). It stays usable with 40+ categories.
+
+- **Toolbar**: the search box ("Search categories"; `Ctrl+F` focuses it, `Escape` clears it) matches names, activation texts and sub-prompt texts; the state filter ("Filter by state"): Any state, Used by the current output, With a locked sub-prompt, Forbidden with the association source, Association source, Indirectly disabled, Skipped. A count shows "N categories", or "M of N categories" with Clear filter while filtered. The "Board commands" toolbar has Add category, Collapse all, Expand all and Sort by priority (`Ctrl+O`).
+- **Cards**: a card's header has a drag handle ("Reorder <name>"), the expand toggle ("Collapse <name>" / "Expand <name>"), the editable name, the sub-prompt count and the state icon; a second header row has Priority, Edit all sub-prompts, Add sub-prompt, Skip category and Delete category. The body holds the activation text and the sub-prompts, which scroll inside the card (cards are at most 400 px tall). On a card you can:
   - rename the category
   - set its priority
   - set an optional activation text
@@ -173,12 +211,15 @@ Storage: `<data dir>/characters/characters.json` (`{"version": 1, "active_id", "
   - bulk-edit all of its sub-prompts as text (entries separated by a line containing only `|`; `Ctrl+Enter` applies, `Escape` cancels)
   - lock one sub-prompt so it is always chosen until you unlock it
   - delete the category (after a confirmation)
+- **Collapse** a card to its header, or use Collapse all / Expand all; this is saved.
+- **Reorder**: drag a card's handle (a brand-colored bar shows where it lands; the board scrolls near its edges), or focus the handle and use `←` / `↑`, `→` / `↓`, `Home` and `End`. Moves are announced ("Subject moved to position 3 of 7") and the focus stays on the handle; the output arrows never fire from it. While a filter is active, cards move relative to the shown cards. The order is display order only and is saved.
+- **Sort by priority** (`Ctrl+O`) sorts by priority, then name, renumbers the priorities 1..n and makes that the board order.
+- **Add category**: the new card scrolls into view inside the board (never the page) with its name editor open and the name selected, so typing names it. A filter that would hide it is cleared. A card revealed from another section (an image's tags added to a category) is shown when Create is shown.
 - Inline edits: `Enter` commits, `Shift+Enter` inserts a line break, `Escape` cancels, and leaving the field commits.
-- The sub-prompts used by the output being viewed are highlighted in their windows, which scroll to them.
+- The sub-prompts used by the output being viewed are highlighted in their cards, which scroll to them.
 - A category with an activation text (comma-separated terms) is disabled by default. It only takes part when a sub-prompt selected before it (in generation order) contains one of the terms, ignoring case and extra whitespace.
 - Forbidden associations take precedence over activation: a triggered category that would conflict is skipped.
 - Categories and sub-prompts that cannot be selected (because of skips, locks, activation texts and forbidden associations) are shown as indirectly disabled automatically. The old `Ctrl+D` "compute indirectly disabled" command no longer exists.
-- A new category's window opens at its cascade position, in front of the other windows.
 
 State colors (Fluent 2 tokens, light and dark themes; one table, `frontend/src/ui/stateColors.ts`):
 
@@ -186,26 +227,26 @@ State colors (Fluent 2 tokens, light and dark themes; one table, `frontend/src/u
 | --- | --- | --- |
 | Forbidden together with the association source | red | prohibited icon |
 | Forbidden, and a locked prompt is involved (the active character's prompts count as locked) | purple | shield icon |
-| Association source (picked in the Used sub-prompts pane) | green | link icon |
+| Association source (picked in the Used sub-prompts tab) | green | link icon |
 | Used by the output being viewed | brand blue | check icon, `aria-current` |
 | Locked sub-prompt | purple accent (the checked Lock toggle) | lock icon |
 | Indirectly disabled (can never be selected) | amber, dashed border | icon, italic text |
 | Skipped | muted | struck-through text, the checked (amber) Skip toggle |
 
 - Sub-prompt rows show their state with the tinted surface, the border and the icon. When several apply, the strongest wins, in the order of the table.
-- Category windows show the state of the whole category on their frame (border), a tinted header and a state icon at the start of the header (its label in a tooltip): forbidden, forbidden by a lock, association source, indirectly disabled, skipped (strongest first). A P pick marks the picked sub-prompt and its window, a C pick the whole category window and its rows, a tag pick the rows of that category carrying the tag, and the window.
+- Category cards show the state of the whole category on their frame (border), a tinted header and a state icon in the header (its label in a tooltip and the card's accessible description): forbidden, forbidden by a lock, association source, indirectly disabled, skipped (strongest first). A P pick marks the picked sub-prompt and its card, a C pick the whole card and its rows, a tag pick the rows of that category carrying the tag, and the card.
 - Action colors: Delete and Remove buttons are red (danger); an active Skip toggle and actions that change what generation uses without deleting anything (Cancel, Clear) are amber (warning); Generate and Save are the brand primary. A disabled button keeps the Fluent disabled look.
 - Color is never the only cue: every state also has an icon, a border style or text style, and an accessible description. Text contrast is at least 4.5:1, state borders and icons at least 3:1, in both themes (checked in the real browser by the e2e suite).
 
 ### Forbidden associations
 
-- You edit associations in the Used sub-prompts pane, which lists the sub-prompts used by the current output (each with a button copying its text). Click two endpoints to toggle an association between them. An endpoint is one of:
+- You edit associations in the **Used sub-prompts** tab of the viewer's details panel, which lists the sub-prompts used by the current output (each with a button copying its text). Click two endpoints to toggle an association between them. An endpoint is one of:
   - `P`: that exact sub-prompt
   - `C`: its whole category
   - a tag chip: any sub-prompt carrying that tag
 - Rules from older versions, including "contains text" rules, still load.
 - Exact sub-prompt matching ignores casing, whitespace and the order of comma-separated tags.
-- Category windows and their rows highlight what is forbidden together with the selected association source in red, or purple when a lock is involved (the active character's 'Character' and 'Character outfit' prompts count as locked); the source itself is green (see the state colors above). The P, C and tag buttons of the Used sub-prompts pane show the same states, and the Locked badge is purple.
+- Category cards and their rows highlight what is forbidden together with the selected association source in red, or purple when a lock is involved (the active character's 'Character' and 'Character outfit' prompts count as locked); the source itself is green (see the state colors above). The P, C and tag buttons of the Used sub-prompts tab show the same states, and the Locked badge is purple.
 
 ### Seeds
 
@@ -221,28 +262,35 @@ State colors (Fluent 2 tokens, light and dark themes; one table, `frontend/src/u
 
 - Every generation is saved in `<data dir>/output` under a fixed-width 10-digit number: `0000000001.png` + `0000000001.json`.
 - After a generation, the UI jumps to the newest output.
-- The arrow keys move through the output history: left/up goes to the previous output, right/down to the next. They are left to the focused control when it uses them itself (text fields, window handles, menus, dropdowns, the app bar); click elsewhere to browse again. The Output browser pane offers First / Previous / Next / Last buttons.
-- For the current output, the Output browser shows its number and position, image name, size, steps, CFG, seed, prompt seed, model and LoRAs with their weights (`name (weight)`, one per line; a long name is truncated with its full name in a tooltip, the weight always stays visible); the Used sub-prompts pane lists each category with its chosen sub-prompt. "Copy prompt" (Output browser and Generation pane) copies the full prompt. The Output browser's Delete is the red danger action.
-- The Image pane fits the picture without distortion. It says when there are no outputs yet, when no output is selected, and when the picture of an output cannot be loaded (deleted outside the app). At startup, an output whose picture is missing is not listed.
+- The Create section's **Current image** region (the viewer) shows, top to bottom: the output actions toolbar, the current picture, the filmstrip and the details panel. It works at its 320 px minimum width.
+- **Output actions** ("Output actions" toolbar): "#<id>" and "n / N", then icon buttons with tooltips: First / Previous / Next / Last output (their arrow keys in the tooltips), Copy prompt (the full prompt), Create character (prefilled from the output; see Characters), Undo (`Ctrl+Z`; disabled when there is nothing to undo), Delete (the red danger action; "Move to the app trash (Undo restores it)") and the "Output details" toggle. In a narrow viewer the toolbar wraps to a second row; arrow keys move between its buttons.
+- The **picture** fits the remaining space without distortion, centered on a darker canvas; it is the only picture named "Output <id>". The viewer says when there are no outputs yet ("No outputs yet": press Generate, `Ctrl+G`), when no output is selected, and when the picture of an output cannot be loaded (moved or deleted outside the app). At startup, an output whose picture is missing is not listed.
+- The **filmstrip** ("Outputs") is a horizontal list of thumbnails, oldest on the left, loaded lazily from `GET /api/outputs/{id}/thumbnail` (WebP, at most 256 px, cached in `<data dir>/cache/output_thumbnails`). It renders a window of 31 outputs around the current one (`FILMSTRIP_RADIUS`, `src/domain/outputs.ts`), so thousands of outputs stay fast. Click a thumbnail to show its output; inside the list, `←` / `↑` and `→` / `↓` show the previous / next output and `Home` / `End` the first / last, the focus following. The current thumbnail has the "current" frame and is scrolled into view. "Jump to latest" appears while an older output is shown; a thumbnail whose file is missing shows an icon.
+- The **details panel** (about 38% of the viewer's height, opened and closed with "Output details") has two tabs, both remembered in `layout-store`:
+  - **Details**: output number and position, image name, size, steps, CFG, seed, prompt seed, model, LoRAs with their weights (`name (weight)`, one per line; a long name is truncated with its full name in a tooltip, the weight always stays visible), the character when one was active, the prompt and the negative prompt;
+  - **Used sub-prompts**: each category with its chosen sub-prompt, with the P / C / tag association buttons (see Forbidden associations) and Copy sub-prompt.
+- The arrow keys move through the output history while Create is shown: left/up goes to the previous output, right/down to the next. They are left to the focused control when it uses them itself (text fields, splitters, the rail, toolbars, reorder handles, menus, dropdowns); click elsewhere to browse again.
 - The metadata JSON lists the LoRAs used as `active_loras: [{"id", "weight"}]`. Files written before LoRA weights existed (`active_lora_ids`) still load, with weight 1; they are not rewritten.
-- An output made with an active character has a `character` key: `{"id", "name", "reference": {"applied", "variant_id", "strength", "image_ids", "reason"}}`, where `reason` says why the reference images were not applied. Outputs made without a character have no such key (the API answers `character: null`), so older outputs load unchanged. The Output browser shows it as a 'Character' row, and has "Create character" (see Characters).
-- Output ids come from file names only, so the list stays fast with thousands of outputs. Metadata and images are loaded by id through the backend API.
+- An output made with an active character has a `character` key: `{"id", "name", "reference": {"applied", "variant_id", "strength", "image_ids", "reason"}}`, where `reason` says why the reference images were not applied. Outputs made without a character have no such key (the API answers `character: null`), so older outputs load unchanged. The Details tab shows it as a 'Character' row.
+- Output ids come from file names only, so the list stays fast with thousands of outputs. Metadata, images and thumbnails are loaded by id through the backend API.
 
 ### Delete and undo
 
 - Delete moves the image and its JSON into the app-managed trash folder, `<data dir>/trash`.
-- `Ctrl+Z` (or Undo in the app bar) undoes, newest first:
+- `Ctrl+Z` (or Undo in the viewer's output actions) undoes, newest first:
   - a generation step: it goes back to the previous output and restores the seed inputs (the generated files stay on disk)
   - a deletion: it restores the files from the trash
 - `Ctrl+Z` needs exactly that combination: `Ctrl+Shift+Z` does nothing. It is ignored while typing in a text field.
 
 ### Generation and progress
 
-- `Ctrl+G` generates one image. `Ctrl+T` starts or stops continuous generation. Both also work while typing in a text field. The Generation pane has Generate, Continuous and Cancel buttons.
+- The Create section's **Generation** region is a scrolling panel above a sticky action area. The body, in order: Model (the Checkpoint picker and Browse models; without a model, "No model yet" with Add model file and Browse models), Character (see Characters), LoRAs with their weights and Clear, Image settings (width, height, steps, CFG), Seeds, Negative prompt, then "More options" (collapsed by default: model and LoRA files and folders, the prompt-linked LoRA details).
+- The **sticky action area** stays visible whatever the scroll, at 1280 x 720 too: Generate (primary, `Ctrl+G`), Continuous (toggle, `Ctrl+T`, blue while it runs), Cancel (amber) and the one progress bar with its message and step count ("Ready to generate", or "Pick a checkpoint to generate" without a model). In a narrow panel Generate wraps onto its own row. A collapsed generation panel keeps the same three actions, icon-only, in its strip, with a small progress bar.
+- `Ctrl+G` and `Ctrl+T` also work while typing in a text field.
 - A failed generation shows an error notification and stops continuous generation. LoRAs requested by the selection but missing from the library are skipped with a warning.
-- The backend streams progress over the WebSocket `/ws/tasks`. The stages are loading the model, sampling (one update per diffusion step), saving, complete, error and cancelled. `GET /api/tasks` returns the latest event of every task. The Generation and Output browser panes show it as a progress bar whose color and text name the state: blue while running (indeterminate while the model loads), green when complete, orange when cancelled, red with the error message on failure.
-- Generate is the primary action, Cancel the amber warning action, and Continuous turns blue while it runs. When a generation is cancelled while the backend is already saving it, its output is still listed once the backend completes it.
-- The Generation pane shows the data directory on one line (full path in a tooltip).
+- The backend streams progress over the WebSocket `/ws/tasks`. The stages are loading the model, sampling (one update per diffusion step), saving, complete, error and cancelled. `GET /api/tasks` returns the latest event of every task. The progress bar's color and text name the state: blue while running (indeterminate while the model loads), green when complete, orange when cancelled, red with the error message on failure.
+- When a generation is cancelled while the backend is already saving it, its output is still listed once the backend completes it.
+- The data directory is shown by About at the bottom of the navigation rail.
 - In the backend console, the first `Ctrl+C` cancels the running generation and then stops the server gracefully. A second `Ctrl+C` exits immediately.
 
 ### Keyboard shortcuts
@@ -251,12 +299,15 @@ All bindings are defined once, in `frontend/src/app/keymap.json`. The Electron "
 
 | Shortcut | Command |
 | --- | --- |
+| `Ctrl+1` .. `Ctrl+4` | Show Create, Models, Images, Characters (the focus moves to the section's first region) |
+| `F6` / `Shift+F6` | Next / previous region (works from any control) |
+| `Ctrl+F` | Search in the shown section (in Create, the board's search) |
 | `Ctrl+G` | Generate |
 | `Ctrl+T` | Toggle continuous generation |
-| `Ctrl+H` | Cycle visibility (all / categories only / panes only) |
-| `Ctrl+O` | Reorganize categories |
+| `Ctrl+H` | Cycle the Create layout (everything / the board alone / image + generation panel); shows Create first |
+| `Ctrl+O` | Sort categories by priority |
 | `Ctrl+Z` | Undo |
-| `←` / `↑`, `→` / `↓` | Previous / next output |
+| `←` / `↑`, `→` / `↓` | Previous / next output (in Create, when the focused control does not use them) |
 
 ## Architecture
 
@@ -299,7 +350,8 @@ prompt-weaver-local/
         ip_adapters.py     IP-Adapter catalog (h94, pinned), on-disk status, the support rule, installs
         model_installs.py  install = find on disk or download; ModelSource provenance; display names
         legacy_state.py    app_state.json / library.json (read-only seeds)
-        outputs.py         output ids, metadata, images, trash/restore
+        outputs.py         output ids, metadata, images, thumbnails (cache/output_thumbnails), trash/restore
+        pictures.py        the one picture downscaling rule (fit_within) and atomic picture writes (characters, outputs)
         persisted_stores.py  frontend store files, legacy Electron formats included
         task_hub.py        latest event per task + WebSocket fan-out
         generation.py      generation orchestration, GeneratorPort, character references (ReferenceInput)
@@ -319,30 +371,39 @@ prompt-weaver-local/
                            externalLinks.cjs (web links open in the system browser) + tests
     scripts/               apiTypes.mjs + generate-api-types.mjs (npm run gen:api)
     e2e/                   Playwright suite (real Edge, dark + light): support/ (env, fixtures, app driver, backend
-                           client and persisted stores, network, diagnostics, visibility and geometry checks, colors and
-                           contrast, screenshots, baselines, shared flows), smoke.spec.ts, one folder per area
-                           (workspace, categories, generation, outputs, library, models, images, characters) with its
-                           specs and area helpers, electron/ (Electron smoke test), __screenshots__/ (committed baselines)
+                           client and persisted stores, network, diagnostics, visibility and geometry checks, the docked
+                           shell geometry, colors and contrast, screenshots, baselines, shared flows), smoke.spec.ts, one
+                           folder per area (shell, categories, generation, outputs, library, models, images, characters)
+                           with its specs and area helpers, journeys/ (task flows across sections), electron/ (Electron
+                           smoke test), __screenshots__/ (committed baselines)
     src/
       api/                 schema.gen.ts + defaults.gen.ts (generated), types.ts, config.ts (URLs), client.ts,
                            taskSocket.ts
       persistence/         persist.ts (the one persistence mechanism), storeBackend.ts, storeNames.ts
       domain/              pure logic: text, guards, categories, forbiddenRules, reachability, promptEngine,
-                           seeds, library, loraSelection, generationRequest, outputs, layout, legacyImport, paths,
-                           modelCatalog, imageLibrary, characters (prompt injection), characterDrafts (editor form)
+                           seeds, library, loraSelection, generationRequest, outputs (filmstrip window), board (card
+                           order, filters, moves, legacy order), layout (Create regions: fit, limits, collapse, Ctrl+H
+                           cycle, legacy widths), legacyLayout (the floating-window stores, read only), legacyImport,
+                           paths, modelCatalog, imageLibrary, characters (prompt injection), characterDrafts (editor form)
       stores/              one zustand store per domain (see "Frontend stores" below), pagedSearch.ts (the search
                            engine of the online catalogs), clipboardActions.ts, flags.ts (busy flag records)
-      features/            thin Fluent views per feature (categories, forbidden, generation, library, models, images,
-                           outputs, characters)
-      workspace/           Workspace shell, FloatingPane, app bar, paneRegistry.tsx (PANES)
-      ui/                  shared views and hooks: boot screen and error card, error boundary, notifications host,
-                           PaneLayout, keyboard hints, useInfiniteScroll + LoadMoreButton, spinButtonValue, ConfirmDialog,
-                           stateColors.ts (semantic state and action colors) + stateStyles.tsx (their classes and icons)
-      app/                 App, providers + theme, keymap.json, commands.ts, global shortcuts
+      features/            thin Fluent views per feature: categories (the prompt board), forbidden (Used sub-prompts),
+                           outputs (the viewer: toolbar, picture, filmstrip, details tabs), generation (generation panel,
+                           actions, command bar), library, models, images, characters (the section pages)
+      shell/               AppShell (rail + one lazily mounted <main> per section, F6 / Ctrl+F focus), NavRail
+                           (Downloads indicator, About), CreateSection (command bar, Layout toolbar, regions, splitters,
+                           collapsed strips), sectionViews.tsx (which view and icon each section has)
+      ui/                  shared views and hooks: SectionLayout (full-page sections), DetailPanel + SectionToolbar,
+                           EmptyState, FactList, Splitter, boot screen and error card, error boundary, notifications host,
+                           PaneLayout, keyboard hints, visuallyHidden, useInfiniteScroll + LoadMoreButton, spinButtonValue,
+                           ConfirmDialog, stateColors.ts (semantic state and action colors) + stateStyles.tsx (their
+                           classes and icons)
+      app/                 App, providers + theme, sections.ts (section and region names), keymap.json, commands.ts,
+                           global shortcuts
       services/            desktop bridge (Electron preload) and clipboard
       test/                Vitest setup, render (through the real AppProviders) and dialog helpers, state class
-                           assertions (stateClasses.tsx), a layout / ResizeObserver stub, IntersectionObserver stub, model,
-                           image library and character test data, character store doubles for view tests
+                           assertions (stateClasses.tsx), IntersectionObserver stub, model, image library and character
+                           test data, character store doubles for view tests
     __mocks__/zustand.ts   resets every store between tests
   launcher/
     src/prompt_weaver_launcher/cli.py
@@ -355,7 +416,7 @@ prompt-weaver-local/
 - **LoRA weights.** One representation end to end: `LoraWeight {id, weight}` (`schemas.py`). The LoRA selection (`libraryStore.selectedLoras`), the character LoRAs (`Character.loras`), the generation request (`GenerationLoRA` = library entry + weight), the output metadata (`active_loras`) and the runtime call (`LoRASpec.weight` of `diffusion-lora-runtime`) all use it. The frontend clamps weights only with `clampLoraWeight`, merges character, selected and prompt-linked LoRAs only in `resolveLoraSelection` (`src/domain/loraSelection.ts`), and formats weights (and the reference strength) only with `formatWeight` (`src/domain/text.ts`) / `weightedLorasText`.
 - **Inline LoRA syntax** (`<lora:name:weight>`) belongs to `diffusion_lora_runtime.prompt_lora` (`extract_prompt_lora_specs`, `strip_prompt_lora_tags`), which imports without torch: the image library reads the prompts of online images with it.
 - **Online image metadata.** Parsing Civitai's image metadata and merging its model lists is backend-owned (`civitai_image_meta.py`); the frontend only reads `RemoteImage.resources` and `ImageGenerationParams.clean_prompt`. Splitting a prompt into tags (`splitPromptTags`) and joining tags back into prompt text (`joinPromptTags`, also used for trigger words) live in `src/domain/text.ts`.
-- **Window geometry and category priority defaults** belong to the frontend (default layouts in `paneRegistry.tsx`, the categories domain). The legacy `app_state.json` fields are nullable on the backend and carry no defaults.
+- **Sections, regions and layout.** The section ids, names, descriptions and shortcuts, the Create region names and the shell landmark names belong to `src/app/sections.ts` (the views, the stores and the e2e suite use them). The Create layout rules (defaults, minimum and maximum widths, fitting the regions into the window, collapsing, the `Ctrl+H` cycle, the widths derived from the legacy layout) belong to `src/domain/layout.ts`; the board order, filters and moves (and the order derived from the legacy window positions) to `src/domain/board.ts`; the shapes of the floating-window stores of older versions to `src/domain/legacyLayout.ts`. Category priority defaults belong to the categories domain. The legacy `app_state.json` fields are nullable on the backend and carry no defaults.
 - **Model folders and data dir layout.** `backend/app/settings.py` (`DEFAULT_MODELS_ROOT`, `MODEL_KIND_SUBDIRS`, `AppPaths`); the UI shows the folders reported by `GET /api/models/info`.
 - **Model library rules** are backend-owned and only read by the frontend: which file of a version gets installed (`RemoteModelVersion.default_file_id`), whether it can be installed (`unavailable_reason`), the display name of an install (`InstalledModel.name`, the download task title), the base model -> architecture mapping and the NSFW level rule (`model_providers/civitai.py`), and file hash normalization (`services/file_hashes.py`: `normalize_sha256` for SHA-256, `normalize_file_hash` for the short Civitai hashes too).
 - **Downloads.** Every model file, including the LoRAs and checkpoints of "Use these LoRAs" / "Use this checkpoint", is installed through one flow: `modelCatalogStore.install` -> `POST /api/models/install` -> `DownloadManager`. IP-Adapter files go through the same `DownloadManager` (`ipAdapterStore.install` -> `POST /api/ip-adapters/{variant_id}/install`). "Already on disk" (by name and size, or by hash) has one owner, `services/local_models.py` `LocalModelFiles`, used per model kind and per IP-Adapter folder; in the UI, the label, color and icon of each file status ('On disk', 'Downloading', ...) have one owner, `features/models/VersionStatusBadge.tsx`.
@@ -363,8 +424,10 @@ prompt-weaver-local/
 - **IP-Adapters.** The catalog (Hugging Face repo, pinned revision, file names, sizes, SHA-256, variants per family and focus) and the rule "can reference images apply with this model and focus, and why not" belong to `services/ip_adapters.py`; both the UI (`GET /api/ip-adapters`) and generation use that one rule, and `ipAdapterStore` never computes support itself. Which pipeline family the runtime loads a model as belongs to `diffusion_lora_runtime.pipeline_architecture` (torch-free; the runtime's own loader uses it too). The runtime request is `IPAdapterSpec`, built only in `services/runtime_adapter.py`.
 - **Host and ports.** `config/defaults.json` is read by the launcher, `backend/run_backend.py` and `config/appConfig.cjs` (Vite and Electron). The frontend builds every backend URL in `src/api/config.ts`.
 - **Frontend state.** Each domain has exactly one zustand store that owns its state and actions (see below).
-- **Semantic state colors.** `src/ui/stateColors.ts` is the one mapping of every semantic visual state (forbidden, forbidden by a locked prompt, association source, used by the current output, locked, indirectly disabled, skipped; `VISUAL_STATES` is also their precedence) and every action intent (primary, danger, warning) to Fluent 2 tokens; `src/ui/stateStyles.tsx` builds the classes and icons views use from it (action classes color enabled buttons only), and the e2e suite reads it to check the colors the browser computes. Which state a row, a window or a Used sub-prompts endpoint is in is decided once, by `forbiddenRulesStore` (`useSubPromptVisualState`, `useCategoryWindowState`, `buildUsedSelectionRows`) on top of `src/domain/forbiddenRules.ts`. Views never pick state tokens themselves (the remaining palette/status tokens are the file status badges of `VersionStatusBadge.tsx`, which use Fluent badge colors, and the error icon of the boot error card).
-- **End-to-end tests.** Ports, URLs and shared Playwright settings: `e2e/support/env.ts`; the test object and its fixtures: `e2e/support/fixtures.ts`; the reset options: `backend/tests/e2e/options.py` (the TypeScript side only passes them through); page helpers (open, settle, windows, panes, toasts, pointer parking): `e2e/support/app.ts`; persisted store reads, saves and fixture store files: `e2e/support/backend.ts`; colors and WCAG contrast: `e2e/support/colors.ts`; visibility and geometry checks: `e2e/support/visibility.ts`. Area helpers live in their area folder and build on these.
+- **Accessible names shared with tests.** Labels that views render and tests look up live in small pure modules next to their views: `src/features/outputs/viewerLabels.ts`, `src/features/generation/generationLabels.ts`, `src/features/images/imageLabels.ts` (and `src/app/sections.ts` for the shell).
+- **Shared views.** One empty state (`src/ui/EmptyState.tsx`), one fact list (`src/ui/FactList.tsx`), one detail panel frame with its focus rules (`src/ui/DetailPanel.tsx`), one splitter (`src/ui/Splitter.tsx`), one full-page section layout (`src/ui/SectionLayout.tsx`).
+- **Semantic state colors.** `src/ui/stateColors.ts` is the one mapping of every semantic visual state (forbidden, forbidden by a locked prompt, association source, used by the current output, locked, indirectly disabled, skipped; `VISUAL_STATES` is also their precedence) and every action intent (primary, danger, warning) to Fluent 2 tokens; `src/ui/stateStyles.tsx` builds the classes and icons views use from it (action classes color enabled buttons only), and the e2e suite reads it to check the colors the browser computes. Which state a row, a category card or a Used sub-prompts endpoint is in is decided once, by `forbiddenRulesStore` (`useSubPromptVisualState`, `selectCategoryCardStates` / `useCategoryCardState`, `buildUsedSelectionRows`) on top of `src/domain/forbiddenRules.ts`. Views never pick state tokens themselves (the remaining palette/status tokens are the file status badges of `VersionStatusBadge.tsx`, which use Fluent badge colors, and the error icon of the boot error card).
+- **End-to-end tests.** Ports, URLs and shared Playwright settings: `e2e/support/env.ts`; the test object and its fixtures: `e2e/support/fixtures.ts`; the reset options: `backend/tests/e2e/options.py` (the TypeScript side only passes them through); page helpers (open, settle, the rail, sections, Create regions, command bar, category cards, generation actions, viewer tabs, toasts, pointer parking): `e2e/support/app.ts`; the docked shell geometry and the Create layout files: `e2e/support/shell.ts`; flows several areas need (generate one output, Go to Create from a toast): `e2e/support/flows.ts`; persisted store reads, saves and fixture store files: `e2e/support/backend.ts`; colors and WCAG contrast: `e2e/support/colors.ts`; visibility and geometry checks: `e2e/support/visibility.ts`. Area helpers live in their area folder and build on these.
 - **Untrusted values.** Persisted and imported data is validated through `src/domain/guards.ts`; lists of backend enum values (seed behaviors, torch dtypes) are exhaustive typed records, so the type-check fails when the schema changes.
 
 ### Frontend stores
@@ -373,21 +436,23 @@ The frontend is organized around zustand stores, one per domain. Each store is t
 
 | Store | Owns | Persisted as |
 | --- | --- | --- |
-| `categoriesStore` | categories and sub-prompts (`addSubPromptWithText` for tags from the image library; `addCategory` opens the new window at its cascade position, in front); reachability ("indirectly disabled") hooks, which include the active character's pinned categories | `categorie-store` |
-| `forbiddenRulesStore` | forbidden rules, the association source of the Used sub-prompts pane, highlights (the active character's prompts count as locked), and the semantic visual state of every row, category window and Used sub-prompts endpoint (`useSubPromptVisualState`, `useCategoryWindowState`, `useIsSubPromptDesignated`, `useIsCategoryDesignated`, `useCategoryForbiddenHighlight`, `buildUsedSelectionRows`) | `forbidden-associations-store` |
-| `libraryStore` | models, LoRAs (with model library provenance), the model selection and the LoRA selection with weights (`selectedLoras`), file dialogs, registration of installed models | `library-store` (version 2) |
-| `modelCatalogStore` | model library: provider info, search filters, results and paging, picked versions, installs in progress (a completed install marks its file local in the results), provider token updates. `install(model, version, fileId, {select, announce})` resolves to an `InstallOutcome` (installed + library entry, failed, cancelled, refused); a second install of a running install joins it | - |
-| `imageLibraryStore` | image library: search filters, results and paging, the image in the detail view, the resolution of each image's models, running "Use these LoRAs" and checkpoint switches, favorites (read from and saved to the backend); `collectImageLoras` (an image's LoRAs as library entries with weights, shared with "Create character") | - |
-| `charactersStore` | the frontend copy of the backend-owned characters (`/api/characters`) and the active character (`activeId`), the character editor (form, and the images a new character will import), busy flags; actions: load, setActive / toggleActive, startCreate / startCreateFromOutput / startCreateFromImage / startEdit, form and form-LoRA edits, saveEditor, remove, reference images (current output, file, remove, thumbnail), setReferenceStrength | - (the backend saves characters and `active_id`) |
+| `categoriesStore` | categories and sub-prompts (`addSubPromptWithText` for tags from the Images section; `addCategory` reveals the new card with its name editor open); keeps the board in step (reveal on add, forget on delete, rename, the order after Sort by priority: `reorganize`); reachability ("indirectly disabled") hooks, which include the active character's pinned categories | `categorie-store` |
+| `forbiddenRulesStore` | forbidden rules, the association source of the Used sub-prompts tab, highlights (the active character's prompts count as locked), and the semantic visual state of every row, category card and Used sub-prompts endpoint (`useSubPromptVisualState`, `selectCategoryCardStates` (every card in one memoized pass) / `useCategoryCardState`, `useIsSubPromptDesignated`, `useIsCategoryDesignated`, `useCategoryForbiddenHighlight`, `buildUsedSelectionRows`) | `forbidden-associations-store` |
+| `libraryStore` | models, LoRAs (with model library provenance), the model selection and the LoRA selection with weights (`selectedLoras`, `useSelectedLoraRows`, `selectSelectedLoraCount`), display names (`selectModelName`, `selectLoraName`), file dialogs, registration of installed models | `library-store` (version 2) |
+| `modelCatalogStore` | Models section: the view (Online / Local library), the model shown in the detail panel (`selectedModelKey`, `selectModel` / `closeModel`), provider info, search filters, results and paging, picked versions, installs in progress (a completed install marks its file local in the results), provider token updates, the local library's `applyLibraryCheckpoint`. `install(model, version, fileId, {select, announce})` resolves to an `InstallOutcome` (installed + library entry, failed, cancelled, refused); a second install of a running install joins it; an install that selects announces it with "Go to Create" | - |
+| `imageLibraryStore` | Images section: the view (Search / Favorites), the image in the detail panel (`selectedImageKey`, `openImage` / `closeImage`), search filters, results and paging, the resolution of each image's models, running "Use these LoRAs" and checkpoint switches (announced with "Go to Create"), Add to category (reveals the card on the board), favorites (read from and saved to the backend); `collectImageLoras` (an image's LoRAs as library entries with weights, shared with "Create character") | - |
+| `charactersStore` | the frontend copy of the backend-owned characters (`/api/characters`) and the active character (`activeId`), the character editor (form, and the images a new character will import), busy flags, the gallery's search (`query`, `setQuery`, `useGalleryCharacters`) and selected character (`selectedId`, `select`), the section the editor was opened from (`returnSection`: Cancel goes back there); actions: load, setActive / toggleActive, startCreate / startCreateFromOutput / startCreateFromImage / startEdit (they show the Characters section), form and form-LoRA edits, saveEditor, remove, reference images (current output, file, remove, thumbnail), setReferenceStrength | - (the backend saves characters and `active_id`) |
 | `ipAdapterStore` | the IP-Adapter status read for the selected model (variants, files on disk or downloading, reference support per focus), running installs and the failed downloads of each installed variant (`installFailures`, `selectFileFailure`, `selectVariantFailure`); actions: refresh (views call it when they show reference support and when the selected model changes), install (follows the downloads through the tasks store), cancelInstall | - |
 | `generationSettingsStore` | size, steps, CFG, negative prompt, seed inputs and behaviors | `settings-store` |
 | `generationStore` | single and continuous generations (with the active character), cancel; lists the output of a cancelled generation the backend still completed | - |
-| `outputsStore` | output ids, current output and its metadata, delete/restore, copy | `current-image-store` |
+| `outputsStore` | output ids, current output and its metadata, the filmstrip window (`selectFilmstripIds`, `selectLatestOutputId`), delete/restore, copy | `current-image-store` |
 | `undoStore` | undo stack (generation steps, deletions) | - |
-| `tasksStore` | latest task event per task (`/ws/tasks`), generation progress (stage, outcome: idle / running / complete / error / cancelled, bar fill) and download progress, `waitForTask` | - |
-| `workspaceStore` | window layouts and stacking, closed panes, visibility mode; `revealPane` (shows a pane, brings it to the front and asks for it to scroll into view, `revealRequest`; the app bar toggles and e.g. "Create character" use it), `useIsPaneShown` (a toggle is pressed only while its pane is on screen) | `workspace-store` (not the visibility mode or the reveal request) |
-| `notificationsStore` | user-facing errors, warnings and confirmations | - |
-| `sessionStore` | boot: bootstrap, hydration of every persisted store, legacy seeding, resuming running installs, loading the characters in the background (never delays or fails boot; a failure shows in the Characters pane with Retry) | - |
+| `tasksStore` | latest task event per task (`/ws/tasks`), generation progress (stage, outcome: idle / running / complete / error / cancelled, bar fill), download progress, the running downloads of any source (`selectActiveDownloads`, `useActiveDownloadCount`, `selectActiveDownloadRatio`: the Models badge and the Downloads indicator), `waitForTask` | - |
+| `navigationStore` | the shown section and the sections visited (mounted) so far, focus requests (F6 / Shift+F6 region cycling, `Ctrl+F` search, the first region after `Ctrl+1..4`), `goToSectionAction` (the "Go to <section>" action of hand-off toasts, not offered while that section is shown: `useApplicableAction`) | - |
+| `layoutStore` | the docked Create layout: image and generation widths, collapsed regions (never all), the output details panel (open, tab), the `Ctrl+H` cycle | `layout-store` (version 0) |
+| `boardStore` | the prompt board: card order, collapsed cards, search and state filter (`useVisibleCategoryKeys`, with the card states of `forbiddenRulesStore`), moves (`moveCategoryNextTo`, `moveCategory`), reveal requests (`revealCategory`: expands the card and the board, clears a filter that hides it) | `board-store` (version 0: order, collapsed) |
+| `notificationsStore` | user-facing errors, warnings and confirmations, each with an optional one-click action (`notify({ action })`, `runAction`) | - |
+| `sessionStore` | boot: bootstrap, hydration of every persisted store, legacy seeding (including the layout and the board from `app_state.json` when no layout was ever saved), resuming running installs, loading the characters in the background (never delays or fails boot; a failure shows in the Characters section with Retry) | - |
 
 Copying text with a notification goes through one action module, `src/stores/clipboardActions.ts` (`copyTextWithFeedback`), used by the outputs, model catalog and image library stores. Busy / running flag records (`Record<id, true>`) are updated with `withFlag` (`src/stores/flags.ts`). The two online catalogs share one search engine, `src/stores/pagedSearch.ts` (debounced query, abort of the previous request, stale answers ignored, pages appended without duplicates).
 
@@ -398,13 +463,14 @@ Persisted stores are declared with `persistedStoreOptions` (`src/persistence/per
 - The backend persists the frontend stores at `<data dir>/stores/<name>/state.json`, through `GET/PUT/DELETE /api/stores/{name}`. Reads and writes of one file are serialized (`json_files.path_lock`), so a read racing a write of the same store never breaks the write (on Windows a replace onto a file open for reading fails); a sharing violation from another process is retried for about a second. Each file holds the zustand envelope `{"state": ..., "version": n}`. The formats written by the former Electron storage still load: JSON `null`, a legacy string map, and legacy flat `<name>.json` files. A file that exists but cannot be read is reported as an error rather than treated as empty, so it is never overwritten.
 - `src/persistence/persist.ts` is the only persistence mechanism. It hydrates stores explicitly at boot, ignores writes until a store has been read, coalesces writes, and runs legacy merge migrations.
 - On first start, stores without persisted data are seeded from the legacy `app_state.json` and `library.json`, which `GET /api/bootstrap` returns (LoRA references missing from the library are stripped). The app no longer saves its state to these two files: `library.json` is a read-only seed, and the library lives in `library-store`.
+- `layout-store` (version 0) holds the Create layout and `board-store` (version 0) the board (card order, collapsed cards). When they do not exist yet, they are derived once from the layout of the floating-window versions: `workspace-store` v0, else `panel-layouts-store` + `workspace-z-index-store` (the shape the oldest versions left), else the pane and category positions of `app_state.json`. The Image and Generation pane widths become the region widths (clamped); a region whose panes were all closed starts collapsed; the details panel opens on the Used sub-prompts tab when only that pane was open, and is closed when both the Output browser and the Used sub-prompts panes were. The category windows give the board order, read top to bottom, grouped into rows (tops within 64 px), then left to right (ties go to the front window); panes and deleted categories are dropped, categories without a window come last, every card starts expanded, and free positions are dropped. The legacy files are only read, never written or deleted.
 - `library-store` is version 2: entries may carry a `source` (model library provenance), and the LoRA selection is `selectedLoras: [{id, weight}]`. Older data migrates on load: version 0 entries get `source: null`, and the `selectedLoraIds` of versions 0 and 1 become `selectedLoras` at weight 1. The `last_lora_ids` of a legacy `app_state.json` seed the selection at weight 1 too.
 - The backend owns the favorite online images (`<data dir>/image_favorites.json`, version 1) and the characters (`<data dir>/characters/characters.json`, version 1, plus `characters/images/*.png`; see Characters).
-- The frontend reads outputs through the backend API: `/api/outputs`, `/api/outputs/{id}`, `/api/outputs/{id}/image`, `/api/outputs/{id}/trash` and `/api/trash/{id}/restore`.
+- The frontend reads outputs through the backend API: `/api/outputs`, `/api/outputs/{id}`, `/api/outputs/{id}/image`, `/api/outputs/{id}/thumbnail` (a WebP of at most 256 px, made on first request and remade when the picture is newer; cached in `<data dir>/cache/output_thumbnails`, derived data that is safe to delete; 404 for an unknown output, 422 for an invalid id), `/api/outputs/{id}/trash` and `/api/trash/{id}/restore`.
 
 ### Extension points
 
-- **New panes:** add or extend a store in `src/stores` (logic in `src/domain`), then the view in `src/features/<area>` (using `src/ui/PaneLayout.tsx`), then one entry in `frontend/src/workspace/paneRegistry.tsx`. The app bar gets its show/hide toggle automatically.
+- **New sections:** add or extend a store in `src/stores` (logic in `src/domain`), then the view in `src/features/<area>` (a full page on `src/ui/SectionLayout.tsx`, panels with `src/ui/PaneLayout.tsx`), then the section id, name, description and command in `src/app/sections.ts` (and its key binding), and its view and rail icon in `src/shell/sectionViews.tsx`. The rail, `Ctrl+<n>`, the F6 regions and the e2e `AppDriver` follow from those names.
 - **New API areas:** add `backend/app/routers/<area>.py` exposing an `APIRouter`, append it to `ROUTERS`, put its logic in a service wired in `services/container.py`, add its models to `schemas.py`, then run `npm run gen:api` and add the client calls to `src/api/client.ts`.
 - **Background tasks:** progress events form one discriminated union, `TaskEvent` = `GenerationTaskEvent | DownloadTaskEvent`, keyed by `task_id` and published through `TaskHub.publish` from any thread. The frontend reads them from `tasksStore` (`useDownloadProgress`, `waitForTask`).
 - **Downloads:** `services/downloads.py` `DownloadManager.start(DownloadSpec(url, dest, title, headers, expected_sha256, expected_size), on_complete=...)` is generic: any feature that needs a file gets streaming, verification, retries, cancel (`POST /api/downloads/{task_id}/cancel`) and progress events.
@@ -555,13 +621,13 @@ Tests never touch the real data directory, the model folders or the network, and
 
 ```powershell
 cd backend
-uv run pytest              # 736 tests: API tests (TestClient), service unit tests, the download manager against a
+uv run pytest              # 745 tests: API tests (TestClient), service unit tests, the download manager against a
                            # local HTTP server, the install, image library and character flows end to end, and the
                            # e2e backend itself (tests/e2e: reset, fake generator, synthetic Civitai)
 
 cd frontend
-npm test                   # 1141 Vitest tests: domain, stores, persistence, API client, components, Electron helpers
-npm run test:e2e           # 292 Playwright tests in the real browser (146 per theme; see below)
+npm test                   # 1376 Vitest tests: domain, stores, persistence, API client, components, Electron helpers
+npm run test:e2e           # 366 Playwright tests in the real browser (183 per theme; about 25 min; see below)
 npm run typecheck          # tsc -b
 npm run build              # type-check + production bundle
 npm run gen:api            # regenerate backend/openapi.json, src/api/schema.gen.ts and src/api/defaults.gen.ts
@@ -596,21 +662,22 @@ The specs, one folder per area (each spec runs in both projects, dark and light)
 
 | Folder | Covers |
 | --- | --- |
-| `smoke.spec.ts` | the app is visible (no portal overlay, no blank screen), tooltips create no overlay, whole-workspace baselines at 1920 x 1080 and 1280 x 720 |
-| `workspace/` | pane toggles, Close and reopen, visibility modes (button and `Ctrl+H`), Reorganize (button and `Ctrl+O`), stacking and Send to back, mouse and keyboard move / resize, the resize grip never covering content, layout persistence, the one-row app bar at every width, a revealed pane scrolling into view, Undo, toasts, boot spinner and failure + Retry |
-| `categories/` | the state colors of rows, windows and the Used sub-prompts pane (computed colors against `stateColors.ts`, contrast, non-color cues, element baselines), category flows (create, rename, priority, activation text, skip, lock, add / edit / delete sub-prompts, bulk edit, delete with confirmation), forbidden rule flows, the minimum window width |
-| `generation/`, `outputs/`, `library/` | Generate / Continuous / Cancel with progress, a failing generation, the model dropdown, Copy prompt, output navigation (arrow keys, buttons), trash and undo, missing pictures and the empty history, LoRA weights (typed, stepped, clamped, saved, used by the generation) |
-| `models/`, `images/` | search and filters, statuses, downloads with progress, Cancel, stalls, Failed + Retry / Dismiss, resumed downloads, embeddings, the token dialog, the Local library, the image grid, Load more and infinite scroll, the detail view, Use these LoRAs, Use this checkpoint, favorites, Add to category |
-| `characters/` | the gallery, activation, the editor (new, edit, validation, reference images, delete), Create character from an output and from an image, generation with an active character, the IP-Adapter section (download, stall + Cancel, failure) |
+| `smoke.spec.ts` | every section is visible (no portal overlay, no blank screen) with no page overflow, the docked regions never overlap and Generate is on top, tooltips create no overlay, baselines of every section at 1920 x 1080 and 1280 x 720 |
+| `shell/` | the rail (click, `Ctrl+1..4`, `aria-current`, focus, tooltips, About and the data directory), splitters (drag and keyboard, limits, saved widths), collapse and the strips (generate from the collapsed panel), the `Ctrl+H` cycle, the 1280 x 720 fit, F6 / Shift+F6 and `Ctrl+F`, the layout migration from the floating-window stores, the Downloads indicator and the Models badge, toasts (placement clear of Generate, Go to Create), boot spinner and failure + Retry |
+| `categories/` | the board (grid without overlap, search and state filter, collapse and collapse all, reorder by drag and by keyboard, Sort by priority with the button and `Ctrl+O`, reveal on Add category, the empty board, the legacy order), a 320 px board at 1280 x 720, the state colors of rows, cards and the Used sub-prompts list (computed colors against `stateColors.ts`, contrast, non-color cues, element baselines), category flows (create, rename, priority, activation text, skip, lock, add / edit / delete sub-prompts, bulk edit, delete with confirmation), forbidden rule flows |
+| `generation/`, `outputs/`, `library/` | Generate / Continuous / Cancel with progress, a failing generation, the Checkpoint picker, the no-model call to action, More options, the sticky actions at 1280 x 720 and in the narrowest panel, the command bar (model, character, LoRA weights), the viewer (output actions, arrow keys and buttons, Copy prompt, trash and undo, missing pictures, the empty history, the narrowest viewer), the filmstrip (thumbnails, keyboard, Jump to latest, 44 outputs), the details tabs and their persistence, LoRA weights (typed, stepped, clamped, saved, used by the generation) |
+| `models/`, `images/` | search and filters, the result grids and detail panels (selection, `Escape` and focus return, 1280 x 720), statuses, downloads with progress, Cancel, stalls, Failed + Retry / Dismiss, resumed downloads, embeddings, the token dialog, the Local library, the image grid, Load more and infinite scroll, Use these LoRAs, Use this checkpoint, favorites, Add to category, the hand-off toasts landing in Create |
+| `characters/` | the gallery (search, selection, details, activation), the editor (new, edit, validation, reference images, delete, focus), Create character from an output and from an image, the Character section of the generation panel (300 px), generation with an active character, the IP-Adapter section (download, stall + Cancel, failure), 1280 x 720 |
+| `journeys/` | task flows across sections: the first run (empty app guidance, Browse models, Use a checkpoint, add a category, Generate), compose + generate + review, remix an online image (Use these LoRAs, tags to a new category, Generate), keep a character (create from an output, activate, two outputs with the same locked seed), download a model and use it, and a board of 42 categories (no overlap, search, collapse all, reorder) |
 
 - Servers: each run starts its own e2e backend and Vite dev server, on `E2E_BACKEND_PORT` / `E2E_FRONTEND_PORT` (default 18100 / 15200; set other ports to run several suites side by side, e.g. `E2E_BACKEND_PORT=18101 E2E_FRONTEND_PORT=15201 npx playwright test e2e/categories`). Vite runs with HMR off and its own dependency cache per port; Playwright's output goes to `test-results/e2e-<frontend port>`. `frontend/e2e/support/env.ts` owns the ports, URLs and shared Playwright settings.
 - The e2e backend (`backend/tests/e2e/server.py`, never imported by production code) runs the real `create_app` on a temp data dir and temp model folders seeded from synthetic fixture data (`backend/tests/e2e/fixtures`: every visual state of categories, prompts, forbidden rules, outputs, the library with LoRA weights, characters), with a paced fake generator (a real picture, one progress event per step, cancellable) and a synthetic Civitai / Hugging Face (`fake_civitai.py`: search, versions, images, downloads with progress, stalls and cancel). The browser's requests to other hosts go to the same synthetic network. Before every test, `POST /__e2e__/reset` gives the test a fresh app on fresh data. Its options (`backend/tests/e2e/options.py`, set per test with `test.use({ e2eOptions })`):
   - `generator`: `step_delay_ms` (default 60 per step), `fail_message` (every generation fails with it);
   - `network`: `chunk_delay_ms` (default 150), `download_chunks` (MiB per file, default 6), `stall_at_percent` (downloads stop there until cancelled), `corrupt_downloads` (the first N Civitai downloads fail their SHA-256 check, later ones succeed), `civitai_error_status` (e.g. 503), `civitai_delay_ms`;
-  - `files`: data dir files written over the fixture data (`storeFile`, `fixtureStoreFile` and `workspaceLayout` in `e2e/support/backend.ts`);
-  - `remove`: data dir files or folders deleted once everything is seeded (`output` for an empty history, `output/0000000004.png` for an output whose picture is missing, `characters`).
+  - `files`: data dir files written over the fixture data (`storeFile` and `fixtureStoreFile` in `e2e/support/backend.ts`, `layoutStoreFile` in `e2e/support/shell.ts`);
+  - `remove`: data dir files or folders deleted once everything is seeded (`output` for an empty history, `output/0000000004.png` for an output whose picture is missing, `characters`, `stores/board-store` + `stores/layout-store` to migrate the fixture's legacy `workspace-store` v0).
 - The synthetic catalog (`fixtures/civitai_catalog.json`) has LoRAs, checkpoints and an embedding in every status (to download, in the library, on disk, not supported, refused pickle file, NSFW), and a feed of 24 safe, locally usable images on two pages plus special images (NSFW, Flux, unidentified LoRA, no generation data).
-- Every test fails on a console error, an uncaught page error or a request the synthetic network could not answer. `assertAppVisible` samples the viewport with `elementFromPoint` and fails when a Fluent portal mount node, an unexpected overlay or nothing covers the app, or when the screen is (nearly) one color; `expectOnTop` checks that one element is not covered; `expectNoHorizontalOverflow` that nothing sticks out of a window. State colors are compared with the token table (`resolveColor`, `computedStyle`) and text contrast is measured on the painted colors (`textContrast`, `expectReadable`).
+- Every test fails on a console error, an uncaught page error or a request the synthetic network could not answer. `expectDockedLayout` (`e2e/support/shell.ts`) checks that the rail, the Create header and the three regions tile the window without overlapping and that Generate is on top; `expectNoPageOverflow` that nothing scrolls horizontally. `assertAppVisible` samples the viewport with `elementFromPoint` and fails when a Fluent portal mount node, an unexpected overlay or nothing covers the app, or when the screen is (nearly) one color; `expectOnTop` checks that one element is not covered; `expectNoHorizontalOverflow` that nothing sticks out of a window. State colors are compared with the token table (`resolveColor`, `computedStyle`) and text contrast is measured on the painted colors (`textContrast`, `expectReadable`).
 - Wait for the app's own save before reading a persisted store (`savedStore(page, name, accepts)`, called before the action), then read it with `backend.storedState(name)`.
 - Screenshots the tests save for inspection go to `frontend/e2e/.screens` (ignored by git); visual baselines (`expectBaseline`, volatile content masked) are committed under `frontend/e2e/__screenshots__/<spec>/<project>/`.
 - The backend side of the e2e server is tested by `backend/tests/e2e/test_server.py` and `test_fake_civitai.py` (part of `uv run pytest`).
