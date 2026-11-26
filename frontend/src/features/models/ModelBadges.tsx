@@ -1,6 +1,6 @@
 // Descriptive badges of models and images: kind, base model, version name, local file, NSFW, not supported locally
 // and selected for generation. The single owner of their look (appearance, color, icon), shared by the model result
-// cards, the local library entries and the image library detail view. File statuses ('In library', 'On disk', ...)
+// cards and detail panel, the local library entries and the image detail panel. File statuses ('In library', 'On disk', ...)
 // are VersionStatusBadge's (VersionStatusBadge.tsx).
 //
 // Every look reads in both themes: never the 'subtle' color with the outline / tint appearances (white text and

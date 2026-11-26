@@ -2,7 +2,7 @@ import { act, renderHook } from '@testing-library/react';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { ApiError, api } from '../api/client';
 import type { DownloadTaskEvent, InstalledModel, InstallJob, InstallResponse, ModelSearchPage, RemoteModel, RemoteModelVersion } from '../api/types';
-import { buildSearchQuery, DEFAULT_CATALOG_FILTERS, INSTALL_ALREADY_RUNNING, installKey } from '../domain/modelCatalog';
+import { buildSearchQuery, DEFAULT_CATALOG_FILTERS, INSTALL_ALREADY_RUNNING, installKey, modelKey } from '../domain/modelCatalog';
 import { clipboard } from '../services/clipboard';
 import {
 	downloadEvent as buildDownloadEvent,
@@ -25,11 +25,13 @@ import { SEARCH_DEBOUNCE_MS } from './pagedSearch';
 import {
 	selectActiveProvider,
 	selectDetachedInstallKeys,
+	selectSelectedRemoteModel,
 	useModelCatalogStore,
 	usePickedVersion,
 	useVersionStatus,
 	type InstallEntry,
 } from './modelCatalogStore';
+import { useNavigationStore } from './navigationStore';
 import { useNotificationsStore } from './notificationsStore';
 import { useTasksStore } from './tasksStore';
 
@@ -703,6 +705,101 @@ describe('setProviderToken', () => {
 
 		expect(catalog().info).toBe(INFO);
 		expect(notifications()).toEqual([{ intent: 'error', title: 'Could not save the API token', message: 'Token rejected' }]);
+	});
+});
+
+describe('view and detail selection', () => {
+	it('shows the online search first, then the local library', () => {
+		expect(catalog().view).toBe('online');
+
+		catalog().setView('local');
+		expect(catalog().view).toBe('local');
+		catalog().setView('online');
+		expect(catalog().view).toBe('online');
+	});
+
+	it('shows a listed result in the detail panel until it is closed; unknown keys are ignored', () => {
+		useModelCatalogStore.setState({ results: [LORA_MODEL, CHECKPOINT_MODEL] });
+		expect(catalog().selectedModelKey).toBeNull();
+		expect(selectSelectedRemoteModel(catalog())).toBeNull();
+
+		catalog().selectModel(modelKey(CHECKPOINT_MODEL));
+		expect(catalog().selectedModelKey).toBe(modelKey(CHECKPOINT_MODEL));
+		expect(selectSelectedRemoteModel(catalog())).toBe(CHECKPOINT_MODEL);
+
+		catalog().selectModel('civitai:not-listed');
+		expect(catalog().selectedModelKey).toBe(modelKey(CHECKPOINT_MODEL));
+
+		// The local library keeps the selection for the way back.
+		catalog().setView('local');
+		expect(catalog().selectedModelKey).toBe(modelKey(CHECKPOINT_MODEL));
+
+		catalog().closeModel();
+		expect(catalog().selectedModelKey).toBeNull();
+		expect(selectSelectedRemoteModel(catalog())).toBeNull();
+	});
+
+	it('shows nothing once the selected result is no longer listed (a new search)', () => {
+		useModelCatalogStore.setState({ results: [LORA_MODEL] });
+		catalog().selectModel(modelKey(LORA_MODEL));
+
+		useModelCatalogStore.setState({ results: [CHECKPOINT_MODEL] });
+
+		expect(selectSelectedRemoteModel(catalog())).toBeNull();
+	});
+});
+
+describe('hand-offs to Create', () => {
+	const latest = () => useNotificationsStore.getState().notifications.at(-1);
+
+	it('the announcement of a selected install offers Go to Create, and only that click shows Create', async () => {
+		useNavigationStore.getState().showSection('models');
+		vi.spyOn(api, 'installModel').mockResolvedValue(installedAnswer(INSTALLED_CHECKPOINT));
+
+		await catalog().install(CHECKPOINT_MODEL, CHECKPOINT_VERSION);
+
+		const announcement = latest();
+		expect(announcement).toMatchObject({ intent: 'success', message: `${INSTALLED_CHECKPOINT.name} is ready and selected for generation.` });
+		expect(announcement?.action?.label).toBe('Go to Create');
+		expect(useNavigationStore.getState().section).toBe('models');
+
+		useNotificationsStore.getState().runAction(announcement!.id);
+		expect(useNavigationStore.getState().section).toBe('create');
+		expect(useNotificationsStore.getState().notifications).toEqual([]);
+	});
+
+	it('an install that selects nothing, and an embedding, offer no Go to Create', async () => {
+		vi.spyOn(api, 'installModel')
+			.mockResolvedValueOnce(installedAnswer(INSTALLED_LORA))
+			.mockResolvedValueOnce(installedAnswer(INSTALLED_EMBEDDING));
+
+		await catalog().install(LORA_MODEL, LORA_VERSION, null, { select: false });
+		await catalog().install(EMBEDDING_MODEL, EMBEDDING_VERSION);
+
+		expect(useNotificationsStore.getState().notifications.map((item) => item.action)).toEqual([null, null]);
+	});
+
+	it("'Use' of a library checkpoint selects it and announces it with Go to Create", () => {
+		useNavigationStore.getState().showSection('models');
+		const entryId = useLibraryStore.getState().registerInstalled(INSTALLED_CHECKPOINT, { select: false });
+		const otherId = useLibraryStore.getState().registerInstalled(installed(remoteModel({ id: '9' }), remoteVersion({ id: '99' }), 'checkpoints'));
+		expect(useLibraryStore.getState().selectedModelId).toBe(otherId);
+
+		catalog().applyLibraryCheckpoint(entryId!);
+
+		expect(useLibraryStore.getState().selectedModelId).toBe(entryId);
+		expect(latest()).toMatchObject({ intent: 'success', message: `${INSTALLED_CHECKPOINT.name} is selected for generation.` });
+		expect(latest()?.action?.label).toBe('Go to Create');
+		expect(useNavigationStore.getState().section).toBe('models');
+	});
+
+	it('ignores the Use of an unknown checkpoint', () => {
+		const before = useLibraryStore.getState().selectedModelId;
+
+		catalog().applyLibraryCheckpoint('no-such-model');
+
+		expect(useLibraryStore.getState().selectedModelId).toBe(before);
+		expect(useNotificationsStore.getState().notifications).toEqual([]);
 	});
 });
 

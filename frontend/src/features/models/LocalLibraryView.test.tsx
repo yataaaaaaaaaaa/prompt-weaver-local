@@ -4,7 +4,7 @@ import type { LoRASpec, ModelSpec } from '../../api/types';
 import { useLibraryStore } from '../../stores/libraryStore';
 import { useModelCatalogStore } from '../../stores/modelCatalogStore';
 import { renderWithProviders } from '../../test/render';
-import { LocalLibraryView } from './LocalLibraryView';
+import { LocalLibraryView, ModelFolders } from './LocalLibraryView';
 import { INFO, modelSource } from '../../test/modelLibraryData';
 
 const INSTALLED_MODEL: ModelSpec = {
@@ -34,15 +34,16 @@ function seed() {
 		selectedLoras: [{ id: 'lora-one', weight: 0.6 }],
 		...libraryActions,
 	});
-	const copyTriggerWords = vi.fn(async () => undefined);
-	useModelCatalogStore.setState({ info: INFO, infoStatus: 'ready', copyTriggerWords });
-	return { ...libraryActions, copyTriggerWords };
+	const catalogActions = { copyTriggerWords: vi.fn(async () => undefined), applyLibraryCheckpoint: vi.fn() };
+	useModelCatalogStore.setState({ info: INFO, infoStatus: 'ready', ...catalogActions });
+	return { ...libraryActions, ...catalogActions };
 }
 
 function entry(listName: string, name: string): HTMLElement {
 	return within(screen.getByRole('list', { name: listName })).getByRole('group', { name });
 }
 
+// Fluent components render slowly on a busy machine: more than the default 5 s per test.
 describe('LocalLibraryView', () => {
 	it('shows the provenance of installed checkpoints and marks local files', () => {
 		seed();
@@ -61,7 +62,7 @@ describe('LocalLibraryView', () => {
 		expect(within(local).queryByRole('img')).not.toBeInTheDocument();
 	});
 
-	it('uses a checkpoint for generation and shows the selected one', async () => {
+	it("uses a checkpoint for generation through the catalog store's hand-off, and shows the selected one", async () => {
 		const actions = seed();
 		const { user } = renderWithProviders(<LocalLibraryView />);
 
@@ -69,7 +70,18 @@ describe('LocalLibraryView', () => {
 		expect(within(entry('Checkpoints', 'local.safetensors')).queryByRole('button', { name: 'Use' })).not.toBeInTheDocument();
 		await user.click(within(entry('Checkpoints', 'Model One - v1.0')).getByRole('button', { name: 'Use' }));
 
-		expect(actions.selectModel).toHaveBeenCalledWith('model-one');
+		expect(actions.applyLibraryCheckpoint).toHaveBeenCalledWith('model-one');
+		expect(actions.selectModel).not.toHaveBeenCalled();
+	});
+
+	it('lists the entries in grids (a card per entry)', () => {
+		seed();
+		renderWithProviders(<LocalLibraryView />);
+
+		expect(within(screen.getByRole('list', { name: 'Checkpoints' })).getAllByRole('group')).toHaveLength(2);
+		expect(within(screen.getByRole('list', { name: 'LoRAs' })).getAllByRole('group')).toHaveLength(2);
+		// The model folders are the detail panel's (ModelFolders).
+		expect(screen.queryByRole('heading', { name: 'Model folders' })).not.toBeInTheDocument();
 	});
 
 	it('toggles the default selection of LoRAs and removes them', async () => {
@@ -107,19 +119,26 @@ describe('LocalLibraryView', () => {
 
 	it('shows the model folders of the backend', () => {
 		seed();
-		renderWithProviders(<LocalLibraryView />);
+		renderWithProviders(<ModelFolders />);
 
+		expect(screen.getByRole('heading', { name: 'Model folders', level: 2 })).toBeInTheDocument();
+		expect(screen.getByText(/^Downloads are saved in these folders/)).toBeInTheDocument();
 		const folders = screen.getAllByRole('definition');
 		expect(folders.map((folder) => folder.textContent)).toEqual(['D:/models/checkpoints', 'D:/models/loras', 'D:/models/embeddings']);
 		expect(screen.getAllByRole('term').map((term) => term.textContent)).toEqual(['Checkpoint', 'LoRA', 'Embedding']);
 	});
 
 	it('shows the empty states and waits for the folders', () => {
-		renderWithProviders(<LocalLibraryView />);
+		renderWithProviders(
+			<>
+				<LocalLibraryView />
+				<ModelFolders />
+			</>,
+		);
 
 		expect(screen.getByText('No checkpoint in the library.')).toBeInTheDocument();
 		expect(screen.getByText('No LoRA in the library.')).toBeInTheDocument();
-		expect(screen.getByText('The model folders are shown once the model library is loaded.')).toBeInTheDocument();
+		expect(screen.getByText('The model folders are shown once the model providers are loaded.')).toBeInTheDocument();
 	});
 
 	it('names every control', () => {

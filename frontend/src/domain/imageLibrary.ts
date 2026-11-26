@@ -91,7 +91,7 @@ export function appliedLoraWeight(resource: ImageResource): number {
  *  versionStatusKind of the resolved version (unavailable / installing / failed / in_library / on_disk / remote). */
 export type ImageResourceStatusKind = VersionStatusKind | 'resolving' | 'unresolved';
 
-/** One row of the detail view's LoRA list or checkpoint line (computed by the image library store hooks). */
+/** One row of the detail panel's LoRA list or checkpoint line (computed by the image library store hooks). */
 export type ImageResourceRow = {
 	/** Position in RemoteImage.resources (stable React key). */
 	index: number;
@@ -119,7 +119,7 @@ export type ImageResourceRow = {
 };
 
 // ---------------------------------------------------------------------------
-// Resolution of an image's resources and the rows of the detail view
+// Resolution of an image's resources and the rows of the detail panel
 // ---------------------------------------------------------------------------
 
 export type ImageResolutionStatus = 'loading' | 'ready' | 'failed';

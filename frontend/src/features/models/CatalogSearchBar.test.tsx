@@ -3,8 +3,20 @@ import { describe, expect, it, vi } from 'vitest';
 import type { ModelKind } from '../../api/types';
 import { useModelCatalogStore } from '../../stores/modelCatalogStore';
 import { renderWithProviders } from '../../test/render';
-import { CatalogSearchBar } from './CatalogSearchBar';
+import { SECTION_SEARCH_ATTRIBUTE } from '../../app/sections';
+import { CatalogFilters, CatalogSearchBox, ProviderInfoError } from './CatalogSearchBar';
 import { INFO } from '../../test/modelLibraryData';
+
+/** The search controls as the Models section lays them out (toolbar + the error above the results). */
+function CatalogSearchBar(): JSX.Element {
+	return (
+		<>
+			<CatalogSearchBox />
+			<CatalogFilters />
+			<ProviderInfoError />
+		</>
+	);
+}
 
 /** Filter actions that also update the filters (like the store does), so controlled inputs follow. */
 function seedActions() {
@@ -26,6 +38,7 @@ function seedInfo() {
 	useModelCatalogStore.setState({ info: INFO, infoStatus: 'ready' });
 }
 
+// Fluent components render slowly on a busy machine: more than the default 5 s per test.
 describe('CatalogSearchBar', () => {
 	it('updates the query on every keystroke (the store debounces)', async () => {
 		const actions = seedActions();
@@ -34,6 +47,8 @@ describe('CatalogSearchBar', () => {
 
 		const box = screen.getByRole('searchbox', { name: 'Search models' });
 		expect(box).toHaveAttribute('placeholder', 'Search Civitai models');
+		// Ctrl+F focuses it (the shell finds the shown section's search box by this attribute).
+		expect(box).toHaveAttribute(SECTION_SEARCH_ATTRIBUTE);
 		await user.type(box, 'pony');
 
 		expect(actions.setQuery).toHaveBeenCalledTimes(4);

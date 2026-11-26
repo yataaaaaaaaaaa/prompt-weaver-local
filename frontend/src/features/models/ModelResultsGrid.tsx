@@ -1,5 +1,6 @@
-// Online search results of the catalog store: spinner while searching (the previous results stay visible),
-// error with Retry, empty state, the result cards and 'Load more' (LoadMoreButton) while the provider has a next
+// Online results of the Models section (catalog store): the provider info error, the downloads no card shows
+// (DownloadsSection), a spinner while searching (the previous results stay visible), the search error with Retry,
+// the empty state, the responsive grid of result cards and 'Load more' (LoadMoreButton) while the provider has a next
 // page.
 import {
 	Body1,
@@ -16,29 +17,37 @@ import { ArrowClockwiseRegular } from '@fluentui/react-icons';
 import { modelKey } from '../../domain/modelCatalog';
 import { useModelCatalogStore } from '../../stores/modelCatalogStore';
 import { LoadMoreButton } from '../../ui/LoadMoreButton';
+import { ProviderInfoError } from './CatalogSearchBar';
+import { DownloadsSection } from './DownloadsSection';
 import { ModelResultCard } from './ModelResultCard';
+
+/** Narrowest card column of the results grid (more columns as the section grows). */
+export const RESULT_CARD_MIN_WIDTH = '320px';
 
 const useStyles = makeStyles({
 	root: {
 		display: 'flex',
 		flexDirection: 'column',
-		gap: tokens.spacingVerticalS,
+		gap: tokens.spacingVerticalM,
 		minWidth: 0,
 	},
-	list: {
-		display: 'flex',
-		flexDirection: 'column',
-		gap: tokens.spacingVerticalS,
+	grid: {
+		display: 'grid',
+		gridTemplateColumns: `repeat(auto-fill, minmax(min(100%, ${RESULT_CARD_MIN_WIDTH}), 1fr))`,
+		gap: tokens.spacingHorizontalM,
 		margin: 0,
 		padding: 0,
 		listStyleType: 'none',
+	},
+	item: {
+		minWidth: 0,
 	},
 	muted: {
 		color: tokens.colorNeutralForeground3,
 	},
 });
 
-export function ModelResultList(): JSX.Element {
+export function ModelResultsGrid(): JSX.Element {
 	const styles = useStyles();
 	const results = useModelCatalogStore((state) => state.results);
 	const searchStatus = useModelCatalogStore((state) => state.searchStatus);
@@ -49,6 +58,8 @@ export function ModelResultList(): JSX.Element {
 
 	return (
 		<div className={styles.root} aria-busy={searchStatus === 'loading'}>
+			<ProviderInfoError />
+			<DownloadsSection />
 			{searchStatus === 'loading' ? <Spinner size="small" label="Searching models…" /> : null}
 			{searchStatus === 'failed' ? (
 				<MessageBar intent="error" layout="multiline">
@@ -64,9 +75,9 @@ export function ModelResultList(): JSX.Element {
 				</MessageBar>
 			) : null}
 			{results.length > 0 ? (
-				<ul className={styles.list} aria-label="Search results">
+				<ul className={styles.grid} aria-label="Search results">
 					{results.map((model) => (
-						<li key={modelKey(model)}>
+						<li key={modelKey(model)} className={styles.item}>
 							<ModelResultCard model={model} />
 						</li>
 					))}

@@ -1,7 +1,7 @@
 // Progress of a running install (modelCatalogStore InstallEntry + tasks store DownloadProgress): progress bar
 // (indeterminate while checking/registering or while the size is unknown), the transferred bytes or the phase
-// text, and Cancel (enabled while the download task runs). Shared by the result cards and the downloads section;
-// the presentation is the shared TransferProgress.
+// text, and Cancel (enabled while the download task runs). Shared by the result cards, the detail panel, the Downloads
+// area and the image resources; the presentation is the shared TransferProgress.
 import type { InstallPhase } from '../../domain/modelCatalog';
 import { useModelCatalogStore, type InstallEntry } from '../../stores/modelCatalogStore';
 import type { DownloadProgress } from '../../stores/tasksStore';

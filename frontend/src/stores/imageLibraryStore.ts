@@ -1,14 +1,17 @@
-// Image library store (online images): single truth holder of the image search (filters, results, paging), the
-// image shown in the detail view, the resolution of each image's models, the running "Use these LoRAs" /
-// checkpoint switches, and the favorites collection read from the backend (which owns it). Not persisted.
+// Image library store (the Images section): single truth holder of the image search (filters, results, paging),
+// which grid the section shows (search or favorites), the image shown in the detail panel, the resolution of each
+// image's models, the running "Use these LoRAs" / checkpoint switches, and the favorites collection read from the
+// backend (which owns it). Not persisted.
 // Pure logic lives in src/domain/imageLibrary.ts. Cross-store coordination happens in the actions:
 // - installs go through useModelCatalogStore.getState().install (the one install/download flow; progress stays
 //   in the tasks store);
 // - the LoRA selection is replaced with useLibraryStore.getState().setLoraSelection (LoraWeight items);
 // - the checkpoint is selected with useLibraryStore.getState().selectModel, or installed (and selected) through
 //   the catalog store;
-// - tags become a sub-prompt through the categories store;
+// - tags become a sub-prompt through the categories store, and the board store reveals its card;
 // - copies go through copyTextWithFeedback (src/stores/clipboardActions.ts).
+// Hand-offs to Create: the success notifications offer 'Go to Create' (navigationStore goToSectionAction); nothing
+// here navigates by itself.
 import { useMemo } from 'react';
 import { create } from 'zustand';
 import { useShallow } from 'zustand/react/shallow';
@@ -36,18 +39,24 @@ import {
 import { weightedLorasText } from '../domain/loraSelection';
 import { installOutcomeEntry, type InstallOptions } from '../domain/modelCatalog';
 import { joinPromptTags, namedProblemsText } from '../domain/text';
+import { useBoardStore } from './boardStore';
 import { findCategory, useCategoriesStore } from './categoriesStore';
 import { copyTextWithFeedback } from './clipboardActions';
 import { withFlag } from './flags';
 import { useLibraryStore } from './libraryStore';
 import { useModelCatalogStore } from './modelCatalogStore';
+import { goToSectionAction } from './navigationStore';
 import { describeError, reportError, useNotificationsStore } from './notificationsStore';
 import { createPagedSearch, type LoadStatus, type PagedSearchActions, type SearchStatus } from './pagedSearch';
 
 /** Defined in src/domain/imageLibrary.ts (with the row builders that read them). */
 export type { ImageResolution, ImageResolutionStatus } from '../domain/imageLibrary';
 
+/** The grid the Images section shows: the search results or the favorites. */
+export type ImagesView = 'search' | 'favorites';
+
 export type ImageLibraryState = {
+	view: ImagesView;
 	filters: ImageFilters;
 	results: RemoteImage[];
 	nextCursor: string | null;
@@ -57,7 +66,8 @@ export type ImageLibraryState = {
 	favorites: FavoriteImage[];
 	favoritesStatus: LoadStatus;
 	favoritesError: string | null;
-	/** imageKey of the image shown in the detail view (null: none). Looked up in results, then favorites. */
+	/** imageKey of the image shown in the detail panel (null: none). Looked up in results, then favorites: an image
+	 *  listed in neither shows nothing (selectSelectedImage). */
 	selectedImageKey: string | null;
 	/** Resolution of each image's resources by imageKey (absent: never requested). */
 	resolutions: Record<string, ImageResolution>;
@@ -68,9 +78,11 @@ export type ImageLibraryState = {
 };
 
 export type ImageLibraryActions = {
-	/** Idempotent first use of the pane: the first search (when none ran yet) and the favorites (once, again after
-	 *  a failure). Never rejects. */
+	/** Idempotent first use of the Images section: the first search (when none ran yet) and the favorites (once,
+	 *  again after a failure). Never rejects. */
 	activate: () => Promise<void>;
+	/** Shows the search results or the favorites (the image in the detail panel stays shown). */
+	setView: (view: ImagesView) => void;
 	/** Updates the query text and searches again after SEARCH_DEBOUNCE_MS of inactivity (src/stores/pagedSearch.ts). */
 	setQuery: PagedSearchActions['setQuery'];
 	/** The other filters search again immediately (no-op when unchanged). A period change does not search while a
@@ -85,7 +97,7 @@ export type ImageLibraryActions = {
 	/** Appends the next page (infinite scroll); no-op without nextCursor or while a search runs. A failure keeps
 	 *  the results; images of earlier pages are not listed twice. */
 	loadMore: PagedSearchActions['loadMore'];
-	/** Shows the image (a result or a favorite; unknown keys are ignored) in the detail view and resolves its
+	/** Shows the image (a result or a favorite; unknown keys are ignored) in the detail panel and resolves its
 	 *  resources when not resolved yet (or failed). */
 	openImage: (imageKey: string) => void;
 	closeImage: () => void;
@@ -102,18 +114,19 @@ export type ImageLibraryActions = {
 	collectImageLoras: (imageKey: string) => Promise<ImageLoraCollection | null>;
 	/** "Use these LoRAs": collectImageLoras, then replaces the selection with exactly the usable LoRAs via
 	 *  useLibraryStore.setLoraSelection (unchanged when none is usable). Success notification listing
-	 *  'name (weight)'; a warning listing the skipped LoRAs with their reasons; info when the image publishes no LoRA.
-	 *  No-op while it runs for the image (applyingLoras). Never rejects. */
+	 *  'name (weight)' with 'Go to Create'; a warning listing the skipped LoRAs with their reasons; info when the
+	 *  image publishes no LoRA. No-op while it runs for the image (applyingLoras). Never rejects. */
 	applyImageLoras: (imageKey: string) => Promise<void>;
-	/** Selects the image's checkpoint (imageCheckpointRow): its library entry (selectModel + success), else installs
-	 *  it through the catalog store with the default options (which selects and announces it, and notifies its
-	 *  failures). A warning with the reason when it cannot be resolved or installed. No-op while it runs for the
-	 *  image (switchingCheckpoint). Never rejects. */
+	/** Selects the image's checkpoint (imageCheckpointRow): its library entry (selectModel + success with 'Go to
+	 *  Create'), else installs it through the catalog store with the default options (which selects and announces it
+	 *  with 'Go to Create', and notifies its failures). A warning with the reason when it cannot be resolved or
+	 *  installed. No-op while it runs for the image (switchingCheckpoint). Never rejects. */
 	switchToImageCheckpoint: (imageKey: string) => Promise<void>;
 	/** Adds the image's tags (all, or `tags`) as one new sub-prompt (joinPromptTags) to the category `target`
 	 *  (categoriesStore.addSubPromptWithText, which rejects duplicates), or to a new category when null (addCategory,
-	 *  then its empty sub-prompt gets the text); success notification naming the category. A warning when there are
-	 *  no tags. */
+	 *  which reveals its card, then its empty sub-prompt gets the text). The board store reveals the category's card
+	 *  (revealCategory), and a success notification naming the category offers 'Go to Create'. A warning when there
+	 *  are no tags. */
 	addTagsToCategory: (imageKey: string, target: CategoryKey | null, tags?: readonly string[]) => void;
 	/** Copies the published prompt (copyTextWithFeedback). */
 	copyPrompt: (imageKey: string) => Promise<void>;
@@ -231,6 +244,7 @@ export const useImageLibraryStore = create<ImageLibraryStore>()((set, get) => {
 	};
 
 	return {
+		view: 'search',
 		filters: DEFAULT_IMAGE_FILTERS,
 		results: [],
 		nextCursor: null,
@@ -250,6 +264,12 @@ export const useImageLibraryStore = create<ImageLibraryStore>()((set, get) => {
 				searchStatus === 'idle' ? get().search() : undefined,
 				favoritesStatus === 'idle' || favoritesStatus === 'failed' ? get().loadFavorites() : undefined,
 			]);
+		},
+
+		setView: (view) => {
+			if (get().view !== view) {
+				set({ view });
+			}
 		},
 
 		...pagedSearch,
@@ -331,7 +351,7 @@ export const useImageLibraryStore = create<ImageLibraryStore>()((set, get) => {
 				const { items, applied, skipped } = collection;
 				if (items.length) {
 					useLibraryStore.getState().setLoraSelection(items);
-					notify('success', `LoRAs selected for generation: ${weightedLorasText(applied)}.`);
+					notify('success', `LoRAs selected for generation: ${weightedLorasText(applied)}.`, { action: goToSectionAction('create') });
 				}
 				if (skipped.length) {
 					notify('warning', namedProblemsText(skipped), {
@@ -349,7 +369,7 @@ export const useImageLibraryStore = create<ImageLibraryStore>()((set, get) => {
 					notify('info', 'This image publishes no checkpoint.');
 				} else if (row.status === 'in_library' && row.libraryEntryId !== null) {
 					useLibraryStore.getState().selectModel(row.libraryEntryId);
-					notify('success', `${row.name} is selected for generation.`);
+					notify('success', `${row.name} is selected for generation.`, { action: goToSectionAction('create') });
 				} else if (isInstallableRow(row)) {
 					// Installs, selects and announces it; its failures are notified by the catalog store.
 					await useModelCatalogStore.getState().install(row.model, row.version);
@@ -382,8 +402,9 @@ export const useImageLibraryStore = create<ImageLibraryStore>()((set, get) => {
 				}
 				categoryKey = target;
 			}
+			useBoardStore.getState().revealCategory(categoryKey);
 			const name = findCategory(useCategoriesStore.getState().categories, categoryKey)?.text ?? categoryKey;
-			notify('success', `Tags added to the category '${name}'.`);
+			notify('success', `Tags added to the category '${name}'.`, { action: goToSectionAction('create') });
 		},
 
 		copyPrompt: (key) => copyTextWithFeedback(selectImage(key)(get())?.params?.prompt, 'Prompt'),
@@ -439,7 +460,7 @@ export const selectImage =
 		);
 	};
 
-/** The image shown in the detail view. */
+/** The image shown in the detail panel (null when none is selected or it is listed nowhere any more). */
 export const selectSelectedImage = (state: ImageLibraryState): RemoteImage | null => selectImage(state.selectedImageKey)(state);
 
 export const selectIsFavorite =
@@ -478,7 +499,7 @@ function useImageResourceContext(key: string | null): ImageResourceContext {
 	}, [resolution, models, loras, installKeys, installList]);
 }
 
-/** LoRA rows of the image's detail view (one per LoRA resource, in order), combining its resolution, the library
+/** LoRA rows of the image's detail panel (one per LoRA resource, in order), combining its resolution, the library
  *  store entries and the catalog store installs (views read the download progress of a row's install through
  *  installs[row.installKey].taskId). Memoized. [] for null. */
 export function useImageLoraRows(key: string | null): ImageResourceRow[] {

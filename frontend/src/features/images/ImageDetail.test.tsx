@@ -97,8 +97,8 @@ function seedActions() {
 }
 
 function renderDetail(key = KEY) {
-	const onBack = vi.fn();
-	return { onBack, ...renderWithProviders(<ImageDetail imageKey={key} onBack={onBack} />) };
+	const onClose = vi.fn();
+	return { onClose, ...renderWithProviders(<ImageDetail imageKey={key} onClose={onClose} />) };
 }
 
 function section(name: string): HTMLElement {
@@ -112,6 +112,7 @@ beforeEach(() => {
 	vi.mocked(useDownloadProgress).mockReset().mockReturnValue(null);
 });
 
+// Fluent components render slowly on a busy machine: more than the default 5 s per test.
 describe('ImageDetail overview', () => {
 	it('shows the large preview, the author and the base model', () => {
 		seedActions();
@@ -148,13 +149,14 @@ describe('ImageDetail overview', () => {
 		expect(screen.getByRole('img', { name: 'Image by alice' })).toBeInTheDocument();
 	});
 
-	it('explains when the image is no longer listed', () => {
+	it('renders nothing when the image is no longer listed (the section shows its empty detail)', () => {
 		seedActions();
 		useImageLibraryStore.setState({ results: [] });
 		renderDetail();
 
-		expect(screen.getByText('This image is no longer listed. Go back to pick another one.')).toBeInTheDocument();
+		expect(screen.queryByRole('heading')).not.toBeInTheDocument();
 		expect(screen.queryByRole('img')).not.toBeInTheDocument();
+		expect(screen.queryByRole('button')).not.toBeInTheDocument();
 	});
 
 	it('toggles the favorite', async () => {
@@ -222,36 +224,35 @@ describe('ImageDetail overview', () => {
 });
 
 describe('ImageDetail navigation', () => {
-	it('focuses Back when it opens and goes back with it', async () => {
+	it('focuses its heading when it opens and closes with Close', async () => {
 		seedActions();
-		const { user, onBack } = renderDetail();
+		const { user, onClose } = renderDetail();
 
-		const back = screen.getByRole('button', { name: 'Back' });
-		expect(back).toHaveFocus();
-		await user.click(back);
+		expect(screen.getByRole('heading', { name: 'Image by alice', level: 2 })).toHaveFocus();
+		await user.click(screen.getByRole('button', { name: 'Close details' }));
 
-		expect(onBack).toHaveBeenCalledTimes(1);
+		expect(onClose).toHaveBeenCalledTimes(1);
 	});
 
-	it('goes back with Escape', async () => {
+	it('closes with Escape', async () => {
 		seedActions();
-		const { user, onBack } = renderDetail();
+		const { user, onClose } = renderDetail();
 
 		act(() => screen.getByRole('button', { name: 'Copy prompt' }).focus());
 		await user.keyboard('{Escape}');
 
-		expect(onBack).toHaveBeenCalledTimes(1);
+		expect(onClose).toHaveBeenCalledTimes(1);
 	});
 
 	it('leaves Escape to an open menu', async () => {
 		seedActions();
-		const { user, onBack } = renderDetail();
+		const { user, onClose } = renderDetail();
 
 		await user.click(screen.getByRole('button', { name: 'Add to category' }));
 		const menu = await screen.findByRole('menu');
 		fireEvent.keyDown(within(menu).getByRole('menuitem', { name: 'New category' }), { key: 'Escape' });
 
-		expect(onBack).not.toHaveBeenCalled();
+		expect(onClose).not.toHaveBeenCalled();
 	});
 });
 

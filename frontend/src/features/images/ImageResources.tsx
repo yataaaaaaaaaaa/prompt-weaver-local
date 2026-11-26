@@ -1,4 +1,4 @@
-// LoRAs and checkpoint of the image in the detail view. Rows come from the image library store hooks
+// LoRAs and checkpoint of the image in the detail panel. Rows come from the image library store hooks
 // (useImageLoraRows / useImageCheckpointRow: resolution + library + installs); each row shows its name (linked to the
 // provider page), weight, status (reason in a tooltip) and, while it downloads, the shared InstallProgress of the
 // catalog store install. 'Use these LoRAs' and 'Use this checkpoint' call the store actions, which own the install

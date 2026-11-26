@@ -1,5 +1,5 @@
-// Presentational texts of the image library views (pure; no domain rules): the accessible name of an image (grid
-// thumbnails, detail preview) and the site name of an external page link.
+// Presentational texts of the Images section views (pure; no domain rules): the accessible name of an image (grid
+// thumbnails, detail preview) and the site name of an external page link (also the Models section's page links).
 import type { RemoteImage } from '../../api/types';
 
 /** 'Image by <username>', or 'Image <id>' for an anonymous upload. */

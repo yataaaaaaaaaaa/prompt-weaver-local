@@ -1,4 +1,5 @@
-// Action area of a result card, chosen by the version status (useVersionStatus of the catalog store):
+// Action area of a version, on its result card and in the detail panel, chosen by the version status (useVersionStatus
+// of the catalog store):
 // remote -> 'Download and use'; on_disk / in_library -> 'Use' (+ 'Copy prompt token' for local embeddings);
 // installing -> progress + Cancel; failed -> error with Retry / Dismiss; unavailable -> disabled with the reason.
 // Every action is a catalog store action (install also registers and selects the model).

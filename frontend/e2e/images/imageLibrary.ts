@@ -1,9 +1,8 @@
-// Page helpers of the image library specs (e2e/images): the pane, its thumbnail grids, the detail view of an image
-// and its resource rows. Images are the synthetic catalog's (backend/tests/e2e/fixtures/civitai_catalog.json):
-// thumbnails are named 'Image by <username>'.
+// Page helpers of the Images section specs (e2e/images, the remix journey): the section, its thumbnail grids, the
+// detail panel of an image and its resource rows. Images are the synthetic catalog's
+// (backend/tests/e2e/fixtures/civitai_catalog.json): thumbnails are named 'Image by <username>'.
 import { expect, type Locator } from '@playwright/test';
 import { waitForPicturesInView, type AppDriver } from '../support/app';
-import { IMAGE_LIBRARY } from '../models/libraries';
 
 /** Authors of the catalog images used by the specs. */
 export const AUTHOR = {
@@ -19,17 +18,25 @@ export const AUTHOR = {
 export const FEED_FIRST_PAGE = 20;
 export const FEED_TOTAL = 24;
 
-/** Opens the app, then the Image library pane (fronted), once its first page is shown. */
-export async function openImageLibrary(app: AppDriver): Promise<Locator> {
+/** The prompt of the watercolor image (its tags, in order). */
+export const WATERCOLOR_PROMPT = 'watercolor, harbor town, boats, soft light';
+
+/** Opens the app, then the Images section, once its first page is shown. Returns the section. */
+export async function openImages(app: AppDriver): Promise<Locator> {
 	await app.open();
-	const pane = await app.showPane(IMAGE_LIBRARY);
-	await expect(searchResults(pane).getByRole('button').first()).toBeVisible();
+	const section = await app.goTo('images');
+	await expect(searchResults(section).getByRole('button').first()).toBeVisible();
 	await app.settle();
-	return pane;
+	return section;
 }
 
-export function searchResults(pane: Locator): Locator {
-	return pane.getByRole('list', { name: 'Search results' });
+export function searchResults(section: Locator): Locator {
+	return section.getByRole('list', { name: 'Search results' });
+}
+
+/** The detail panel (complementary landmark 'Image details'). */
+export function imageDetail(section: Locator): Locator {
+	return section.getByRole('complementary', { name: 'Image details', exact: true });
 }
 
 /** The thumbnail button of the image by `author` in `grid`. */
@@ -42,33 +49,53 @@ export async function thumbnailNames(grid: Locator): Promise<string[]> {
 	return grid.getByRole('button').evaluateAll((buttons) => buttons.map((button) => button.getAttribute('aria-label') ?? ''));
 }
 
-export function imageSearchBox(pane: Locator): Locator {
-	return pane.getByRole('searchbox', { name: 'Search images' });
+export function imageSearchBox(section: Locator): Locator {
+	return section.getByRole('searchbox', { name: 'Search images' });
 }
 
-/** Opens the image by `author` from the search results and waits for its resolved resources. */
-export async function openImage(pane: Locator, author: string): Promise<void> {
-	await thumbnail(searchResults(pane), author).click();
-	await expect(pane.getByRole('heading', { name: `Image by ${author}`, exact: true })).toBeVisible();
-	await expect(pane.getByText('Resolving', { exact: true })).toHaveCount(0);
-	await waitForPicturesInView(pane.page());
+/** Opens the image by `author` from the search results and waits for the detail panel to show it, resolved. Returns
+ *  the detail panel. */
+export async function openImage(section: Locator, author: string): Promise<Locator> {
+	await thumbnail(searchResults(section), author).click();
+	const detail = imageDetail(section);
+	await expect(detail.getByRole('heading', { name: `Image by ${author}`, exact: true, level: 2 })).toBeVisible();
+	await expect(detail.getByText('Resolving', { exact: true })).toHaveCount(0);
+	await waitForPicturesInView(section.page());
+	return detail;
 }
 
-export function backButton(pane: Locator): Locator {
-	return pane.getByRole('button', { name: 'Back', exact: true });
+/** The Close button of a detail panel. */
+export function closeButton(detail: Locator): Locator {
+	return detail.getByRole('button', { name: 'Close details', exact: true });
 }
 
-/** A section of the detail view by its heading ('Tags', 'LoRAs', 'Checkpoint', 'Generation parameters'). */
-export function detailSection(pane: Locator, title: string): Locator {
-	return pane.getByRole('region', { name: title, exact: true });
+/** A section of the detail panel by its heading ('Tags', 'LoRAs', 'Checkpoint', 'Generation parameters'). */
+export function detailSection(detail: Locator, title: string): Locator {
+	return detail.getByRole('region', { name: title, exact: true });
 }
 
-/** The LoRA row of the detail view whose name starts with `name`. */
-export function loraRow(pane: Locator, name: string): Locator {
-	return pane.getByRole('list', { name: 'LoRAs of this image' }).getByRole('listitem').filter({ hasText: name });
+/** The LoRA row of the detail panel whose name starts with `name`. */
+export function loraRow(detail: Locator, name: string): Locator {
+	return detail.getByRole('list', { name: 'LoRAs of this image' }).getByRole('listitem').filter({ hasText: name });
 }
 
-/** The value of a generation parameter of the detail view ('Sampler', 'Steps', ...). */
-export function parameter(pane: Locator, label: string): Locator {
-	return detailSection(pane, 'Generation parameters').getByRole('group', { name: label, exact: true }).locator('span').last();
+/** The value of a generation parameter of the detail panel ('Sampler', 'Steps', ...). */
+export function parameter(detail: Locator, label: string): Locator {
+	return detailSection(detail, 'Generation parameters').getByRole('group', { name: label, exact: true }).locator('span').last();
+}
+
+/** Adds the image's (picked) tags to `category` (an existing category's name, or 'New category') with the Tags
+ *  section's 'Add to category' menu. */
+export async function addTagsTo(detail: Locator, category: string): Promise<void> {
+	const page = detail.page();
+	await detailSection(detail, 'Tags').getByRole('button', { name: /^Add (\d+ )?to category$/ }).click();
+	const menu = page.getByRole('menu');
+	await expect(menu).toBeVisible();
+	await menu.getByRole('menuitem', { name: category, exact: true }).click();
+	await expect(menu).toBeHidden();
+}
+
+/** The sub-prompt rows of a category card of the board (read-only; the board specs own the cards). */
+export function subPrompts(card: Locator): Locator {
+	return card.getByRole('list', { name: 'Sub-prompts' }).getByRole('button', { name: /^Sub-prompt: / });
 }

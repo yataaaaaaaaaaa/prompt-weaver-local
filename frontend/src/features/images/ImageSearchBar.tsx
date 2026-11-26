@@ -1,41 +1,45 @@
-// Search filters of the image library store: keyword, sort, period (disabled with a hint while a keyword is set:
-// keyword searches go through the models' galleries, which ignore it), NSFW and "only locally usable models".
-// Each control calls one store action; the store owns debouncing and searching.
-import { Caption1, Dropdown, Field, makeStyles, Option, SearchBox, Switch, tokens } from '@fluentui/react-components';
+// Search controls of the image library store for the Images section toolbar (SectionToolbar of
+// src/features/models): the keyword box (Ctrl+F focuses it) and the filters: sort, period (disabled while a keyword is
+// set: keyword searches go through the models' galleries, which ignore it; its hint says so), NSFW and "only locally
+// usable models". Each control calls one store action; the store owns debouncing and searching.
+import { Dropdown, Field, Option, SearchBox, Switch } from '@fluentui/react-components';
 import type { ImagePeriod, ImageSort } from '../../api/types';
+import { SECTION_SEARCH_ATTRIBUTE } from '../../app/sections';
 import { IMAGE_PERIOD_LABELS, IMAGE_SORT_LABELS, isPeriodApplicable } from '../../domain/imageLibrary';
 import { useImageLibraryStore } from '../../stores/imageLibraryStore';
-import { PaneGrid } from '../../ui/PaneLayout';
+import { useFilterStyles } from '../../ui/SectionToolbar';
 
 const SORTS = Object.keys(IMAGE_SORT_LABELS) as ImageSort[];
 const PERIODS = Object.keys(IMAGE_PERIOD_LABELS) as ImagePeriod[];
 
-const useStyles = makeStyles({
-	root: {
-		display: 'flex',
-		flexDirection: 'column',
-		gap: tokens.spacingVerticalS,
-		minWidth: 0,
-	},
-	search: {
-		width: '100%',
-		maxWidth: 'none',
-	},
-	dropdown: {
-		minWidth: 0,
-		width: '100%',
-	},
-	hint: {
-		color: tokens.colorNeutralForeground3,
-	},
-});
+/** The hint under Period: always shown (the filter row keeps its height while a keyword is typed). */
+export const PERIOD_HINTS = {
+	applicable: 'Applies without a keyword.',
+	ignored: 'Keyword searches ignore the period.',
+} as const;
+
+export function ImageSearchBox(): JSX.Element {
+	const styles = useFilterStyles();
+	const query = useImageLibraryStore((state) => state.filters.query);
+	const setQuery = useImageLibraryStore((state) => state.setQuery);
+	return (
+		<SearchBox
+			className={styles.search}
+			aria-label="Search images"
+			placeholder="Search images by keyword"
+			value={query}
+			onChange={(_event, data) => setQuery(data.value)}
+			{...{ [SECTION_SEARCH_ATTRIBUTE]: '' }}
+		/>
+	);
+}
 
 function SortField(): JSX.Element {
-	const styles = useStyles();
+	const styles = useFilterStyles();
 	const sort = useImageLibraryStore((state) => state.filters.sort);
 	const setSort = useImageLibraryStore((state) => state.setSort);
 	return (
-		<Field label="Sort by">
+		<Field label="Sort by" orientation="horizontal" className={styles.field}>
 			<Dropdown
 				className={styles.dropdown}
 				value={IMAGE_SORT_LABELS[sort]}
@@ -58,12 +62,12 @@ function SortField(): JSX.Element {
 }
 
 function PeriodField(): JSX.Element {
-	const styles = useStyles();
+	const styles = useFilterStyles();
 	const period = useImageLibraryStore((state) => state.filters.period);
 	const applicable = useImageLibraryStore((state) => isPeriodApplicable(state.filters));
 	const setPeriod = useImageLibraryStore((state) => state.setPeriod);
 	return (
-		<Field label="Period" hint={applicable ? undefined : 'Keyword searches ignore the period.'}>
+		<Field label="Period" orientation="horizontal" className={styles.field} hint={applicable ? PERIOD_HINTS.applicable : PERIOD_HINTS.ignored}>
 			<Dropdown
 				className={styles.dropdown}
 				disabled={!applicable}
@@ -86,34 +90,18 @@ function PeriodField(): JSX.Element {
 	);
 }
 
-export function ImageSearchBar(): JSX.Element {
-	const styles = useStyles();
-	const query = useImageLibraryStore((state) => state.filters.query);
+/** The filters of the image search. */
+export function ImageSearchFilters(): JSX.Element {
 	const nsfw = useImageLibraryStore((state) => state.filters.nsfw);
 	const usableOnly = useImageLibraryStore((state) => state.filters.usable_only);
-	const setQuery = useImageLibraryStore((state) => state.setQuery);
 	const setNsfw = useImageLibraryStore((state) => state.setNsfw);
 	const setUsableOnly = useImageLibraryStore((state) => state.setUsableOnly);
-
 	return (
-		<div className={styles.root}>
-			<SearchBox
-				className={styles.search}
-				aria-label="Search images"
-				placeholder="Search images by keyword"
-				value={query}
-				onChange={(_event, data) => setQuery(data.value)}
-			/>
-			<Caption1 className={styles.hint}>
-				A keyword finds matching LoRAs and checkpoints and shows the images of their galleries. Without a keyword,
-				all recent images are browsed by sort and period.
-			</Caption1>
-			<PaneGrid>
-				<SortField />
-				<PeriodField />
-				<Switch label="Show NSFW" checked={nsfw} onChange={(_event, data) => setNsfw(data.checked)} />
-				<Switch label="Only locally usable models" checked={usableOnly} onChange={(_event, data) => setUsableOnly(data.checked)} />
-			</PaneGrid>
-		</div>
+		<>
+			<SortField />
+			<PeriodField />
+			<Switch label="Show NSFW" checked={nsfw} onChange={(_event, data) => setNsfw(data.checked)} />
+			<Switch label="Only locally usable models" checked={usableOnly} onChange={(_event, data) => setUsableOnly(data.checked)} />
+		</>
 	);
 }

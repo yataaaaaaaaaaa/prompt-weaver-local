@@ -1,6 +1,6 @@
 // Status of a downloadable file as the views show it: the single owner of the label, color and icon of every
 // VersionStatusKind (src/domain/modelCatalog.ts), e.g. 'On disk' for a local copy found by the backend. Used by the
-// model result cards, the image library resources (which add their own resolution states) and the IP-Adapter files of
+// model result cards and detail panel, the image resources (which add their own resolution states) and the IP-Adapter files of
 // the characters views. StatusBadge renders a look (tint badge with icon) and forwards its ref and extra props, so a
 // Tooltip can wrap it.
 import { Badge, type BadgeProps } from '@fluentui/react-components';

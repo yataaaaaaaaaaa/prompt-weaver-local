@@ -3,7 +3,18 @@ import { describe, expect, it, vi } from 'vitest';
 import type { ImageFilters } from '../../domain/imageLibrary';
 import { useImageLibraryStore } from '../../stores/imageLibraryStore';
 import { renderWithProviders } from '../../test/render';
-import { ImageSearchBar } from './ImageSearchBar';
+import { SECTION_SEARCH_ATTRIBUTE } from '../../app/sections';
+import { ImageSearchBox, ImageSearchFilters, PERIOD_HINTS } from './ImageSearchBar';
+
+/** The search controls as the Images section toolbar lays them out. */
+function ImageSearchBar(): JSX.Element {
+	return (
+		<>
+			<ImageSearchBox />
+			<ImageSearchFilters />
+		</>
+	);
+}
 
 /** Filter actions that also update the filters (like the store does), so controlled inputs follow. */
 function seedActions() {
@@ -19,8 +30,9 @@ function seedActions() {
 	return actions;
 }
 
+// Fluent components render slowly on a busy machine: more than the default 5 s per test.
 describe('ImageSearchBar', () => {
-	it('updates the query on every keystroke (the store debounces) and explains keyword searches', async () => {
+	it('updates the query on every keystroke (the store debounces)', async () => {
 		const actions = seedActions();
 		const { user } = renderWithProviders(<ImageSearchBar />);
 
@@ -30,7 +42,8 @@ describe('ImageSearchBar', () => {
 		expect(actions.setQuery).toHaveBeenCalledTimes(6);
 		expect(actions.setQuery).toHaveBeenLastCalledWith('castle');
 		expect(box).toHaveValue('castle');
-		expect(screen.getByText(/A keyword finds matching LoRAs and checkpoints and shows the images of their galleries/)).toBeInTheDocument();
+		// Ctrl+F focuses it (the shell finds the shown section's search box by this attribute).
+		expect(box).toHaveAttribute(SECTION_SEARCH_ATTRIBUTE);
 	});
 
 	it('changes the sort', async () => {
@@ -63,7 +76,8 @@ describe('ImageSearchBar', () => {
 		const period = screen.getByRole('combobox', { name: 'Period' });
 		expect(period).toBeEnabled();
 		expect(period).toHaveTextContent('Week');
-		expect(screen.queryByText('Keyword searches ignore the period.')).not.toBeInTheDocument();
+		expect(period).toHaveAccessibleDescription(PERIOD_HINTS.applicable);
+		expect(screen.queryByText(PERIOD_HINTS.ignored)).not.toBeInTheDocument();
 		await user.click(period);
 		await user.click(screen.getByRole('option', { name: 'All time' }));
 
@@ -79,6 +93,7 @@ describe('ImageSearchBar', () => {
 		const period = screen.getByRole('combobox', { name: 'Period' });
 		expect(period).toBeDisabled();
 		expect(period).toHaveAccessibleDescription('Keyword searches ignore the period.');
+		expect(screen.queryByText(PERIOD_HINTS.applicable)).not.toBeInTheDocument();
 	});
 
 	it('keeps the period applicable for a blank keyword', () => {

@@ -1,22 +1,36 @@
-// Image library search in the real browser, on the synthetic Civitai: the feed grid (safe and locally usable images
-// by default) with its thumbnails, focus ring and keyboard navigation, the NSFW and 'Only locally usable models'
-// switches, keyword searches (the period disabled), Load more and infinite scroll, the Favorites empty state, and
-// the loading and error states.
+// The Images section's search in the real browser, on the synthetic Civitai: the feed grid (safe and locally usable
+// images by default) with its thumbnails, focus ring and keyboard navigation, the empty detail panel's guidance, the
+// NSFW and 'Only locally usable models' switches, keyword searches (the period disabled with its hint), Load more and
+// infinite scroll, the Favorites empty state, the layout in the smallest supported window, and the loading and error
+// states.
 import { tokens } from '@fluentui/react-theme';
 import { expectBaseline } from '../support/baselines';
 import { expectPicturesLoaded, waitForPicturesInView } from '../support/app';
-import { workspaceLayout } from '../support/backend';
 import { expectReadable, resolveColor } from '../support/colors';
+import { SMALL_VIEWPORT } from '../support/env';
 import { expect, test } from '../support/fixtures';
 import { saveScreenshot } from '../support/screenshots';
-import { assertAppVisible, expectNoHorizontalOverflow } from '../support/visibility';
-import { IMAGE_LIBRARY } from '../models/libraries';
-import { AUTHOR, FEED_FIRST_PAGE, FEED_TOTAL, imageSearchBox, openImageLibrary, searchResults, thumbnail, thumbnailNames } from './imageLibrary';
+import { assertAppVisible, boxOf, expectNoHorizontalOverflow, expectOnTop } from '../support/visibility';
+import {
+	AUTHOR,
+	FEED_FIRST_PAGE,
+	FEED_TOTAL,
+	imageDetail,
+	imageSearchBox,
+	openImage,
+	openImages,
+	searchResults,
+	thumbnail,
+	thumbnailNames,
+} from './imageLibrary';
 
-test('the feed shows safe, locally usable images as 3:4 thumbnails in a regular grid', async ({ app, page }, testInfo) => {
-	const pane = await openImageLibrary(app);
+const EMPTY_DETAIL = 'Pick an image to see its tags, LoRAs and checkpoint';
+
+test('the feed shows safe, locally usable images as 3:4 thumbnails in a regular grid next to the guiding detail panel', async ({ app, page }, testInfo) => {
+	const section = await openImages(app);
 	await assertAppVisible(page);
-	const grid = searchResults(pane);
+	await expect(section.getByRole('heading', { name: 'Images', level: 1 })).toBeVisible();
+	const grid = searchResults(section);
 	// The first page (and, in this tall window, the second one already prefetched by the infinite scroll).
 	const names = await thumbnailNames(grid);
 	expect(names.length).toBeGreaterThanOrEqual(FEED_FIRST_PAGE);
@@ -38,23 +52,28 @@ test('the feed shows safe, locally usable images as 3:4 thumbnails in a regular 
 	expect(columnGap).toBeGreaterThan(4);
 	expect(Math.abs(columnGap - rowGap)).toBeLessThan(1);
 
-	await expect(pane.getByRole('switch', { name: 'Show NSFW' })).not.toBeChecked();
-	await expect(pane.getByRole('switch', { name: 'Only locally usable models' })).toBeChecked();
-	await expectReadable(pane.getByText(/^A keyword finds matching LoRAs/));
-	// In this tall window the infinite scroll prefetches the second page: the baseline shows both (4 full rows).
+	const filters = section.getByRole('group', { name: 'Image filters' });
+	await expect(filters.getByRole('switch', { name: 'Show NSFW' })).not.toBeChecked();
+	await expect(filters.getByRole('switch', { name: 'Only locally usable models' })).toBeChecked();
+	// Nothing picked yet: the detail panel says what it shows and how keywords search.
+	const detail = imageDetail(section);
+	await expect(detail.getByRole('heading', { name: EMPTY_DETAIL })).toBeVisible();
+	await expectReadable(detail.getByText(/^A keyword finds matching LoRAs/));
+	await expectReadable(filters.getByText('Applies without a keyword.'));
+	// In this tall window the infinite scroll prefetches the second page: the baseline shows both.
 	await expect(grid.getByRole('button')).toHaveCount(FEED_TOTAL);
 	await expectPicturesLoaded(grid);
 	await app.parkPointer();
-	await saveScreenshot(pane, testInfo, 'feed');
+	await saveScreenshot(page, testInfo, 'feed');
 	await expectBaseline(grid, 'image-grid.png');
 });
 
-test('the thumbnails take the keyboard focus with a visible ring and move with the arrow keys', async ({ app, page }, testInfo) => {
-	const pane = await openImageLibrary(app);
-	const grid = searchResults(pane);
+test('the thumbnails take the keyboard focus with a visible ring and move with the arrow keys; Enter opens the detail', async ({ app, page }, testInfo) => {
+	const section = await openImages(app);
+	const grid = searchResults(section);
 	const names = await thumbnailNames(grid);
 
-	await pane.getByRole('switch', { name: 'Only locally usable models' }).focus();
+	await section.getByRole('switch', { name: 'Only locally usable models' }).focus();
 	await page.keyboard.press('Tab');
 	const first = grid.getByRole('button').first();
 	await expect(first).toBeFocused();
@@ -65,8 +84,7 @@ test('the thumbnails take the keyboard focus with a visible ring and move with t
 	// The focus ring: Fluent's 2px stroke around the whole thumbnail, not clipped by it.
 	const ring = await second.evaluate((button) => {
 		const after = getComputedStyle(button, '::after');
-		const box = button.getBoundingClientRect();
-		return { width: after.borderTopWidth, color: after.borderTopColor, style: after.borderTopStyle, position: getComputedStyle(button).position, overflow: getComputedStyle(button).overflow, box: box.toJSON() as DOMRect, top: after.top, left: after.left };
+		return { width: after.borderTopWidth, color: after.borderTopColor, style: after.borderTopStyle, position: getComputedStyle(button).position, overflow: getComputedStyle(button).overflow };
 	});
 	expect(ring.style).toBe('solid');
 	expect(ring.width).toBe('2px');
@@ -76,111 +94,128 @@ test('the thumbnails take the keyboard focus with a visible ring and move with t
 	await saveScreenshot(grid, testInfo, 'focus-ring');
 
 	await page.keyboard.press('Enter');
-	await expect(pane.getByRole('heading', { name: names[1], exact: true })).toBeVisible();
+	await expect(imageDetail(section).getByRole('heading', { name: names[1], exact: true, level: 2 })).toBeFocused();
+	// The shown image is marked in the grid with a brand ring.
+	await expect(second).toHaveAttribute('aria-current', 'true');
+	expect(await second.evaluate((button) => getComputedStyle(button).outlineColor)).toBe(await resolveColor(page, tokens.colorBrandStroke1));
 });
 
 test("'Show NSFW' and 'Only locally usable models' change what the feed lists", async ({ app }) => {
-	const pane = await openImageLibrary(app);
-	const grid = searchResults(pane);
+	const section = await openImages(app);
+	const grid = searchResults(section);
 
-	await pane.getByRole('switch', { name: 'Show NSFW' }).check();
+	await section.getByRole('switch', { name: 'Show NSFW' }).check();
 	await expect(thumbnail(grid, AUTHOR.nsfw)).toBeVisible();
-	await pane.getByRole('switch', { name: 'Show NSFW' }).uncheck();
+	await section.getByRole('switch', { name: 'Show NSFW' }).uncheck();
 	await expect(thumbnail(grid, AUTHOR.nsfw)).toHaveCount(0);
 
-	await pane.getByRole('switch', { name: 'Only locally usable models' }).uncheck();
+	await section.getByRole('switch', { name: 'Only locally usable models' }).uncheck();
 	await expect(thumbnail(grid, AUTHOR.flux)).toBeVisible();
-	await pane.getByRole('switch', { name: 'Only locally usable models' }).check();
+	await section.getByRole('switch', { name: 'Only locally usable models' }).check();
 	await expect(thumbnail(grid, AUTHOR.flux)).toHaveCount(0);
 });
 
-test('a keyword shows the galleries of the matching models, and the period is disabled with a hint', async ({ app }, testInfo) => {
-	const pane = await openImageLibrary(app);
-	const period = pane.getByRole('combobox', { name: 'Period' });
+test('a keyword shows the galleries of the matching models, and the period is disabled with a hint', async ({ app, page }, testInfo) => {
+	const section = await openImages(app);
+	const period = section.getByRole('combobox', { name: 'Period' });
 	await expect(period).toBeEnabled();
+	const filtersBox = await boxOf(section.getByRole('group', { name: 'Image filters' }));
 
-	await imageSearchBox(pane).pressSequentially('pixel', { delay: 40 });
-	await expect.poll(() => thumbnailNames(searchResults(pane))).toEqual([`Image by ${AUTHOR.pixelForge}`]);
+	await imageSearchBox(section).pressSequentially('pixel', { delay: 40 });
+	await expect.poll(() => thumbnailNames(searchResults(section))).toEqual([`Image by ${AUTHOR.pixelForge}`]);
 	await expect(period).toBeDisabled();
-	await expect(pane.getByText('Keyword searches ignore the period.')).toBeVisible();
-	await expectReadable(pane.getByText('Keyword searches ignore the period.'));
-	// The hint under Period does not stretch the Sort by dropdown next to it.
-	const sortBox = await pane.getByRole('combobox', { name: 'Sort by' }).boundingBox();
+	await expect(section.getByText('Keyword searches ignore the period.')).toBeVisible();
+	await expectReadable(section.getByText('Keyword searches ignore the period.'));
+	// The hint under Period does not stretch the Sort by dropdown next to it, nor move the filter row.
+	const sortBox = await section.getByRole('combobox', { name: 'Sort by' }).boundingBox();
 	const periodBox = await period.boundingBox();
 	expect(sortBox?.height).toBe(periodBox?.height);
 	expect(sortBox?.y).toBe(periodBox?.y);
-	await waitForPicturesInView(pane.page());
-	await saveScreenshot(pane, testInfo, 'keyword');
+	expect(await boxOf(section.getByRole('group', { name: 'Image filters' }))).toEqual(filtersBox);
+	await waitForPicturesInView(page);
+	await saveScreenshot(section, testInfo, 'keyword');
 
-	await imageSearchBox(pane).fill('no such model');
-	await expect(pane.getByText('No images match this search.')).toBeVisible();
-	await imageSearchBox(pane).clear();
+	await imageSearchBox(section).fill('no such model');
+	await expect(section.getByText('No images match this search.')).toBeVisible();
+	await imageSearchBox(section).clear();
 	await expect(period).toBeEnabled();
-	await expect.poll(async () => (await thumbnailNames(searchResults(pane))).length).toBeGreaterThanOrEqual(FEED_FIRST_PAGE);
+	await expect.poll(async () => (await thumbnailNames(searchResults(section))).length).toBeGreaterThanOrEqual(FEED_FIRST_PAGE);
 });
 
-test.describe('in a window shorter than the first page', () => {
+test('Ctrl+F focuses the search box of the Images section', async ({ app, page }) => {
+	const section = await openImages(app);
+	await thumbnail(searchResults(section), AUTHOR.watercolor).focus();
+	await page.keyboard.press('Control+f');
+	await expect(imageSearchBox(section)).toBeFocused();
+});
+
+test.describe('in the smallest supported window', () => {
 	// The end of the first page stays farther than the infinite scroll's prefetch margin: the next page waits.
-	test.use({ e2eOptions: { files: workspaceLayout({ 'pane:images': { x: 880, y: 16, width: 1024, height: 640, z: 30 } }, ['models', 'characters']) } });
+	test.use({ viewport: SMALL_VIEWPORT });
 
 	test.describe('with a slow Civitai', () => {
 		test.use({ e2eOptions: { network: { civitai_delay_ms: 1500 } } });
 
 		test("'Load more' is reached with the keyboard and keeps the focus while the next page loads", async ({ app, page }, testInfo) => {
-			const pane = await openImageLibrary(app);
-			const grid = searchResults(pane);
+			const section = await openImages(app);
+			const grid = searchResults(section);
 			await expect(grid.getByRole('button')).toHaveCount(FEED_FIRST_PAGE);
 			await grid.getByRole('button').first().focus();
 			// Tab leaves the grid (one Tab stop, arrows inside) for the Load more button: the focus scrolls it into view,
 			// where the infinite scroll may already start loading the page; Enter otherwise.
 			await page.keyboard.press('Tab');
-			await expect(pane.getByRole('button', { name: /^(Load more|Loading more images…)$/ })).toBeFocused();
+			await expect(section.getByRole('button', { name: /^(Load more|Loading more images…)$/ })).toBeFocused();
 			await page.keyboard.press('Enter');
-			const busy = pane.getByRole('button', { name: 'Loading more images…' });
+			const busy = section.getByRole('button', { name: 'Loading more images…' });
 			await expect(busy).toBeFocused();
 			await expect(busy).toHaveAttribute('aria-disabled', 'true');
-			await saveScreenshot(pane, testInfo, 'loading-more');
+			await saveScreenshot(page, testInfo, 'loading-more');
 			await expect(grid.getByRole('button')).toHaveCount(FEED_TOTAL);
-			await expect(pane.getByRole('button', { name: /^(Load more|Loading more images…)$/ })).toHaveCount(0);
+			await expect(section.getByRole('button', { name: /^(Load more|Loading more images…)$/ })).toHaveCount(0);
 			expect(new Set(await thumbnailNames(grid)).size).toBe(FEED_TOTAL);
 		});
 	});
 
 	test('scrolling to the end of the results loads the next page', async ({ app }) => {
-		const pane = await openImageLibrary(app);
-		const grid = searchResults(pane);
+		const section = await openImages(app);
+		const grid = searchResults(section);
 		await expect(grid.getByRole('button')).toHaveCount(FEED_FIRST_PAGE);
 		await grid.getByRole('button').last().scrollIntoViewIfNeeded();
 		await expect(grid.getByRole('button')).toHaveCount(FEED_TOTAL);
-		await expect(pane.getByRole('button', { name: 'Load more' })).toHaveCount(0);
+		await expect(section.getByRole('button', { name: 'Load more' })).toHaveCount(0);
 		await expectPicturesLoaded(grid);
 	});
+
+	test('the grid keeps at least 600 px next to a 360-560 px detail panel, the filters fit', async ({ app, page }, testInfo) => {
+		const section = await openImages(app);
+		const detail = await openImage(section, AUTHOR.watercolor);
+		await assertAppVisible(page);
+		const results = section.getByRole('region', { name: 'Image search results' });
+		expect((await boxOf(results)).width).toBeGreaterThanOrEqual(600);
+		const detailWidth = (await boxOf(detail)).width;
+		expect(detailWidth).toBeGreaterThanOrEqual(360);
+		expect(detailWidth).toBeLessThanOrEqual(560);
+		await expectNoHorizontalOverflow(results);
+		await expectNoHorizontalOverflow(detail);
+		const filters = section.getByRole('group', { name: 'Image filters' });
+		await expectOnTop(filters.getByRole('switch', { name: 'Only locally usable models' }));
+		await expectOnTop(detail.getByRole('button', { name: 'Create character' }));
+		await app.parkPointer();
+		await saveScreenshot(page, testInfo, 'small-window');
+	});
 });
 
-test('the Favorites tab explains how to add favorites while there is none', async ({ app }, testInfo) => {
-	const pane = await openImageLibrary(app);
-	await pane.getByRole('tab', { name: 'Favorites' }).click();
-	const empty = pane.getByText('No favorites yet. Open an image and select Favorite to keep it here.');
+test('the Favorites view explains how to add favorites while there is none', async ({ app }, testInfo) => {
+	const section = await openImages(app);
+	await section.getByRole('tab', { name: 'Favorites' }).click();
+	const empty = section.getByText('No favorites yet. Open an image and select Favorite to keep it here.');
 	await expect(empty).toBeVisible();
 	await expectReadable(empty);
+	// The search controls belong to the search view.
+	await expect(imageSearchBox(section)).toHaveCount(0);
 	await app.parkPointer();
-	await saveScreenshot(pane, testInfo, 'favorites-empty');
-});
-
-test.describe('at its minimum width', () => {
-	test.use({ e2eOptions: { files: workspaceLayout({ 'pane:images': { x: 16, y: 16, width: 420, height: 1004, z: 30 } }, ['models', 'characters']) } });
-
-	test('the grid and the filters fit the window', async ({ app, page }, testInfo) => {
-		await app.open();
-		const pane = app.pane(IMAGE_LIBRARY);
-		await app.bringToFront(pane);
-		await expect(searchResults(pane).getByRole('button').first()).toBeVisible();
-		await waitForPicturesInView(page);
-		expect((await pane.boundingBox())?.width).toBe(420);
-		await expectNoHorizontalOverflow(pane);
-		await app.parkPointer();
-		await saveScreenshot(pane, testInfo, 'grid-420');
-	});
+	// A deliberately plain state (one line of text): nearly one color in the light theme.
+	await saveScreenshot(section, testInfo, 'favorites-empty', { allowUniform: true });
 });
 
 test.describe('while Civitai answers slowly', () => {
@@ -188,11 +223,12 @@ test.describe('while Civitai answers slowly', () => {
 
 	test('a spinner shows the search running', async ({ app, page }, testInfo) => {
 		await app.open();
-		const pane = await app.showPane(IMAGE_LIBRARY);
-		const spinner = pane.getByText('Searching images…');
+		const section = await app.goTo('images');
+		const spinner = section.getByText('Searching images…');
 		await expect(spinner).toBeVisible();
-		await saveScreenshot(pane, testInfo, 'loading');
-		await expect(searchResults(pane)).toBeVisible({ timeout: 15_000 });
+		// A deliberately plain state (a spinner on an empty grid): nearly one color in the light theme.
+		await saveScreenshot(section, testInfo, 'loading', { allowUniform: true });
+		await expect(searchResults(section)).toBeVisible({ timeout: 15_000 });
 		await expect(spinner).toBeHidden();
 		await assertAppVisible(page);
 	});
@@ -204,17 +240,17 @@ test.describe('when Civitai fails', () => {
 	test('the error says why, and Retry searches again once Civitai answers', async ({ app, page, backend, diagnostics }, testInfo) => {
 		diagnostics.allow(/Failed to load resource/);
 		await app.open();
-		const pane = await app.showPane(IMAGE_LIBRARY);
-		await expect(pane.getByText('Search failed')).toBeVisible();
-		await expect(pane.getByText(/HTTP 503/)).toBeVisible();
-		await expectReadable(pane.getByText(/HTTP 503/));
+		const section = await app.goTo('images');
+		await expect(section.getByText('Search failed')).toBeVisible();
+		await expect(section.getByText(/HTTP 503/)).toBeVisible();
+		await expectReadable(section.getByText(/HTTP 503/));
 		await app.parkPointer();
-		await saveScreenshot(pane, testInfo, 'error');
+		await saveScreenshot(section, testInfo, 'error');
 
 		await backend.reset();
-		await pane.getByRole('button', { name: 'Retry' }).click();
-		await expect(pane.getByText('Search failed')).toBeHidden();
-		await expect.poll(() => searchResults(pane).getByRole('button').count()).toBeGreaterThanOrEqual(FEED_FIRST_PAGE);
+		await section.getByRole('button', { name: 'Retry' }).click();
+		await expect(section.getByText('Search failed')).toBeHidden();
+		await expect.poll(() => searchResults(section).getByRole('button').count()).toBeGreaterThanOrEqual(FEED_FIRST_PAGE);
 		await assertAppVisible(page);
 	});
 });

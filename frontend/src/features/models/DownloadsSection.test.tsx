@@ -32,6 +32,7 @@ beforeEach(() => {
 		);
 });
 
+// Fluent components render slowly on a busy machine: more than the default 5 s per test.
 describe('DownloadsSection', () => {
 	it('is hidden without installs outside the results', () => {
 		seedActions();

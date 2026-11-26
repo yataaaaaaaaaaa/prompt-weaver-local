@@ -1,30 +1,28 @@
-// Detail view of the image picked in the image library (selectImage of the store): Back (also Escape), large
-// preview, author and base model, Favorite / Copy prompt / Create character / provider page link, then its tags, LoRAs,
-// checkpoint and generation parameters. Thin view: every action is an image library store action, except Create
-// character (characters store startCreateFromImage). The pane renders it keyed by the image, and moves the focus to
-// Back when it opens.
+// Detail panel of the image selected in the Images section (selectImage of the store), next to the grid: its heading
+// with Close (also Escape; the focus returns to its thumbnail: DetailPanel.tsx), the large preview, author and base
+// model, Favorite / Copy prompt / Create character / provider page link, then its tags, LoRAs, checkpoint and
+// generation parameters. Thin view: every action is an image library store action, except Create character
+// (characters store startCreateFromImage). The section renders it keyed by the image, only while the image is listed.
 import {
 	Body1,
 	Button,
-	Caption1,
 	Caption1Strong,
 	Image,
 	Link,
 	makeStyles,
 	mergeClasses,
 	Spinner,
-	Subtitle2,
 	tokens,
 	ToggleButton,
 	Tooltip,
 	useId,
 } from '@fluentui/react-components';
-import { ArrowLeftRegular, CopyRegular, OpenRegular, PersonAddRegular, StarFilled, StarRegular } from '@fluentui/react-icons';
-import { useEffect, useRef, type KeyboardEvent } from 'react';
+import { CopyRegular, OpenRegular, PersonAddRegular, StarFilled, StarRegular } from '@fluentui/react-icons';
 import type { ImageGenerationParams, RemoteImage } from '../../api/types';
 import { useCharactersStore } from '../../stores/charactersStore';
 import { selectImage, selectIsFavorite, useImageLibraryStore } from '../../stores/imageLibraryStore';
 import { PaneGrid, PaneSection } from '../../ui/PaneLayout';
+import { DetailPanel } from '../../ui/DetailPanel';
 import { BaseModelBadge, NotSupportedLocallyBadge, NsfwBadge } from '../models/ModelBadges';
 import { imageLabel, siteName } from './imageLabels';
 import { ImageCheckpointSection, ImageLorasSection } from './ImageResources';
@@ -47,49 +45,31 @@ const PARAM_FIELDS: readonly ParamField[] = [
 ];
 
 const useStyles = makeStyles({
-	root: {
+	overview: {
 		display: 'flex',
 		flexDirection: 'column',
 		gap: tokens.spacingVerticalM,
 		minWidth: 0,
 	},
-	header: {
-		display: 'flex',
-		alignItems: 'center',
-		flexWrap: 'wrap',
-		gap: tokens.spacingHorizontalS,
-	},
-	title: {
-		flex: '1 1 auto',
-		minWidth: 0,
-		margin: 0,
-		overflowWrap: 'anywhere',
-	},
-	overview: {
-		display: 'flex',
-		flexWrap: 'wrap',
-		alignItems: 'flex-start',
-		gap: tokens.spacingHorizontalL,
-	},
 	preview: {
 		display: 'flex',
 		alignItems: 'center',
 		justifyContent: 'center',
-		flex: '3 1 320px',
 		minWidth: 0,
 		overflow: 'hidden',
 		borderRadius: tokens.borderRadiusLarge,
 		backgroundColor: tokens.colorNeutralBackground3,
 	},
+	// Short enough that the facts and the first actions show under it in a small window.
 	previewImage: {
-		width: '100%',
+		width: 'auto',
+		maxWidth: '100%',
 		height: 'auto',
-		maxHeight: '560px',
+		maxHeight: 'min(480px, 42vh)',
 	},
 	facts: {
 		display: 'flex',
 		flexDirection: 'column',
-		flex: '2 1 240px',
 		gap: tokens.spacingVerticalS,
 		minWidth: 0,
 	},
@@ -107,6 +87,7 @@ const useStyles = makeStyles({
 	link: {
 		display: 'inline-flex',
 		alignItems: 'center',
+		alignSelf: 'flex-start',
 		gap: tokens.spacingHorizontalXXS,
 	},
 	param: {
@@ -223,48 +204,22 @@ function ParamsSection({ params }: { params: ImageGenerationParams | null }): JS
 
 export type ImageDetailProps = {
 	imageKey: string;
-	/** Back (button or Escape): the pane closes the image and restores the focus. */
-	onBack: () => void;
+	/** Clears the selection (image library store closeImage); the panel returns the focus to the thumbnail. */
+	onClose: () => void;
 };
 
-export function ImageDetail({ imageKey, onBack }: ImageDetailProps): JSX.Element {
-	const styles = useStyles();
+export function ImageDetail({ imageKey, onClose }: ImageDetailProps): JSX.Element | null {
 	const image = useImageLibraryStore(selectImage(imageKey));
-	const backRef = useRef<HTMLButtonElement>(null);
-
-	useEffect(() => {
-		backRef.current?.focus();
-	}, []);
-
-	const handleKeyDown = (event: KeyboardEvent<HTMLDivElement>) => {
-		// Open menus and tooltips handle (and prevent) their own Escape first.
-		if (event.key === 'Escape' && !event.defaultPrevented) {
-			event.preventDefault();
-			onBack();
-		}
-	};
-
+	if (!image) {
+		return null;
+	}
 	return (
-		<div className={styles.root} onKeyDown={handleKeyDown}>
-			<div className={styles.header}>
-				<Button ref={backRef} appearance="subtle" icon={<ArrowLeftRegular />} onClick={onBack}>
-					Back
-				</Button>
-				<Subtitle2 as="h3" className={styles.title}>
-					{image ? imageLabel(image) : 'Image'}
-				</Subtitle2>
-			</div>
-			{image ? (
-				<>
-					<Overview image={image} imageKey={imageKey} />
-					<ImageTagsSection imageKey={imageKey} />
-					<ImageLorasSection imageKey={imageKey} />
-					<ImageCheckpointSection imageKey={imageKey} />
-					<ParamsSection params={image.params} />
-				</>
-			) : (
-				<Caption1 className={styles.muted}>This image is no longer listed. Go back to pick another one.</Caption1>
-			)}
-		</div>
+		<DetailPanel itemKey={imageKey} title={imageLabel(image)} onClose={onClose}>
+			<Overview image={image} imageKey={imageKey} />
+			<ImageTagsSection imageKey={imageKey} />
+			<ImageLorasSection imageKey={imageKey} />
+			<ImageCheckpointSection imageKey={imageKey} />
+			<ParamsSection params={image.params} />
+		</DetailPanel>
 	);
 }

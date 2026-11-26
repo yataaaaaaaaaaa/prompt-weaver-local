@@ -1,13 +1,16 @@
-// Thumbnail grids of the image library store: the search results (spinner, error with Retry, empty state, infinite
-// scroll with a visible, focus-keeping 'Load more' fallback: LoadMoreButton) and the favorites (no paging). Each
-// thumbnail is a button opening the image in the detail view (openImage); arrow keys move between thumbnails (Fluent
-// arrow navigation group, one Tab stop). Thin views: paging, guards and the favorites collection stay in the store.
+// Thumbnail grids of the Images section (image library store): the search results (spinner, error with Retry, empty
+// state, infinite scroll with a visible, focus-keeping 'Load more' fallback: LoadMoreButton) and the favorites (no
+// paging). Each thumbnail is a button opening the image in the detail panel next to the grid (openImage; it is the
+// image's opener, the focus returns to it when the detail closes: DetailPanel.tsx), the shown image marked with a
+// brand ring; arrow keys move between thumbnails (Fluent arrow navigation group, one Tab stop). Thin views: paging,
+// guards, the selection and the favorites collection stay in the store.
 import {
 	Body1,
 	Button,
 	createFocusOutlineStyle,
 	Image,
 	makeStyles,
+	mergeClasses,
 	MessageBar,
 	MessageBarActions,
 	MessageBarBody,
@@ -24,10 +27,11 @@ import { useImageLibraryStore } from '../../stores/imageLibraryStore';
 import { ownsKeysProps } from '../../ui/keyboard';
 import { useInfiniteScroll } from '../../ui/useInfiniteScroll';
 import { LoadMoreButton } from '../../ui/LoadMoreButton';
+import { detailOpenerProps } from '../../ui/DetailPanel';
 import { imageLabel } from './imageLabels';
 
-/** Attribute naming the image of a thumbnail button (the pane moves the focus back to it after the detail view). */
-export const THUMBNAIL_KEY_ATTRIBUTE = 'data-image-key';
+/** Narrowest thumbnail column of the grids (more columns as the section grows). */
+export const THUMBNAIL_MIN_WIDTH = '168px';
 
 const useStyles = makeStyles({
 	root: {
@@ -38,7 +42,7 @@ const useStyles = makeStyles({
 	},
 	grid: {
 		display: 'grid',
-		gridTemplateColumns: 'repeat(auto-fill, minmax(144px, 1fr))',
+		gridTemplateColumns: `repeat(auto-fill, minmax(${THUMBNAIL_MIN_WIDTH}, 1fr))`,
 		gap: tokens.spacingHorizontalS,
 		margin: 0,
 		padding: 0,
@@ -71,6 +75,11 @@ const useStyles = makeStyles({
 		},
 		...createFocusOutlineStyle(),
 	},
+	// The image shown in the detail panel (the keyboard focus ring is drawn outside it, around this ring).
+	selected: {
+		outline: `${tokens.strokeWidthThick} solid ${tokens.colorBrandStroke1}`,
+		outlineOffset: tokens.strokeWidthThin,
+	},
 	// A block picture: an inline one adds its baseline gap under the image, making the thumbnail taller than 3:4.
 	picture: {
 		display: 'block',
@@ -84,14 +93,16 @@ const useStyles = makeStyles({
 
 function Thumbnail({ image }: { image: RemoteImage }): JSX.Element {
 	const styles = useStyles();
-	const openImage = useImageLibraryStore((state) => state.openImage);
 	const key = imageKey(image);
+	const openImage = useImageLibraryStore((state) => state.openImage);
+	const selected = useImageLibraryStore((state) => state.selectedImageKey === key);
 	return (
 		<button
 			type="button"
-			className={styles.thumbnail}
+			className={mergeClasses(styles.thumbnail, selected && styles.selected)}
 			aria-label={imageLabel(image)}
-			{...{ [THUMBNAIL_KEY_ATTRIBUTE]: key }}
+			aria-current={selected ? 'true' : undefined}
+			{...detailOpenerProps(key)}
 			onClick={() => openImage(key)}
 		>
 			<Image className={styles.picture} src={image.thumbnail_url} alt="" fit="cover" shape="rounded" loading="lazy" />

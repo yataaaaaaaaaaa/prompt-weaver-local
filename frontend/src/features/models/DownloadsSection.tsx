@@ -1,6 +1,6 @@
-// Installs of the catalog store that no result card shows (selectDetachedInstallKeys: e.g. resumed after a
-// reload, started before the search changed or for another version): title and progress from the tasks store,
-// Cancel, or the error with Dismiss. Hidden when there is none.
+// The Downloads area above the Models results: installs of the catalog store that no result card shows
+// (selectDetachedInstallKeys: e.g. resumed after a reload, started before the search changed or for another version):
+// title and progress from the tasks store, Cancel, or the error with Dismiss. Hidden when there is none.
 import { Body1Strong, Button, makeStyles, MessageBar, MessageBarActions, MessageBarBody, tokens } from '@fluentui/react-components';
 import { useShallow } from 'zustand/react/shallow';
 import { MODEL_KIND_LABELS } from '../../domain/modelCatalog';

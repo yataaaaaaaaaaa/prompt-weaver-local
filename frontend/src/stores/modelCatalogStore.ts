@@ -1,7 +1,10 @@
-// Model catalog store (online model library): single truth holder of the provider info, the search filters and
-// results, the version picked in each result, and the installs in progress. Not persisted.
-// Pure logic lives in src/domain/modelCatalog.ts; library entries stay in the library store (registerInstalled);
-// download progress stays in the tasks store (useDownloadProgress) and is never copied here.
+// Model catalog store (the Models section): single truth holder of the provider info, the search filters and
+// results, the version picked in each result, the result shown in the detail panel, which list the section shows
+// (online search or local library), and the installs in progress. Not persisted.
+// Pure logic lives in src/domain/modelCatalog.ts; library entries stay in the library store (registerInstalled,
+// selectModel); download progress stays in the tasks store (useDownloadProgress) and is never copied here.
+// Hand-offs: the announcement of a model selected for generation offers 'Go to Create' (navigationStore
+// goToSectionAction); nothing here navigates by itself.
 import { useMemo } from 'react';
 import { create } from 'zustand';
 import { ApiError, api } from '../api/client';
@@ -41,6 +44,7 @@ import {
 } from '../domain/modelCatalog';
 import { copyTextWithFeedback } from './clipboardActions';
 import { useLibraryStore } from './libraryStore';
+import { goToSectionAction } from './navigationStore';
 import { describeError, reportError, useNotificationsStore } from './notificationsStore';
 import { createPagedSearch, type LoadStatus, type PagedSearchActions, type SearchStatus } from './pagedSearch';
 import { downloadTitleOf, useDownloadProgress, useTasksStore, type DownloadProgress } from './tasksStore';
@@ -63,7 +67,11 @@ export type InstallEntry = {
 	error: string | null;
 };
 
+/** The list the Models section shows: the online search (catalog results) or the local library (library store). */
+export type ModelsView = 'online' | 'local';
+
 export type ModelCatalogState = {
+	view: ModelsView;
 	info: ModelLibraryInfo | null;
 	infoStatus: LoadStatus;
 	/** Why the info could not be loaded (infoStatus 'failed'). */
@@ -75,15 +83,24 @@ export type ModelCatalogState = {
 	searchError: string | null;
 	/** Version picked in each result's version picker, by modelKey; absent = the first version. */
 	pickedVersionIds: Record<string, string>;
+	/** modelKey of the result shown in the detail panel (null: none). Looked up in the results: a result no longer
+	 *  listed shows nothing (selectSelectedRemoteModel). */
+	selectedModelKey: string | null;
 	/** Running or failed installs by installKey; a successful install is removed (the library store then has it). */
 	installs: Record<string, InstallEntry>;
 };
 
 export type ModelCatalogActions = {
-	/** Idempotent first use of the pane: loads the info (api.modelLibraryInfo) once (again only after a failure)
-	 *  and runs the first search when none ran yet. Failures -> infoStatus 'failed' / searchStatus 'failed'
+	/** Idempotent first use of the Models section: loads the info (api.modelLibraryInfo) once (again only after a
+	 *  failure) and runs the first search when none ran yet. Failures -> infoStatus 'failed' / searchStatus 'failed'
 	 *  (+ infoError / searchError), no throw. */
 	activate: () => Promise<void>;
+	/** Shows the online search or the local library (the selected result is kept for the way back). */
+	setView: (view: ModelsView) => void;
+	/** Shows a listed result in the detail panel (keys of results not listed are ignored). */
+	selectModel: (modelKey: string) => void;
+	/** Clears the detail panel. */
+	closeModel: () => void;
 	/** Reloads the provider info (token state). */
 	loadInfo: () => Promise<void>;
 	/** Updates the query text and searches again after SEARCH_DEBOUNCE_MS of inactivity (src/stores/pagedSearch.ts). */
@@ -101,11 +118,11 @@ export type ModelCatalogActions = {
 	pickVersion: (modelKey: string, versionId: string) => void;
 	/** Select -> use: api.installModel({provider, version_id, file_id}); 'installed' -> useLibraryStore.registerInstalled
 	 *  (selects it unless options.select is false) + when options.announce (default true): success notification
-	 *  naming InstalledModel.name (embeddings: info notification with embeddingPromptToken; display names come from
-	 *  the backend: InstalledModel.name, DownloadTaskEvent.title); 'downloading' -> phase 'downloading' + taskId,
-	 *  useTasksStore.waitForTask(taskId): complete -> phase 'registering', api.installModel again, register; error ->
-	 *  phase 'failed' with the event message (+ an error notification: the pane may be closed); cancelled -> entry
-	 *  removed. API errors -> phase 'failed' + reportError. Refused upfront (failed entry + warning) when
+	 *  naming InstalledModel.name, offering 'Go to Create' when the entry was selected (embeddings: info notification
+	 *  with embeddingPromptToken; display names come from the backend: InstalledModel.name, DownloadTaskEvent.title);
+	 *  'downloading' -> phase 'downloading' + taskId, useTasksStore.waitForTask(taskId): complete -> phase
+	 *  'registering', api.installModel again, register; error -> phase 'failed' with the event message (+ an error
+	 *  notification: the Models section may not be shown); cancelled -> entry removed. API errors -> phase 'failed' + reportError. Refused upfront (failed entry + warning) when
 	 *  version.unavailable_reason is set. A second install of a running installKey joins it: it returns the running
 	 *  install's promise (whose options apply). Resolves to the InstallOutcome when the install ended; never rejects. */
 	install: (model: RemoteModel, version: RemoteModelVersion, fileId?: string | null, options?: InstallOptions) => Promise<InstallOutcome>;
@@ -113,6 +130,9 @@ export type ModelCatalogActions = {
 	 *  no such download any more, e.g. after a backend restart) removes the install; other errors are reported. */
 	cancelInstall: (key: string) => Promise<void>;
 	dismissInstallError: (key: string) => void;
+	/** 'Use' of a checkpoint of the local library: useLibraryStore.selectModel, announced with 'Go to Create' (unknown
+	 *  ids are ignored). */
+	applyLibraryCheckpoint: (modelId: string) => void;
 	/** Boot (session store): api.listInstalls() and follow each running install with install()'s engine and default
 	 *  options (kind and ids come from the InstallJob; an install() of the same key then joins it). Failures are
 	 *  ignored (the backend may not know any install); never rejects. */
@@ -184,8 +204,10 @@ export const useModelCatalogStore = create<ModelCatalogStore>()((set, get) => {
 			const { notify } = useNotificationsStore.getState();
 			if (installed.kind === 'embedding') {
 				notify('info', `${installed.name} is ready: write ${embeddingPromptToken(installed.path)} in a prompt to use it.`);
+			} else if (options.select) {
+				notify('success', `${installed.name} is ready and selected for generation.`, { action: goToSectionAction('create') });
 			} else {
-				notify('success', options.select ? `${installed.name} is ready and selected for generation.` : `${installed.name} is ready.`);
+				notify('success', `${installed.name} is ready.`);
 			}
 		}
 		return { status: 'installed', installed, entryId };
@@ -255,6 +277,7 @@ export const useModelCatalogStore = create<ModelCatalogStore>()((set, get) => {
 	};
 
 	return {
+		view: 'online',
 		info: null,
 		infoStatus: 'idle',
 		infoError: null,
@@ -264,6 +287,7 @@ export const useModelCatalogStore = create<ModelCatalogStore>()((set, get) => {
 		searchStatus: 'idle',
 		searchError: null,
 		pickedVersionIds: {},
+		selectedModelKey: null,
 		installs: {},
 
 		activate: async () => {
@@ -281,6 +305,24 @@ export const useModelCatalogStore = create<ModelCatalogStore>()((set, get) => {
 				set({ info, infoStatus: 'ready' });
 			} catch (error) {
 				set({ infoStatus: 'failed', infoError: describeError(error) });
+			}
+		},
+
+		setView: (view) => {
+			if (get().view !== view) {
+				set({ view });
+			}
+		},
+
+		selectModel: (key) => {
+			if (get().selectedModelKey !== key && get().results.some((model) => modelKey(model) === key)) {
+				set({ selectedModelKey: key });
+			}
+		},
+
+		closeModel: () => {
+			if (get().selectedModelKey !== null) {
+				set({ selectedModelKey: null });
 			}
 		},
 
@@ -346,6 +388,16 @@ export const useModelCatalogStore = create<ModelCatalogStore>()((set, get) => {
 			}
 		},
 
+		applyLibraryCheckpoint: (modelId) => {
+			const library = useLibraryStore.getState();
+			const model = library.models.find((entry) => entry.id === modelId);
+			if (!model) {
+				return;
+			}
+			library.selectModel(modelId);
+			useNotificationsStore.getState().notify('success', `${model.name} is selected for generation.`, { action: goToSectionAction('create') });
+		},
+
 		resumeInstalls: async () => {
 			let jobs: InstallJob[];
 			try {
@@ -400,6 +452,10 @@ export const useModelCatalogStore = create<ModelCatalogStore>()((set, get) => {
 // Selectors / hooks (views read through these; nothing derived is stored)
 // ---------------------------------------------------------------------------
 
+/** The result shown in the detail panel (null when none is selected or it is no longer listed). */
+export const selectSelectedRemoteModel = (state: ModelCatalogState): RemoteModel | null =>
+	state.selectedModelKey === null ? null : (state.results.find((model) => modelKey(model) === state.selectedModelKey) ?? null);
+
 /** Info of the provider of the current filters (null before the info is loaded). */
 export const selectActiveProvider = (state: ModelCatalogState): ModelProviderInfo | null =>
 	state.info?.providers.find((provider) => provider.id === state.filters.provider) ?? null;
@@ -438,7 +494,7 @@ export type VersionStatus = {
 	sizeBytes: number | null;
 };
 
-/** Status of a version for its result card: combines the installs of this store, the tasks store progress
+/** Status of a version for its result card and the detail panel: combines the installs of this store, the tasks store progress
  *  and the library store entries (memoized: the same object while none of them changes). */
 export function useVersionStatus(model: RemoteModel, version: RemoteModelVersion): VersionStatus {
 	const key = installKey(model.provider, version, null);

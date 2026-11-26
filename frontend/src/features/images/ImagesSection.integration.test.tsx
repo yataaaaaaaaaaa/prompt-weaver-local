@@ -1,17 +1,20 @@
-// Image library pane over the REAL stores (image library, catalog, library, tasks, notifications): only the HTTP
-// client is replaced. Covers the wiring the view tests mock (useImageLoraRows / useImageCheckpointRow) and the
-// one-click "Use these LoRAs" flow end to end on the frontend: open an image, install the missing LoRA through the
-// catalog store (progress from the tasks store), then the selection holds exactly the image's LoRAs with its weights.
+// The Images section over the REAL stores (image library, catalog, library, tasks, notifications, navigation): only
+// the HTTP client is replaced. Covers the wiring the view tests mock (useImageLoraRows / useImageCheckpointRow) and
+// the one-click "Use these LoRAs" flow end to end on the frontend: open an image, install the missing LoRA through the
+// catalog store (progress from the tasks store), then the selection holds exactly the image's LoRAs with its weights,
+// and the announcement's 'Go to Create' shows the Create section.
 import { act, screen, waitFor, within } from '@testing-library/react';
 import { describe, expect, it, vi } from 'vitest';
 import { api } from '../../api/client';
 import type { InstallResponse } from '../../api/types';
 import { selectSelectedLoras, useLibraryStore } from '../../stores/libraryStore';
+import { useNavigationStore } from '../../stores/navigationStore';
+import { useNotificationsStore } from '../../stores/notificationsStore';
 import { useTasksStore } from '../../stores/tasksStore';
 import { CHILLOUT, DETAIL_IMAGE, DETAIL_IMAGE_RESOLUTION, KIM_LORA } from '../../test/imageLibraryData';
 import { DETAIL_TWEAKER, DETAIL_TWEAKER_VERSION, downloadEvent, installedModel } from '../../test/modelLibraryData';
 import { renderWithProviders } from '../../test/render';
-import { ImageLibraryPane } from './ImageLibraryPane';
+import { ImagesSection } from './ImagesSection';
 
 const KIM_VERSION = KIM_LORA.versions[0];
 const ADD_DETAIL_PATH = 'D:/models/loras/add_detail.safetensors';
@@ -47,11 +50,12 @@ function mockApi() {
 	return { resolve, installModel };
 }
 
-describe('ImageLibraryPane with the real stores', () => {
+describe('ImagesSection with the real stores', () => {
 	it('shows the resolved LoRAs and sets exactly them, with their weights, in one click', async () => {
 		const { addDetailId, oldId } = seedLibrary();
 		const { resolve, installModel } = mockApi();
-		const { user } = renderWithProviders(<ImageLibraryPane />);
+		useNavigationStore.getState().showSection('images');
+		const { user } = renderWithProviders(<ImagesSection />);
 
 		await user.click(await screen.findByRole('button', { name: 'Image by alice' }));
 
@@ -88,5 +92,12 @@ describe('ImageLibraryPane with the real stores', () => {
 		]);
 		expect(within(kimRow).getByText('In library')).toBeInTheDocument();
 		expect(installModel).toHaveBeenCalledTimes(2);
-	}, 20_000);
+
+		// The hand-off: the announcement offers 'Go to Create'; only that click leaves the Images section.
+		const announcement = useNotificationsStore.getState().notifications.find((item) => item.intent === 'success');
+		expect(announcement?.message).toMatch(/^LoRAs selected for generation: /);
+		expect(useNavigationStore.getState().section).toBe('images');
+		act(() => useNotificationsStore.getState().runAction(announcement!.id));
+		expect(useNavigationStore.getState().section).toBe('create');
+	});
 });

@@ -1,6 +1,7 @@
-// Tags of the image in the detail view (useImageTags: its prompt split into tags, LoRA tags removed) as selectable
+// Tags of the image in the detail panel (useImageTags: its prompt split into tags, LoRA tags removed) as selectable
 // Fluent tags, and the 'Add to category' menu: every category plus 'New category'; the store's addTagsToCategory adds
-// them as one new sub-prompt. The picked subset is ephemeral view state (none picked = every tag).
+// them as one new sub-prompt (and the toast's 'Go to Create' shows its card). The picked subset is ephemeral view
+// state (none picked = every tag).
 import {
 	Body1,
 	Caption1,

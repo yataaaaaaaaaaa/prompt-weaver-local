@@ -26,6 +26,7 @@ async function openTokenDialog(user: ReturnType<typeof renderWithProviders>['use
 	await waitFor(() => expect(currentDialog()).toHaveAccessibleName('Civitai API token'));
 }
 
+// Typing a token into a Fluent dialog is slow on a busy machine: more than the default 5 s.
 describe('ProviderTokenDialog', () => {
 	it('renders nothing for a provider without token support', () => {
 		seed(false, false);

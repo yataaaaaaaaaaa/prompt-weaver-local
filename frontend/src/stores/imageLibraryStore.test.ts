@@ -2,7 +2,7 @@ import { act, renderHook } from '@testing-library/react';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { ApiError, api } from '../api/client';
 import type { FavoriteImage, ImageSearchPage, InstalledModel, InstallResponse, RemoteImage, ResolvedImageResource } from '../api/types';
-import { subPromptKeyOf } from '../domain/categories';
+import { categoryKeyOf, subPromptKeyOf } from '../domain/categories';
 import { buildImageSearchQuery, DEFAULT_IMAGE_FILTERS, imageKey, type ImageResolution } from '../domain/imageLibrary';
 import { installKey, type InstallOutcome } from '../domain/modelCatalog';
 import { clipboard } from '../services/clipboard';
@@ -20,6 +20,7 @@ import {
 	resolvedResource,
 } from '../test/imageLibraryData';
 import { DETAIL_TWEAKER, DETAIL_TWEAKER_VERSION, downloadEvent, installedModel, installEntry, JANKU, JANKU_VERSION } from '../test/modelLibraryData';
+import { useBoardStore } from './boardStore';
 import { useCategoriesStore } from './categoriesStore';
 import {
 	selectImage,
@@ -32,6 +33,7 @@ import {
 } from './imageLibraryStore';
 import { useLibraryStore } from './libraryStore';
 import { useModelCatalogStore } from './modelCatalogStore';
+import { useNavigationStore } from './navigationStore';
 import { useNotificationsStore } from './notificationsStore';
 import { SEARCH_DEBOUNCE_MS } from './pagedSearch';
 import { useTasksStore } from './tasksStore';
@@ -273,6 +275,36 @@ describe('search', () => {
 // ---------------------------------------------------------------------------
 // Detail view and resolution
 // ---------------------------------------------------------------------------
+
+describe('view and detail selection', () => {
+	it('shows the search first, then the favorites; the image in the detail panel stays shown', () => {
+		const saved = remoteImage({ id: '3003' });
+		seedImages([DETAIL_IMAGE]);
+		useImageLibraryStore.setState({ favorites: [favoriteImage(saved)] });
+		expect(store().view).toBe('search');
+
+		store().openImage(DETAIL_KEY);
+		store().setView('favorites');
+		expect(store().view).toBe('favorites');
+		expect(selectSelectedImage(store())).toBe(DETAIL_IMAGE);
+
+		store().openImage(imageKey(saved));
+		expect(selectSelectedImage(store())).toBe(saved);
+		store().setView('search');
+		expect(store().view).toBe('search');
+		expect(store().selectedImageKey).toBe(imageKey(saved));
+	});
+
+	it('shows nothing once the selected image is listed neither in the results nor in the favorites', () => {
+		seedImages([DETAIL_IMAGE]);
+		store().openImage(DETAIL_KEY);
+
+		useImageLibraryStore.setState({ results: [OTHER_IMAGE] });
+
+		expect(store().selectedImageKey).toBe(DETAIL_KEY);
+		expect(selectSelectedImage(store())).toBeNull();
+	});
+});
 
 describe('openImage and resolveResources', () => {
 	it('shows the image and resolves its resources once', async () => {
@@ -684,6 +716,82 @@ describe('addTagsToCategory', () => {
 
 		expect(categories.addSubPromptWithText).toHaveBeenCalledTimes(1);
 		expect(notifications()).toEqual([{ intent: 'warning', title: null, message: 'This image has no tags to add.' }]);
+	});
+});
+
+describe('hand-offs to Create', () => {
+	const latest = () => useNotificationsStore.getState().notifications.at(-1);
+
+	/** The latest notification offers 'Go to Create'; only running it shows Create. */
+	function expectGoToCreate(): void {
+		const notification = latest();
+		expect(notification?.action?.label).toBe('Go to Create');
+		expect(useNavigationStore.getState().section).toBe('images');
+		useNotificationsStore.getState().runAction(notification!.id);
+		expect(useNavigationStore.getState().section).toBe('create');
+	}
+
+	it("'Use these LoRAs' announces the selection with Go to Create", async () => {
+		useNavigationStore.getState().showSection('images');
+		seedImages();
+		register(ADD_DETAIL_INSTALLED);
+		register(KIM_INSTALLED);
+		mockLibraryActions();
+
+		await store().applyImageLoras(DETAIL_KEY);
+
+		expect(latest()?.intent).toBe('warning');
+		const success = useNotificationsStore.getState().notifications.find((item) => item.intent === 'success');
+		expect(success?.message).toMatch(/^LoRAs selected for generation: /);
+		useNotificationsStore.setState({ notifications: [success!] });
+		expectGoToCreate();
+	});
+
+	it("'Use this checkpoint' of a library checkpoint announces it with Go to Create", async () => {
+		useNavigationStore.getState().showSection('images');
+		seedImages();
+		register(CHILLOUT_INSTALLED);
+		mockLibraryActions();
+
+		await store().switchToImageCheckpoint(DETAIL_KEY);
+
+		expect(latest()?.message).toBe('ChilloutMix - NiPrunedFp32Fix is selected for generation.');
+		expectGoToCreate();
+	});
+
+	it('the tags reveal their category card on the board and are announced with Go to Create', () => {
+		useNavigationStore.getState().showSection('images');
+		seedImages();
+		useCategoriesStore.getState().addCategory();
+		const [category] = useCategoriesStore.getState().categories;
+		const key = categoryKeyOf(category.text);
+		useBoardStore.setState({ collapsed: [key], filter: { ...useBoardStore.getState().filter, query: 'something else' }, revealRequest: null });
+
+		store().addTagsToCategory(DETAIL_KEY, key, ['castle']);
+
+		expect(useBoardStore.getState().revealRequest?.key).toBe(key);
+		expect(useBoardStore.getState().collapsed).toEqual([]);
+		expect(useBoardStore.getState().filter.query).toBe('');
+		expect(latest()?.message).toBe(`Tags added to the category '${category.text}'.`);
+		expectGoToCreate();
+	});
+
+	it('the tags of a new category reveal its card', () => {
+		seedImages();
+
+		store().addTagsToCategory(DETAIL_KEY, null, ['castle']);
+
+		expect(useBoardStore.getState().revealRequest?.key).toBe('new-category');
+		expect(latest()?.action?.label).toBe('Go to Create');
+	});
+
+	it('a refused sub-prompt reveals nothing', () => {
+		seedImages();
+		useCategoriesStore.setState({ addSubPromptWithText: vi.fn(() => false) });
+
+		store().addTagsToCategory(DETAIL_KEY, 'scenery');
+
+		expect(useBoardStore.getState().revealRequest).toBeNull();
 	});
 });
 

@@ -1,9 +1,8 @@
-// Page helpers of the model library specs (e2e/models): the pane, its result cards by model name, the search box,
-// the filters and the toasts the installs announce. The synthetic catalog is backend/tests/e2e/fixtures/
-// civitai_catalog.json (fake_civitai.py): the names used here are its models.
+// Page helpers of the Models section specs (e2e/models): the section, its result cards by model name, the detail
+// panel, the search box, the filters and the install statuses. The synthetic catalog is
+// backend/tests/e2e/fixtures/civitai_catalog.json (fake_civitai.py): the names used here are its models.
 import { expect, type Locator, type Page } from '@playwright/test';
 import { waitForPicturesInView, type AppDriver } from '../support/app';
-import { MODEL_LIBRARY } from './libraries';
 
 /** Every model of the default search (no filter, NSFW hidden), most downloaded first. */
 export const DEFAULT_RESULTS = [
@@ -18,41 +17,55 @@ export const DEFAULT_RESULTS = [
 	'Legacy Ink Lines',
 ];
 
-/** Opens the app, then the Model library pane (fronted), once its first results are shown. */
-export async function openModelLibrary(app: AppDriver): Promise<Locator> {
+/** Opens the app, then the Models section, once its first results are shown. Returns the section. */
+export async function openModels(app: AppDriver): Promise<Locator> {
 	await app.open();
-	const pane = await app.showPane(MODEL_LIBRARY);
-	await expect(resultList(pane)).toBeVisible();
+	const section = await app.goTo('models');
+	await expect(resultList(section)).toBeVisible();
 	await app.settle();
-	return pane;
+	return section;
 }
 
-export function resultList(pane: Locator): Locator {
-	return pane.getByRole('list', { name: 'Search results' });
+export function resultList(section: Locator): Locator {
+	return section.getByRole('list', { name: 'Search results' });
 }
 
 /** The result card of a model (a Fluent Card: role group named by the model name). */
-export function resultCard(pane: Locator, name: string): Locator {
-	return resultList(pane).getByRole('group', { name, exact: true });
+export function resultCard(section: Locator, name: string): Locator {
+	return resultList(section).getByRole('group', { name, exact: true });
 }
 
 /** The model names of the listed results, in order. */
-export async function resultNames(pane: Locator): Promise<string[]> {
-	return resultList(pane)
+export async function resultNames(section: Locator): Promise<string[]> {
+	return resultList(section)
 		.getByRole('group')
 		.evaluateAll((cards) => cards.map((card) => document.getElementById(card.getAttribute('aria-labelledby') ?? '')?.textContent ?? ''));
 }
 
-export function searchBox(pane: Locator): Locator {
-	return pane.getByRole('searchbox', { name: 'Search models' });
+/** The detail panel of the section (complementary landmark 'Model details'). */
+export function modelDetail(section: Locator): Locator {
+	return section.getByRole('complementary', { name: 'Model details', exact: true });
+}
+
+/** Opens a result in the detail panel with its name (a link button) and waits for the panel to show it. */
+export async function openModel(section: Locator, name: string): Promise<Locator> {
+	await resultCard(section, name).getByRole('button', { name, exact: true }).click();
+	const detail = modelDetail(section);
+	await expect(detail.getByRole('heading', { name, exact: true, level: 2 })).toBeVisible();
+	await waitForPicturesInView(section.page());
+	return detail;
+}
+
+export function searchBox(section: Locator): Locator {
+	return section.getByRole('searchbox', { name: 'Search models' });
 }
 
 /** Types a query like a user (one key at a time: the store debounces) and waits for exactly `expected`. */
-export async function searchFor(pane: Locator, query: string, expected: string[]): Promise<void> {
-	await searchBox(pane).fill('');
-	await searchBox(pane).pressSequentially(query, { delay: 40 });
-	await expect.poll(() => resultNames(pane), { message: `results of '${query}'` }).toEqual(expected);
-	await waitForPicturesInView(pane.page());
+export async function searchFor(section: Locator, query: string, expected: string[]): Promise<void> {
+	await searchBox(section).fill('');
+	await searchBox(section).pressSequentially(query, { delay: 40 });
+	await expect.poll(() => resultNames(section), { message: `results of '${query}'` }).toEqual(expected);
+	await waitForPicturesInView(section.page());
 }
 
 /** The open popup of a Fluent Dropdown (aria-controls of its combobox): a listbox of options, or for a multiselect
@@ -72,10 +85,10 @@ export function dropdownOption(popup: Locator, name: string | RegExp): Locator {
 	return popup.getByRole('option', { name, exact }).or(popup.getByRole('menuitemcheckbox', { name, exact }));
 }
 
-/** Picks (toggles, for a multiselect dropdown) options of a filter dropdown (Type, Base model, Sort by) and closes
- *  its popup. */
-export async function pickOptions(page: Page, pane: Locator, filter: string, options: string[]): Promise<void> {
-	const combobox = pane.getByRole('combobox', { name: filter });
+/** Picks (toggles, for a multiselect dropdown) options of a filter dropdown (Type, Base model, Sort by, Version) and
+ *  closes its popup. */
+export async function pickOptions(page: Page, scope: Locator, filter: string, options: string[]): Promise<void> {
+	const combobox = scope.getByRole('combobox', { name: filter });
 	await combobox.click();
 	const popup = await dropdownPopup(page, combobox);
 	for (const option of options) {
@@ -87,12 +100,13 @@ export async function pickOptions(page: Page, pane: Locator, filter: string, opt
 	await expect(popup).toBeHidden();
 }
 
-/** The status badge of a card ('In library', 'On disk', 'Downloading', 'Failed', 'Not supported', 'Selected'). */
-export function statusBadge(card: Locator, label: string): Locator {
-	return card.locator('.fui-Badge').filter({ hasText: new RegExp(`^${label}$`) });
+/** The status badge of a card or detail panel ('In library', 'On disk', 'Downloading', 'Failed', 'Not supported',
+ *  'Selected'). */
+export function statusBadge(scope: Locator, label: string): Locator {
+	return scope.locator('.fui-Badge').filter({ hasText: new RegExp(`^${label}$`) });
 }
 
-/** The install progress bar of a card or download (accessible name 'Installing <title>'). */
+/** The install progress bar of a card, detail panel or download (accessible name 'Installing <title>'). */
 export function installProgress(scope: Locator): Locator {
 	return scope.getByRole('progressbar', { name: /^Installing / });
 }

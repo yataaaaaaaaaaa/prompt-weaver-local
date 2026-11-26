@@ -25,6 +25,7 @@ function thumbnails(name = 'Search results'): HTMLElement[] {
 	return within(screen.getByRole('list', { name })).getAllByRole('button');
 }
 
+// Fluent components render slowly on a busy machine: more than the default 5 s per test.
 describe('SearchResultsGrid', () => {
 	let io: IntersectionObserverControl;
 
@@ -69,6 +70,19 @@ describe('SearchResultsGrid', () => {
 		expect(actions.openImage).toHaveBeenLastCalledWith(imageKey(ANONYMOUS));
 		await user.keyboard(' ');
 		expect(actions.openImage).toHaveBeenCalledTimes(3);
+	});
+
+	it('marks each thumbnail as the opener of its image, and the image shown in the detail panel', () => {
+		seedActions();
+		useImageLibraryStore.setState({ searchStatus: 'ready', results: RESULTS, selectedImageKey: imageKey(ANONYMOUS) });
+		renderWithProviders(<SearchResultsGrid />);
+
+		const [first, second] = thumbnails();
+		expect(first).toHaveAttribute('data-detail-opener', imageKey(DETAIL_IMAGE));
+		expect(second).toHaveAttribute('data-detail-opener', imageKey(ANONYMOUS));
+		expect(first).not.toHaveAttribute('aria-current');
+		expect(second).toHaveAttribute('aria-current', 'true');
+		expect(second.className).not.toBe(first.className);
 	});
 
 	it('shows a spinner while searching, keeping the previous results', () => {
