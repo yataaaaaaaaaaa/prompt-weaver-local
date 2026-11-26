@@ -1,16 +1,15 @@
-// Character editor (characters store `editor`): name, identity / outfit / negative tags (comma-separated; the outfit
-// is kept separate from the identity), LoRAs with weights, seed with its lock, reference focus with its support for
-// the selected model, reference strength and reference images; Save (primary intent; disabled while the form has
-// errors or saves) and Cancel, in an action bar that stays visible at the bottom of the pane while the form scrolls.
-// When the editor closes with the focus inside, the focus returns to what opened it (the openers are Fluent restore
-// focus targets: New character, Edit). Every field is bound to the store form (updateForm); validation messages come
-// from useCharacterFormErrors. The name field takes the focus when the editor opens.
+// Character editor (characters store `editor`), shown in the detail panel of the Characters section: name, identity /
+// outfit / negative tags (comma-separated; the outfit is kept separate from the identity), LoRAs with weights, seed
+// with its lock, reference focus with its support for the selected model, reference strength and reference images;
+// Save (primary intent; disabled while the form has errors or saves) and Cancel, in an action bar that stays visible
+// at the bottom of the panel while the form scrolls. Every field is bound to the store form (updateForm); validation
+// messages come from useCharacterFormErrors. The section moves the focus (useCharactersSectionFocus): to the name field
+// (focusTarget 'name') when the editor opens, back to what opened it when it closes.
 import {
 	Button,
 	Field,
 	Input,
 	makeStyles,
-	mergeClasses,
 	MessageBar,
 	MessageBarBody,
 	MessageBarTitle,
@@ -20,10 +19,8 @@ import {
 	Switch,
 	Textarea,
 	tokens,
-	useRestoreFocusSource,
 } from '@fluentui/react-components';
 import { DismissRegular, SaveRegular } from '@fluentui/react-icons';
-import { useEffect, useRef } from 'react';
 import { REFERENCE_DEFAULTS } from '../../api/defaults.gen';
 import type { ReferenceFocus } from '../../api/types';
 import { REFERENCE_FOCUS_LABELS, type CharacterForm } from '../../domain/characterDrafts';
@@ -34,6 +31,7 @@ import { CharacterLorasField } from './CharacterLorasField';
 import { CharacterReferenceImages } from './CharacterReferenceImages';
 import { ReferenceStrengthField } from './ReferenceStrengthField';
 import { ReferenceSupportHint } from './ReferenceSupportHint';
+import { focusTarget } from './useCharactersSectionFocus';
 
 /** The focuses, in REFERENCE_FOCUS_LABELS order (exhaustive record of ReferenceFocus). */
 const REFERENCE_FOCUSES = Object.keys(REFERENCE_FOCUS_LABELS) as ReferenceFocus[];
@@ -59,11 +57,7 @@ const TAG_FIELDS: ReadonlyArray<{ field: TagsTextField; label: string; hint: str
 ];
 
 const useStyles = makeStyles({
-	// No box of its own: the section keeps its place in the pane's layout.
-	root: {
-		display: 'contents',
-	},
-	// Sticks to the bottom of the pane's scrolling body while the editor is taller than the pane.
+	// Sticks to the bottom of the detail panel (which scrolls) while the editor is taller than the panel.
 	actions: {
 		position: 'sticky',
 		bottom: 0,
@@ -91,13 +85,9 @@ function NameField(): JSX.Element {
 	const name = useCharactersStore((state) => state.editor?.form.name ?? '');
 	const error = useCharacterFormErrors().name;
 	const updateForm = useCharactersStore((state) => state.updateForm);
-	const inputRef = useRef<HTMLInputElement>(null);
-	useEffect(() => {
-		inputRef.current?.focus();
-	}, []);
 	return (
 		<Field label="Name" required validationState={error ? 'error' : 'none'} validationMessage={error}>
-			<Input ref={inputRef} value={name} onChange={(_event, data) => updateForm({ name: data.value })} />
+			<Input value={name} onChange={(_event, data) => updateForm({ name: data.value })} {...focusTarget('name')} />
 		</Field>
 	);
 }
@@ -215,25 +205,22 @@ function EditorActions(): JSX.Element {
 
 export function CharacterEditor(): JSX.Element {
 	const styles = useStyles();
-	const restoreFocusSource = useRestoreFocusSource();
 	const characterId = useCharactersStore((state) => state.editor?.characterId ?? null);
 	const savedName = useCharactersStore((state) => selectCharacter(characterId)(state)?.name ?? null);
 	return (
-		<div className={styles.root} {...restoreFocusSource}>
-			<PaneSection title={characterId === null ? 'New character' : `Edit ${savedName ?? 'character'}`}>
-				<div className={styles.fields}>
-					<NameField />
-					{TAG_FIELDS.map((item) => (
-						<TagsField key={item.field} {...item} />
-					))}
-					<CharacterLorasField />
-					<SeedFields />
-					<FocusField />
-					<StrengthField />
-					<CharacterReferenceImages />
-				</div>
-				<EditorActions />
-			</PaneSection>
-		</div>
+		<PaneSection level={2} title={characterId === null ? 'New character' : `Edit ${savedName ?? 'character'}`}>
+			<div className={styles.fields}>
+				<NameField />
+				{TAG_FIELDS.map((item) => (
+					<TagsField key={item.field} {...item} />
+				))}
+				<CharacterLorasField />
+				<SeedFields />
+				<FocusField />
+				<StrengthField />
+				<CharacterReferenceImages />
+			</div>
+			<EditorActions />
+		</PaneSection>
 	);
 }

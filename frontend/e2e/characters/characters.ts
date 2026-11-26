@@ -1,28 +1,13 @@
-// Helpers of the characters e2e specs (e2e/characters/*.spec.ts), built on the shared AppDriver: the Characters pane
-// and its parts by their accessible names, the Character section of the Generation pane, the fixture characters
-// (backend/tests/e2e/fixtures/data/characters/characters.json) and geometry checks of what the user sees.
+// Helpers of the characters e2e specs (e2e/characters/*.spec.ts, e2e/journeys/keep-character.spec.ts), built on the
+// shared AppDriver: the Characters section and its parts by their accessible names (toolbar search, gallery, detail
+// panel with the details / editor / IP-Adapter section), the Character section of the Create section's generation
+// panel, the fixture characters (backend/tests/e2e/fixtures/data/characters/characters.json) and geometry checks of
+// what the user sees.
 import { expect, type Locator, type Page } from '@playwright/test';
 import type { CharacterCollection } from '../../src/api/types';
-import { CHARACTERS_PANE_ID } from '../../src/domain/characters';
-import { paneWindowKey, type WindowLayout } from '../../src/domain/layout';
-import type { AppDriver } from '../support/app';
-import { fixtureStoreFile, STORE_NAMES, type E2EBackend, type E2EResetOptions } from '../support/backend';
+import { toast, type AppDriver } from '../support/app';
+import type { E2EBackend } from '../support/backend';
 import { boxOf } from '../support/visibility';
-
-type WorkspaceState = { windows: Record<string, WindowLayout>; hiddenPaneIds: string[] } & Record<string, unknown>;
-
-/** Reset files of the fixture workspace with the Characters window shown at `layout` and on top (e.g. its minimum
- *  width, or inside the small viewport). */
-export function charactersWindowAt(layout: Omit<WindowLayout, 'z'>): E2EResetOptions['files'] {
-	return fixtureStoreFile<WorkspaceState>(STORE_NAMES.workspace, (state) => {
-		const top = Math.max(...Object.values(state.windows).map((window) => window.z)) + 1;
-		return {
-			...state,
-			windows: { ...state.windows, [paneWindowKey(CHARACTERS_PANE_ID)]: { ...layout, z: top } },
-			hiddenPaneIds: state.hiddenPaneIds.filter((id) => id !== CHARACTERS_PANE_ID),
-		};
-	});
-}
 
 /** The fixture characters (synthetic data of the e2e backend), in the gallery order (sorted by name). */
 export const MIRA = { id: 'chr-aaaaaaaaaaa1', name: 'Mira' } as const;
@@ -56,17 +41,33 @@ export class CharactersDriver {
 		return this.app.page;
 	}
 
-	/** Shows the Characters pane (app bar toggle) and brings it to the front. */
+	/** Shows the Characters section (navigation rail) and returns it. */
 	open(): Promise<Locator> {
-		return this.app.showPane('Characters');
+		return this.app.goTo('characters');
 	}
 
-	pane(): Locator {
-		return this.app.pane('Characters');
+	/** The Characters section (<main> landmark). */
+	section(): Locator {
+		return this.app.section('characters');
+	}
+
+	/** The gallery search of the section's toolbar. */
+	search(): Locator {
+		return this.section().getByRole('searchbox', { name: 'Search characters', exact: true });
+	}
+
+	/** New character in the section's toolbar (the header row of the section). */
+	newCharacter(): Locator {
+		return this.section().locator('header').getByRole('button', { name: 'New character', exact: true });
+	}
+
+	/** The count of the toolbar ('3 characters', '1 of 3 characters'). */
+	count(): Locator {
+		return this.section().locator('header').getByRole('status');
 	}
 
 	gallery(): Locator {
-		return this.pane().getByRole('region', { name: 'Character gallery', exact: true });
+		return this.section().getByRole('region', { name: 'Character gallery', exact: true });
 	}
 
 	/** The gallery card (Fluent Card, a group named by the character's name). */
@@ -74,25 +75,41 @@ export class CharactersDriver {
 		return this.gallery().getByRole('group', { name, exact: true });
 	}
 
+	/** The card's picture: the button selecting the card (named by the character). */
+	selectButton(name: string): Locator {
+		return this.card(name).getByRole('button', { name, exact: true });
+	}
+
 	activeSwitch(name: string): Locator {
 		return this.card(name).getByRole('switch', { name: 'Active' });
 	}
 
+	/** The detail panel (complementary landmark): the editor or the selected character's details, then the IP-Adapter
+	 *  section. */
+	details(): Locator {
+		return this.section().getByRole('complementary', { name: 'Character details', exact: true });
+	}
+
+	/** The details of the selected character (a section of the detail panel named by the character). */
+	detailsOf(name: string): Locator {
+		return this.details().getByRole('region', { name, exact: true });
+	}
+
 	/** The open editor: a section titled 'New character' or 'Edit <name>'. */
 	editor(title: string): Locator {
-		return this.pane().getByRole('region', { name: title, exact: true });
+		return this.details().getByRole('region', { name: title, exact: true });
 	}
 
 	editorActions(): Locator {
-		return this.pane().getByRole('group', { name: 'Character editor actions' });
+		return this.details().getByRole('group', { name: 'Character editor actions' });
 	}
 
 	references(): Locator {
-		return this.pane().getByRole('group', { name: 'Reference images', exact: true });
+		return this.details().getByRole('group', { name: 'Reference images', exact: true });
 	}
 
 	ipAdapter(): Locator {
-		return this.pane().getByRole('region', { name: 'Reference images (IP-Adapter)', exact: true });
+		return this.details().getByRole('region', { name: 'Reference images (IP-Adapter)', exact: true });
 	}
 
 	/** The reference support entry of a focus ('Face', 'Whole subject') in the IP-Adapter section. */
@@ -103,9 +120,15 @@ export class CharactersDriver {
 			.filter({ has: this.page.getByText(focusLabel, { exact: true }) });
 	}
 
-	/** The Character section of the Generation pane. */
+	/** The Character section of the generation panel (Create section). */
 	generationSection(): Locator {
-		return this.app.pane('Generation').getByRole('region', { name: 'Character', exact: true });
+		return this.app.createRegion('generation').getByRole('region', { name: 'Character', exact: true });
+	}
+
+	/** The toast (a Fluent MessageBar of the Notifications region) saying `message`; its follow-up action ('Go to
+	 *  <section>') is one of its buttons. */
+	toast(message: string): Locator {
+		return toast(this.page, message);
 	}
 
 	/** Activates (or deactivates) a character with its card's Active switch and waits for the backend's answer. */
@@ -122,7 +145,7 @@ export async function centerY(locator: Locator): Promise<number> {
 	return box.y + box.height / 2;
 }
 
-/** `inner` lies entirely inside `outer` (e.g. a button inside the visible part of its window). */
+/** `inner` lies entirely inside `outer` (e.g. a button inside the visible part of its panel). */
 export async function expectInside(inner: Locator, outer: Locator, what: string): Promise<void> {
 	const [a, b] = [await boxOf(inner), await boxOf(outer)];
 	expect(

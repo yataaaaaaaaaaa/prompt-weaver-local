@@ -1,13 +1,16 @@
-// Character injection into prompt building (pure). The active character (src/stores/charactersStore.ts) takes part in
-// generation through the existing prompt engine, never through a parallel path. Precedence, documented once, here
-// (README "Characters" links to it):
+// Characters (pure): the gallery order and search of the Characters section, and the character injection into prompt
+// building. The characters store (src/stores/charactersStore.ts) holds the collection and the gallery query; its
+// selectors order and filter through characterGallery.
+//
+// Injection: the active character takes part in generation through the existing prompt engine, never through a
+// parallel path. Precedence, documented once, here (README "Characters" links to it):
 // 1. Pinned categories first. The identity tags become the locked sub-prompt of a PINNED category 'Character', the
 //    outfit tags (kept separate from the identity) the locked sub-prompt of a pinned 'Character outfit' category
 //    (characterCategories; each one omitted when its tags are empty). The prompt engine (src/domain/promptEngine.ts)
 //    selects pinned categories first, in this order, before every user category whatever the user priorities; they
 //    are never sorted, never use or advance a per-category cycle counter and never draw from the prompt seed's random
 //    sequence (the same prompt seed picks the same user sub-prompts with or without a character, rules aside). Their
-//    selections are flagged `locked` and are listed like any category (Used sub-prompts pane, output metadata), so
+//    selections are flagged `locked` and are listed like any category (Used sub-prompts, output details), so
 //    rules can be created with them.
 // 2. Forbidden rules: the character wins. A user sub-prompt forbidden together with the character's identity or
 //    outfit (exact prompt, category-wide 'Character' / 'Character outfit', contains or tag rules) is never chosen:
@@ -28,11 +31,34 @@
 //    then renamed with uniqueKey ('character-2').
 import type { Character } from '../api/types';
 import { categoryKeyOf, makeCategory, makeSubPrompt, type Category } from './categories';
-import { joinPromptTags, normalizeTagId, promptTagIds, uniqueKey } from './text';
+import { joinPromptTags, normalizeTagId, promptTagIds, splitPromptWords, textContains, uniqueKey } from './text';
 
-/** Id of the Characters pane (src/workspace/paneRegistry.tsx, through src/stores/charactersStore.ts): window layouts
- *  are persisted by id, never rename. */
-export const CHARACTERS_PANE_ID = 'characters';
+// ---------------------------------------------------------------------------
+// Gallery: order and search
+// ---------------------------------------------------------------------------
+
+/** The character fields the gallery search reads. */
+export type CharacterSearchInput = Pick<Character, 'name' | 'identity_tags' | 'outfit_tags'>;
+
+/** Whether a character matches the gallery search `query`: every comma-separated term of the query
+ *  (splitPromptWords) is contained (textContains: case and whitespace insensitive) in its name, in one of its identity
+ *  tags or in one of its outfit tags. A blank query matches every character. */
+export function characterMatchesQuery(character: CharacterSearchInput, query: string): boolean {
+	const fields = [character.name, ...character.identity_tags, ...character.outfit_tags];
+	return splitPromptWords(query).every((term) => fields.some((field) => textContains(field, term)));
+}
+
+/** The gallery: the characters matching `query` (characterMatchesQuery), by name (case-insensitive, locale order),
+ *  then in their given order (the backend's creation order). A new array; the input is left untouched. */
+export function characterGallery<T extends CharacterSearchInput>(characters: readonly T[], query = ''): T[] {
+	return characters
+		.filter((character) => characterMatchesQuery(character, query))
+		.sort((left, right) => left.name.localeCompare(right.name, undefined, { sensitivity: 'base' }));
+}
+
+// ---------------------------------------------------------------------------
+// Injection into prompt building
+// ---------------------------------------------------------------------------
 
 /** The character fields prompt building reads. */
 export type CharacterGenerationInput = Pick<

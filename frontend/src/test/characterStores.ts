@@ -1,6 +1,6 @@
 // Test doubles of the characters and IP-Adapter stores for view tests (imported by tests only): every action is
 // replaced by vi.fn (the views are tested against the store contracts, never the real actions), plus builders of the
-// editor state. updateForm applies its patch so the controlled fields behave like in the app.
+// editor state. updateForm, select and setQuery apply their change so the controlled views behave like in the app.
 import { vi } from 'vitest';
 import { REFERENCE_DEFAULTS } from '../api/defaults.gen';
 import type { CharacterForm } from '../domain/characterDrafts';
@@ -12,6 +12,8 @@ export function seedCharacterActions() {
 		load: vi.fn(async () => undefined),
 		setActive: vi.fn(async (_characterId: string | null) => undefined),
 		toggleActive: vi.fn(async (_characterId: string) => undefined),
+		select: vi.fn((characterId: string | null) => useCharactersStore.setState({ selectedId: characterId })),
+		setQuery: vi.fn((query: string) => useCharactersStore.setState({ query })),
 		startCreate: vi.fn(),
 		startCreateFromOutput: vi.fn(),
 		startCreateFromImage: vi.fn(async (_imageKey: string) => undefined),
@@ -62,7 +64,17 @@ export function characterForm(overrides: Partial<CharacterForm> = {}): Character
 	};
 }
 
-/** The editor open on a new character (characterId null) unless overridden. */
+/** The editor open on a new character (characterId null), opened from the Characters section (no return section),
+ *  unless overridden. */
 export function editorState(overrides: Partial<CharacterEditorState> = {}): CharacterEditorState {
-	return { characterId: null, form: characterForm(), pendingSources: [], saving: false, error: null, ...overrides };
+	return {
+		session: 1,
+		characterId: null,
+		returnSection: null,
+		form: characterForm(),
+		pendingSources: [],
+		saving: false,
+		error: null,
+		...overrides,
+	};
 }

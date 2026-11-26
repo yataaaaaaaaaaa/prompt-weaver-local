@@ -11,6 +11,7 @@ import { useOutputsStore } from '../../stores/outputsStore';
 import { ALICE_ID, character, characterImage, ipAdapterStatus, READY_SDXL_FACE, REFERENCE_IMAGE_ID, referenceSupport } from '../../test/characterData';
 import { renderWithProviders } from '../../test/render';
 import { CharacterEditor } from './CharacterEditor';
+import { CHARACTER_FOCUS_ATTRIBUTE } from './useCharactersSectionFocus';
 import { characterForm, editorState, seedCharacterActions, seedIpAdapterActions } from '../../test/characterStores';
 import { hasActionIntent } from '../../test/stateClasses';
 
@@ -32,13 +33,15 @@ function renderEditor(editor = editorState()) {
 const saveButton = () => screen.getByRole('button', { name: 'Save' });
 
 describe('CharacterEditor fields', () => {
-	it('shows the form values and focuses the name', () => {
+	it('shows the form values; the name field is the focus target of the section', () => {
 		renderEditor();
 
 		expect(screen.getByRole('heading', { name: 'New character' })).toBeInTheDocument();
 		const name = screen.getByRole('textbox', { name: /^Name/ });
 		expect(name).toHaveValue('Alice');
-		expect(name).toHaveFocus();
+		// The Characters section focuses it when the editor opens (useCharactersSectionFocus), not the editor itself.
+		expect(name).toHaveAttribute(CHARACTER_FOCUS_ATTRIBUTE, 'name');
+		expect(name).not.toHaveFocus();
 		expect(screen.getByRole('textbox', { name: 'Identity tags' })).toHaveValue('1girl, silver hair, blue eyes');
 		expect(screen.getByRole('textbox', { name: 'Outfit tags' })).toHaveValue('school uniform');
 		expect(screen.getByRole('textbox', { name: 'Negative tags' })).toHaveValue('short hair');

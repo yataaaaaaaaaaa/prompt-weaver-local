@@ -1,4 +1,4 @@
-import { act, fireEvent, screen } from '@testing-library/react';
+import { act, fireEvent, screen, within } from '@testing-library/react';
 import { beforeEach, describe, expect, it } from 'vitest';
 import { characterImageUrl } from '../../api/config';
 import { useCharactersStore } from '../../stores/charactersStore';
@@ -18,13 +18,16 @@ beforeEach(() => {
 	ipAdapterActions = seedIpAdapterActions();
 });
 
+/** The section the generation panel places (its contract: a region named 'Character'). */
+const section = () => screen.getByRole('region', { name: 'Character' });
+
 describe('ActiveCharacterSection without an active character', () => {
-	it('activates a character picked in the dropdown', async () => {
+	it('is a region named Character, and activates a character picked in the dropdown', async () => {
 		useCharactersStore.setState({ loadStatus: 'ready', characters: [BOB, ALICE] });
 		const { user } = renderWithProviders(<ActiveCharacterSection />);
 
-		expect(screen.getByRole('heading', { name: 'Character' })).toBeInTheDocument();
-		const dropdown = screen.getByRole('combobox', { name: 'Active character' });
+		expect(within(section()).getByRole('heading', { name: 'Character' })).toBeInTheDocument();
+		const dropdown = within(section()).getByRole('combobox', { name: 'Active character' });
 		expect(dropdown).toHaveTextContent('None');
 		await user.click(dropdown);
 		expect(screen.getAllByRole('option').map((option) => option.textContent)).toEqual(['Alice', 'Bob']);
@@ -42,7 +45,7 @@ describe('ActiveCharacterSection without an active character', () => {
 		const dropdown = screen.getByRole('combobox', { name: 'Active character' });
 		expect(dropdown).toBeDisabled();
 		expect(dropdown).toHaveTextContent('No characters yet');
-		await user.click(screen.getByRole('button', { name: 'New character' }));
+		await user.click(within(section()).getByRole('button', { name: 'New character' }));
 
 		expect(actions.startCreate).toHaveBeenCalledTimes(1);
 	});
@@ -54,13 +57,35 @@ describe('ActiveCharacterSection with an active character', () => {
 		const { user } = renderWithProviders(<ActiveCharacterSection />);
 
 		expect(screen.queryByRole('combobox', { name: 'Active character' })).not.toBeInTheDocument();
-		const avatar = screen.getByRole('img', { name: 'Alice' });
+		const avatar = within(section()).getByRole('img', { name: 'Alice' });
 		expect(avatar.querySelector('img')).toHaveAttribute('src', characterImageUrl(ALICE_ID, THUMBNAIL_IMAGE_ID));
-		expect(screen.getByText('1girl, silver hair, blue eyes')).toBeInTheDocument();
+		expect(within(section()).getByText('1girl, silver hair, blue eyes')).toBeInTheDocument();
 		expect(screen.queryByText(/Seed locked/)).not.toBeInTheDocument();
 
-		await user.click(screen.getByRole('button', { name: 'Deactivate' }));
+		await user.click(within(section()).getByRole('button', { name: 'Deactivate' }));
 		expect(actions.toggleActive).toHaveBeenCalledWith(ALICE_ID);
+	});
+
+	it('edits it in one click (the editor opens in the Characters section)', async () => {
+		useCharactersStore.setState({ characters: [ALICE], activeId: ALICE_ID });
+		const { user } = renderWithProviders(<ActiveCharacterSection />);
+
+		await user.click(within(section()).getByRole('button', { name: 'Edit Alice' }));
+
+		expect(actions.startEdit).toHaveBeenCalledWith(ALICE_ID);
+	});
+
+	it('keeps the actions on their own row under the identity, for a narrow panel', () => {
+		useCharactersStore.setState({ characters: [ALICE], activeId: ALICE_ID });
+		renderWithProviders(<ActiveCharacterSection />);
+
+		// jsdom does no layout (the 300 px look is checked in the real browser): the structure is checked here.
+		const name = within(section()).getByText('Alice');
+		const deactivate = within(section()).getByRole('button', { name: 'Deactivate' });
+		const identityRow = name.parentElement?.parentElement;
+		expect(identityRow).not.toBeNull();
+		expect(identityRow).not.toContainElement(deactivate);
+		expect(deactivate.parentElement).toContainElement(within(section()).getByRole('button', { name: 'Edit Alice' }));
 	});
 
 	it('shows the seed lock', () => {
@@ -103,7 +128,7 @@ describe('ActiveCharacterSection with an active character', () => {
 		useCharactersStore.setState({ characters: [character({ reference_images: [], thumbnail: null })], activeId: ALICE_ID });
 		renderWithProviders(<ActiveCharacterSection />);
 
-		expect(screen.getByText(/No reference images: add some in the Characters pane/)).toBeInTheDocument();
+		expect(screen.getByText('No reference images: add some with Edit for a stronger likeness.')).toBeInTheDocument();
 		expect(screen.queryByRole('slider')).not.toBeInTheDocument();
 		// No thumbnail: the avatar shows the initials.
 		const avatar = screen.getByRole('img', { name: 'Alice' });
@@ -111,10 +136,22 @@ describe('ActiveCharacterSection with an active character', () => {
 		expect(avatar).toHaveTextContent('A');
 	});
 
-	it('disables Deactivate while the character is busy', () => {
+	it('disables Deactivate and Edit while the character is busy', () => {
 		useCharactersStore.setState({ characters: [ALICE], activeId: ALICE_ID, busyIds: { [ALICE_ID]: true } });
 		renderWithProviders(<ActiveCharacterSection />);
 
 		expect(screen.getByRole('button', { name: 'Deactivate' })).toBeDisabled();
+		expect(screen.getByRole('button', { name: 'Edit Alice' })).toBeDisabled();
+	});
+
+	it('names every button and control', () => {
+		useCharactersStore.setState({ characters: [ALICE], activeId: ALICE_ID });
+		renderWithProviders(<ActiveCharacterSection />);
+
+		for (const role of ['button', 'slider'] as const) {
+			for (const element of screen.getAllByRole(role)) {
+				expect(element).toHaveAccessibleName();
+			}
+		}
 	});
 });

@@ -1,19 +1,24 @@
 // Characters store: single truth holder, in the frontend, of the characters collection (read from and saved to the
-// backend, which owns it: /api/characters), of the active character, and of the character editor (its form while
-// it is open, including the images a new character will import). Not persisted (the backend persists everything,
-// active_id included). Pure logic lives in src/domain/characterDrafts.ts (forms, prefills) and src/domain/characters.ts
-// (prompt injection, read by the generation store). Cross-store coordination happens in the actions:
+// backend, which owns it: /api/characters), of the active character, of the Characters section's gallery (search
+// query, selected character) and of the character editor (its form while it is open, including the images a new
+// character will import, and the section it was opened from). Not persisted (the backend persists everything,
+// active_id included; the gallery state lasts for the session). Pure logic lives in src/domain/characterDrafts.ts
+// (forms, prefills) and src/domain/characters.ts (gallery order and search; prompt injection, read by the generation
+// store). Cross-store coordination happens in the actions:
 // - "Create character from this output" reads the current output (useOutputsStore record);
 // - "Create character" from an image reads the image library (selectImage) and resolves the image's LoRAs with
 //   useImageLibraryStore.getState().collectImageLoras (installs included);
 // - reference files are picked with the desktop file dialog (src/services/desktop.ts);
-// - the editor opens the Characters pane with useWorkspaceStore.getState().revealPane(CHARACTERS_PANE_ID);
+// - the editor opens the Characters section with useNavigationStore.getState().showSection('characters') and
+//   remembers the section shown before: Cancel shows it again, and the notification of a save offers to go back to it
+//   (goToSectionAction); an activation made outside Create offers 'Go to Create';
 // - failures are notified (reportError), successes too when the user cannot see them.
 // Rule: never read another store at module top level or in the initial state (stores import each other).
 import { useMemo } from 'react';
 import { create } from 'zustand';
 import { api } from '../api/client';
 import type { Character, CharacterImageSource, LoraWeight } from '../api/types';
+import type { SectionId } from '../app/sections';
 import {
 	characterFormErrors,
 	characterFormFromValues,
@@ -28,7 +33,7 @@ import {
 	type CharacterFormErrors,
 	type CharacterValues,
 } from '../domain/characterDrafts';
-import { CHARACTERS_PANE_ID } from '../domain/characters';
+import { characterGallery, characterMatchesQuery } from '../domain/characters';
 import { addLorasToSelection, withLoraWeight } from '../domain/loraSelection';
 import { namedProblemsText } from '../domain/text';
 import { desktop } from '../services/desktop';
@@ -38,15 +43,17 @@ import { DESKTOP_DIALOGS_UNAVAILABLE, useLibraryStore } from './libraryStore';
 import { describeError, reportError, useNotificationsStore, type NotificationsActions } from './notificationsStore';
 import { useOutputsStore } from './outputsStore';
 import type { LoadStatus } from './pagedSearch';
-import { useWorkspaceStore } from './workspaceStore';
-
-/** Re-exported for the views and the pane registry (defined in the pure domain module, which Node-side e2e helpers
- *  can import too). */
-export { CHARACTERS_PANE_ID };
+import { goToSectionAction, useNavigationStore } from './navigationStore';
 
 export type CharacterEditorState = {
+	/** Identifies this opening of the editor (a new value each time it opens, also when it replaces an open editor):
+	 *  the view remounts the form, whose name field then takes the focus. */
+	session: number;
 	/** The character being edited; null while creating a new one. */
 	characterId: string | null;
+	/** The section shown when the editor opened, when it was not the Characters section (e.g. 'create' for "Create
+	 *  character" from an output): Cancel shows it again; the notification of a save offers to go back to it. */
+	returnSection: SectionId | null;
 	form: CharacterForm;
 	/** Images imported as reference images when a NEW character is saved (create from an output / an image), in
 	 *  order; the first becomes its thumbnail. Always [] when editing a saved character (its images are edited
@@ -71,27 +78,37 @@ export type CharactersState = {
 	busyIds: Record<string, true>;
 	/** imageKey whose "Create character" is collecting the image's LoRAs (startCreateFromImage); null otherwise. */
 	preparingImageKey: string | null;
+	/** The gallery's selected character: the detail panel shows it while the editor is closed. null: none. */
+	selectedId: string | null;
+	/** The gallery's search text (characterMatchesQuery: name, identity and outfit tags); '' shows every character. */
+	query: string;
 };
 
 export type CharactersActions = {
 	/** api.listCharacters -> characters + activeId (loadStatus 'loading' -> 'ready' | 'failed' + loadError, no
-	 *  notification). Called at boot by the session store and by the pane's Retry. Never rejects. */
+	 *  notification). Called at boot by the session store and by the gallery's Retry. A selected character missing from
+	 *  the answer is unselected. Never rejects. */
 	load: () => Promise<void>;
 	/** api.setActiveCharacter (null deactivates); applies the answered collection. Failures reported. Never rejects. */
 	setActive: (characterId: string | null) => Promise<void>;
 	/** One click: activates the character, or deactivates it when it is the active one. */
 	toggleActive: (characterId: string) => Promise<void>;
-	/** Opens the editor on a new character (emptyCharacterValues with a unique default name) and reveals the pane. */
+	/** Selects a character of the gallery (null unselects; an unknown id is ignored). An open editor stays open: the
+	 *  detail panel shows the selected character once it closes. */
+	select: (characterId: string | null) => void;
+	/** Sets the gallery's search text. */
+	setQuery: (query: string) => void;
+	/** Opens the editor on a new character (emptyCharacterValues with a unique default name) and shows the Characters section. */
 	startCreate: () => void;
 	/** Opens the editor on a new character prefilled from the current output (characterValuesFromOutput), its image as
-	 *  pending reference ({kind: 'output'}); reveals the pane. A warning when no output is shown. */
+	 *  pending reference ({kind: 'output'}); shows the Characters section. A warning when no output is shown. */
 	startCreateFromOutput: () => void;
 	/** Opens the editor on a new character prefilled from the image library image (characterValuesFromImage with the
 	 *  LoRAs of collectImageLoras: missing ones are installed first), the image as pending reference ({kind: 'url',
-	 *  url: image.url}); reveals the pane; a warning lists skipped LoRAs. preparingImageKey is set meanwhile (a second
+	 *  url: image.url}); shows the Characters section; a warning lists skipped LoRAs. preparingImageKey is set meanwhile (a second
 	 *  call while one prepares is ignored). No-op for an unknown image. Never rejects. */
 	startCreateFromImage: (imageKey: string) => Promise<void>;
-	/** Opens the editor on a saved character (characterValuesOf) and reveals the pane. */
+	/** Opens the editor on a saved character (characterValuesOf), selects it and shows the Characters section. */
 	startEdit: (characterId: string) => void;
 	/** Merges a patch into the editor form (no-op when the editor is closed). */
 	updateForm: (patch: Partial<CharacterForm>) => void;
@@ -102,15 +119,17 @@ export type CharactersActions = {
 	setFormLoraWeight: (loraId: string, weight: number) => void;
 	/** Drops one pending reference image of a new character. */
 	removePendingSource: (index: number) => void;
-	/** Closes the editor without saving. */
+	/** Closes the editor without saving, and shows again the section it was opened from (returnSection). */
 	cancelEdit: () => void;
 	/** Validates (characterFormErrors: nothing is sent while there are errors), then api.createCharacter (with the
-	 *  pending sources) or api.updateCharacter; on success the saved character replaces / joins the list, the editor
-	 *  closes and resolves true. A failure keeps the editor open with editor.error set and resolves false. Never
-	 *  rejects. */
+	 *  pending sources) or api.updateCharacter; on success the saved character replaces / joins the list and is
+	 *  selected (a gallery search that would hide it is cleared), the editor closes (the Characters section stays
+	 *  shown) and resolves true. A creation is notified, an
+	 *  update too when the editor was opened from another section; that notification then offers 'Go to <section>'.
+	 *  A failure keeps the editor open with editor.error set and resolves false. Never rejects. */
 	saveEditor: () => Promise<boolean>;
-	/** api.deleteCharacter; the character leaves the list (and activeId when it was active; the editor closes when it
-	 *  edits it). Failures reported. Never rejects. */
+	/** api.deleteCharacter; the character leaves the list (and activeId / selectedId when it was active / selected;
+	 *  the editor closes when it edits it). Failures reported. Never rejects. */
 	remove: (characterId: string) => Promise<void>;
 	/** Imports the current output's image as a reference image ({kind: 'output'}). Failures reported. */
 	addReferenceFromCurrentOutput: (characterId: string) => Promise<void>;
@@ -174,11 +193,26 @@ export const useCharactersStore = create<CharactersStore>()((set, get) => {
 			}
 		});
 
-	/** Opens the editor (replacing an open one) on `values` and reveals the Characters pane. */
+	/** Opens the editor (replacing an open one) on `values` and shows the Characters section, remembering the section
+	 *  shown before (an editor replaced from inside the Characters section passes its own return section on). A saved
+	 *  character becomes the selected one. */
 	const openEditor = (characterId: string | null, values: CharacterValues, pendingSources: CharacterImageSource[]) => {
 		editorSession += 1;
-		set({ editor: { characterId, form: characterFormFromValues(values), pendingSources, saving: false, error: null } });
-		useWorkspaceStore.getState().revealPane(CHARACTERS_PANE_ID);
+		const navigation = useNavigationStore.getState();
+		const returnSection = navigation.section === 'characters' ? (get().editor?.returnSection ?? null) : navigation.section;
+		set((state) => ({
+			editor: {
+				session: editorSession,
+				characterId,
+				returnSection,
+				form: characterFormFromValues(values),
+				pendingSources,
+				saving: false,
+				error: null,
+			},
+			selectedId: characterId ?? state.selectedId,
+		}));
+		navigation.showSection('characters');
 	};
 
 	const closeEditor = () => {
@@ -211,6 +245,8 @@ export const useCharactersStore = create<CharactersStore>()((set, get) => {
 		editor: null,
 		busyIds: {},
 		preparingImageKey: null,
+		selectedId: null,
+		query: '',
 
 		load: async () => {
 			const token = ++loadToken;
@@ -218,7 +254,12 @@ export const useCharactersStore = create<CharactersStore>()((set, get) => {
 			try {
 				const collection = await api.listCharacters();
 				if (token === loadToken) {
-					set({ characters: collection.items, activeId: collection.active_id, loadStatus: 'ready' });
+					set((state) => ({
+						characters: collection.items,
+						activeId: collection.active_id,
+						loadStatus: 'ready',
+						selectedId: collection.items.some((item) => item.id === state.selectedId) ? state.selectedId : null,
+					}));
 				}
 			} catch (error) {
 				if (token === loadToken) {
@@ -240,12 +281,27 @@ export const useCharactersStore = create<CharactersStore>()((set, get) => {
 				set({ characters: collection.items, activeId: collection.active_id });
 				const active = selectActiveCharacter(get());
 				if (active) {
-					notify('success', `${active.name} is active for generation.`);
+					// Activated outside Create (e.g. in the Characters section): one click to generate with it.
+					const outsideCreate = useNavigationStore.getState().section !== 'create';
+					notify('success', `${active.name} is active for generation.`, outsideCreate ? { action: goToSectionAction('create') } : {});
 				}
 			});
 		},
 
 		toggleActive: (characterId) => get().setActive(get().activeId === characterId ? null : characterId),
+
+		select: (characterId) => {
+			if (characterId === get().selectedId || (characterId !== null && selectCharacter(characterId)(get()) === null)) {
+				return;
+			}
+			set({ selectedId: characterId });
+		},
+
+		setQuery: (query) => {
+			if (query !== get().query) {
+				set({ query });
+			}
+		},
 
 		startCreate: () => openEditor(null, emptyCharacterValues(newCharacterName(get().characters)), []),
 
@@ -307,8 +363,13 @@ export const useCharactersStore = create<CharactersStore>()((set, get) => {
 			),
 
 		cancelEdit: () => {
-			if (get().editor) {
-				closeEditor();
+			const editor = get().editor;
+			if (!editor) {
+				return;
+			}
+			closeEditor();
+			if (editor.returnSection !== null) {
+				useNavigationStore.getState().showSection(editor.returnSection);
 			}
 		},
 
@@ -328,9 +389,14 @@ export const useCharactersStore = create<CharactersStore>()((set, get) => {
 				applyCharacter(saved);
 				if (session === editorSession) {
 					closeEditor();
+					// Selected, and in view: a search that would hide it is cleared.
+					set((state) => ({ selectedId: saved.id, query: characterMatchesQuery(saved, state.query) ? state.query : '' }));
 				}
+				const goBack = editor.returnSection === null ? {} : { action: goToSectionAction(editor.returnSection) };
 				if (editor.characterId === null) {
-					notify('success', `${saved.name} was created.`);
+					notify('success', `${saved.name} was created.`, goBack);
+				} else if (editor.returnSection !== null) {
+					notify('success', `${saved.name} was saved.`, goBack);
 				}
 				return true;
 			} catch (error) {
@@ -354,6 +420,7 @@ export const useCharactersStore = create<CharactersStore>()((set, get) => {
 				set((state) => ({
 					characters: state.characters.filter((character) => character.id !== characterId),
 					activeId: state.activeId === characterId ? null : state.activeId,
+					selectedId: state.selectedId === characterId ? null : state.selectedId,
 				}));
 				notify('success', `${name} was deleted.`);
 			}),
@@ -432,13 +499,22 @@ export const selectThumbnailReferenceId =
 		return character.reference_images.some((image) => image.id === source.image_id) ? source.image_id : null;
 	};
 
-/** The gallery order: by name (case-insensitive, locale order), then creation order. Memoized on the list. */
+/** The gallery's selected character (null when none is selected or it no longer exists). */
+export const selectSelectedCharacter = (state: CharactersState): Character | null => selectCharacter(state.selectedId)(state);
+
+/** Every character in the gallery order (characterGallery: by name, case-insensitive, then creation order), whatever
+ *  the search. Memoized on the list. */
 export function useSortedCharacters(): Character[] {
 	const characters = useCharactersStore((state) => state.characters);
-	return useMemo(
-		() => [...characters].sort((left, right) => left.name.localeCompare(right.name, undefined, { sensitivity: 'base' })),
-		[characters],
-	);
+	return useMemo(() => characterGallery(characters), [characters]);
+}
+
+/** The characters the gallery shows: those matching the search query (characterMatchesQuery), in the gallery order.
+ *  Memoized on the list and the query. */
+export function useGalleryCharacters(): Character[] {
+	const characters = useCharactersStore((state) => state.characters);
+	const query = useCharactersStore((state) => state.query);
+	return useMemo(() => characterGallery(characters, query), [characters, query]);
 }
 
 const NO_FORM_ERRORS: CharacterFormErrors = {};

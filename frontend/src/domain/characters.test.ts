@@ -4,11 +4,62 @@ import { makeCategory, type Category } from './categories';
 import {
 	CHARACTER_CATEGORY_NAME,
 	CHARACTER_OUTFIT_CATEGORY_NAME,
-	CHARACTERS_PANE_ID,
 	characterCategories,
+	characterGallery,
+	characterMatchesQuery,
 	characterNegativePrompt,
 	lockedCharacterSeed,
 } from './characters';
+
+describe('characterMatchesQuery', () => {
+	const mira = character({ name: 'Mira Vale', identity_tags: ['1girl', 'short red hair', 'green eyes'], outfit_tags: ['leather jacket'] });
+
+	it('matches the name, an identity tag or an outfit tag, ignoring case and extra spaces', () => {
+		expect(characterMatchesQuery(mira, 'mira')).toBe(true);
+		expect(characterMatchesQuery(mira, 'VALE')).toBe(true);
+		expect(characterMatchesQuery(mira, 'red   hair')).toBe(true);
+		expect(characterMatchesQuery(mira, 'Jacket')).toBe(true);
+		expect(characterMatchesQuery(mira, 'blue eyes')).toBe(false);
+	});
+
+	it('needs every comma-separated term to match (each in any field)', () => {
+		expect(characterMatchesQuery(mira, '1girl, red hair')).toBe(true);
+		expect(characterMatchesQuery(mira, 'mira, jacket')).toBe(true);
+		expect(characterMatchesQuery(mira, '1girl, silver hair')).toBe(false);
+		// Empty terms are ignored.
+		expect(characterMatchesQuery(mira, ', red ,, ')).toBe(true);
+	});
+
+	it('does not search the negative tags', () => {
+		expect(characterMatchesQuery(character({ negative_tags: ['long hair'] }), 'long hair')).toBe(false);
+	});
+
+	it('matches every character with a blank query', () => {
+		expect(characterMatchesQuery(mira, '')).toBe(true);
+		expect(characterMatchesQuery(mira, '  ,  ')).toBe(true);
+		expect(characterMatchesQuery(character({ identity_tags: [], outfit_tags: [] }), ' ')).toBe(true);
+	});
+});
+
+describe('characterGallery', () => {
+	const zed = character({ id: 'chr-zzzzzzzzzzz1', name: 'zed', identity_tags: ['1boy'] });
+	const alice = character({ id: 'chr-aaaaaaaaaaa1', name: 'Alice', identity_tags: ['1girl'] });
+	const alice2 = character({ id: 'chr-aaaaaaaaaaa2', name: 'alice', identity_tags: ['1girl', 'hat'] });
+
+	it('orders by name (case-insensitive), then in the given (creation) order', () => {
+		const characters = [zed, alice2, alice, BOB];
+		expect(characterGallery(characters).map((item) => item.id)).toEqual([alice2.id, alice.id, BOB.id, zed.id]);
+		// The input is left untouched.
+		expect(characters.map((item) => item.id)).toEqual([zed.id, alice2.id, alice.id, BOB.id]);
+	});
+
+	it('keeps only the characters matching the query', () => {
+		expect(characterGallery([zed, alice, alice2, BOB], '1girl').map((item) => item.id)).toEqual([alice.id, alice2.id]);
+		expect(characterGallery([zed, alice, alice2, BOB], 'hat, 1girl')).toEqual([alice2]);
+		expect(characterGallery([zed, BOB], 'nobody')).toEqual([]);
+		expect(characterGallery([], 'x')).toEqual([]);
+	});
+});
 
 const pinnedCategory = (text: string, promptText: string): Category => ({
 	text,
@@ -70,11 +121,5 @@ describe('lockedCharacterSeed', () => {
 		expect(lockedCharacterSeed(character({ seed: 1234, seed_locked: false }))).toBeNull();
 		expect(lockedCharacterSeed(character({ seed: null, seed_locked: true }))).toBeNull();
 		expect(lockedCharacterSeed(null)).toBeNull();
-	});
-});
-
-describe('CHARACTERS_PANE_ID', () => {
-	it('keeps the id window layouts are persisted under (pane:characters)', () => {
-		expect(CHARACTERS_PANE_ID).toBe('characters');
 	});
 });

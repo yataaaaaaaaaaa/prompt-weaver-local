@@ -15,19 +15,20 @@ import { desktop } from '../services/desktop';
 import { ALICE_ID, BOB, BOB_ID, character, characterCollection, characterImage, REFERENCE_IMAGE_ID } from '../test/characterData';
 import { imageParams, remoteImage } from '../test/imageLibraryData';
 import {
-	CHARACTERS_PANE_ID,
 	selectActiveCharacter,
 	selectIsCharacterBusy,
+	selectSelectedCharacter,
 	selectThumbnailReferenceId,
 	useCharacterFormErrors,
 	useCharactersStore,
+	useGalleryCharacters,
 	useSortedCharacters,
 } from './charactersStore';
 import { useImageLibraryStore, type ImageLoraCollection } from './imageLibraryStore';
 import { DESKTOP_DIALOGS_UNAVAILABLE, useLibraryStore } from './libraryStore';
 import { useNotificationsStore } from './notificationsStore';
 import { useOutputsStore } from './outputsStore';
-import { useWorkspaceStore } from './workspaceStore';
+import { useNavigationStore } from './navigationStore';
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -54,11 +55,11 @@ function seedCharacters(characters: Character[] = [ALICE, BOB], activeId: string
 	useCharactersStore.setState({ characters, activeId, loadStatus: 'ready' });
 }
 
-/** Replaces the workspace action the store calls (the workspace store tests own its effect). */
-function mockRevealPane() {
-	const revealPane = vi.fn();
-	useWorkspaceStore.setState({ revealPane });
-	return revealPane;
+/** Replaces the navigation action the store calls (the navigation store tests own its effect). */
+function mockShowSection() {
+	const showSection = vi.fn();
+	useNavigationStore.setState({ showSection });
+	return showSection;
 }
 
 const selection = (category_name: string, prompt_text: string): GenerationSelection => ({
@@ -117,6 +118,16 @@ describe('charactersStore.load', () => {
 
 		expect(store()).toMatchObject({ characters: [BOB], activeId: null, loadStatus: 'ready' });
 	});
+
+	it('keeps the selected character when it is still there, else unselects it', async () => {
+		useCharactersStore.setState({ selectedId: BOB_ID });
+		vi.spyOn(api, 'listCharacters').mockResolvedValueOnce(characterCollection([ALICE, BOB])).mockResolvedValueOnce(characterCollection([ALICE]));
+
+		await store().load();
+		expect(store().selectedId).toBe(BOB_ID);
+		await store().load();
+		expect(store().selectedId).toBeNull();
+	});
 });
 
 describe('charactersStore.toggleActive', () => {
@@ -133,6 +144,21 @@ describe('charactersStore.toggleActive', () => {
 		expect(setActive).toHaveBeenCalledWith(ALICE_ID);
 		expect(store()).toMatchObject({ activeId: ALICE_ID, busyIds: {} });
 		expect(notifications()).toEqual([{ intent: 'success', title: null, message: 'Alice is active for generation.' }]);
+		// Activated in Create (the section shown): nothing to go to.
+		expect(useNotificationsStore.getState().notifications[0].action).toBeNull();
+	});
+
+	it('activated outside Create, the notification offers Go to Create', async () => {
+		seedCharacters();
+		useNavigationStore.setState({ section: 'characters' });
+		vi.spyOn(api, 'setActiveCharacter').mockResolvedValue(characterCollection([ALICE, BOB], BOB_ID));
+
+		await store().toggleActive(BOB_ID);
+
+		const [notification] = useNotificationsStore.getState().notifications;
+		expect(notification).toMatchObject({ intent: 'success', message: 'Bob is active for generation.', action: { label: 'Go to Create' } });
+		useNotificationsStore.getState().runAction(notification.id);
+		expect(useNavigationStore.getState().section).toBe('create');
 	});
 
 	it('deactivates the active character (the active one is busy meanwhile)', async () => {
@@ -189,46 +215,51 @@ describe('charactersStore.toggleActive', () => {
 // ---------------------------------------------------------------------------
 
 describe('charactersStore editor entry points', () => {
-	it('startCreate opens an empty editor with a unique name and reveals the pane', () => {
+	it('startCreate opens an empty editor with a unique name and shows the Characters section', () => {
 		seedCharacters([character({ name: 'New character' })]);
-		const revealPane = mockRevealPane();
+		const showSection = mockShowSection();
 
 		store().startCreate();
 
 		expect(store().editor).toEqual({
+			session: expect.any(Number),
 			characterId: null,
+			// Opened from Create (the section shown): Cancel goes back there.
+			returnSection: 'create',
 			form: characterFormFromValues(emptyCharacterValues('New character 2')),
 			pendingSources: [],
 			saving: false,
 			error: null,
 		});
-		expect(revealPane).toHaveBeenCalledWith(CHARACTERS_PANE_ID);
+		expect(showSection).toHaveBeenCalledWith('characters');
 	});
 
 	it('startCreateFromOutput prefills from the current output, its image pending as reference', () => {
 		useOutputsStore.setState({ currentId: OUTPUT_ID, record: RECORD });
-		const revealPane = mockRevealPane();
+		const showSection = mockShowSection();
 
 		store().startCreateFromOutput();
 
 		expect(store().editor).toEqual({
+			session: expect.any(Number),
 			characterId: null,
+			returnSection: 'create',
 			form: characterFormFromValues(characterValuesFromOutput(RECORD)),
 			pendingSources: [{ kind: 'output', output_id: OUTPUT_ID }],
 			saving: false,
 			error: null,
 		});
 		expect(store().editor?.form).toMatchObject({ name: `Character from #${OUTPUT_ID}`, identityText: '1girl, silver hair', outfitText: 'school uniform', seedText: '2222' });
-		expect(revealPane).toHaveBeenCalledWith(CHARACTERS_PANE_ID);
+		expect(showSection).toHaveBeenCalledWith('characters');
 	});
 
 	it('startCreateFromOutput warns when no output is shown', () => {
-		const revealPane = mockRevealPane();
+		const showSection = mockShowSection();
 
 		store().startCreateFromOutput();
 
 		expect(store().editor).toBeNull();
-		expect(revealPane).not.toHaveBeenCalled();
+		expect(showSection).not.toHaveBeenCalled();
 		expect(notifications()).toEqual([
 			{ intent: 'warning', title: null, message: 'There is no output to create a character from: generate or open an output first.' },
 		]);
@@ -236,20 +267,146 @@ describe('charactersStore editor entry points', () => {
 
 	it('startEdit opens a saved character (unknown ids ignored)', () => {
 		seedCharacters();
-		const revealPane = mockRevealPane();
+		const showSection = mockShowSection();
 
 		store().startEdit('chr-000000000000');
 		expect(store().editor).toBeNull();
 
 		store().startEdit(ALICE_ID);
 		expect(store().editor).toEqual({
+			session: expect.any(Number),
 			characterId: ALICE_ID,
+			returnSection: 'create',
 			form: characterFormFromValues(characterValuesOf(ALICE)),
 			pendingSources: [],
 			saving: false,
 			error: null,
 		});
-		expect(revealPane).toHaveBeenCalledTimes(1);
+		expect(showSection).toHaveBeenCalledTimes(1);
+		// The edited character is the selected one.
+		expect(store().selectedId).toBe(ALICE_ID);
+	});
+
+	it('remembers the section it was opened from; inside Characters, a replaced editor passes its own on', () => {
+		seedCharacters();
+		useNavigationStore.setState({ section: 'images' });
+		store().startCreate();
+		const first = store().editor!;
+		// The real navigation action: the Characters section is shown.
+		expect(useNavigationStore.getState().section).toBe('characters');
+		expect(first.returnSection).toBe('images');
+
+		// Edit from the gallery (the Characters section is shown): the return section stays Images.
+		store().startEdit(BOB_ID);
+		expect(store().editor).toMatchObject({ characterId: BOB_ID, returnSection: 'images' });
+		expect(store().editor!.session).toBeGreaterThan(first.session);
+
+		// Closed, then opened from the Characters section: nowhere to go back to.
+		store().cancelEdit();
+		useNavigationStore.setState({ section: 'characters' });
+		store().startCreate();
+		expect(store().editor?.returnSection).toBeNull();
+	});
+
+	it('opening a new character keeps the selection; each opening is a new session', () => {
+		seedCharacters();
+		mockShowSection();
+		useCharactersStore.setState({ selectedId: BOB_ID });
+
+		store().startCreate();
+		const session = store().editor!.session;
+		store().startCreate();
+
+		expect(store().selectedId).toBe(BOB_ID);
+		expect(store().editor!.session).toBe(session + 1);
+	});
+});
+
+describe('charactersStore.cancelEdit', () => {
+	it('closes the editor and shows the section it was opened from again', () => {
+		seedCharacters();
+		useNavigationStore.setState({ section: 'create' });
+		store().startEdit(ALICE_ID);
+		expect(useNavigationStore.getState().section).toBe('characters');
+
+		store().cancelEdit();
+
+		expect(store().editor).toBeNull();
+		expect(useNavigationStore.getState().section).toBe('create');
+		// The selection stays.
+		expect(store().selectedId).toBe(ALICE_ID);
+	});
+
+	it('stays in the Characters section when it was opened there; no-op when closed', () => {
+		seedCharacters();
+		useNavigationStore.setState({ section: 'characters' });
+		store().startCreate();
+
+		store().cancelEdit();
+		store().cancelEdit();
+
+		expect(store().editor).toBeNull();
+		expect(useNavigationStore.getState().section).toBe('characters');
+	});
+});
+
+describe('charactersStore gallery', () => {
+	it('select selects a known character or none; unknown ids and repeats are ignored', () => {
+		seedCharacters();
+
+		store().select(BOB_ID);
+		expect(store().selectedId).toBe(BOB_ID);
+		expect(selectSelectedCharacter(store())).toEqual(BOB);
+
+		store().select('chr-000000000404');
+		expect(store().selectedId).toBe(BOB_ID);
+
+		const before = store();
+		store().select(BOB_ID);
+		expect(store()).toBe(before);
+
+		store().select(null);
+		expect(store().selectedId).toBeNull();
+		expect(selectSelectedCharacter(store())).toBeNull();
+	});
+
+	it('select keeps an open editor', () => {
+		seedCharacters();
+		mockShowSection();
+		store().startEdit(ALICE_ID);
+
+		store().select(BOB_ID);
+
+		expect(store()).toMatchObject({ selectedId: BOB_ID, editor: { characterId: ALICE_ID } });
+	});
+
+	it('setQuery sets the search text (unchanged text: no update)', () => {
+		store().setQuery('red hair');
+		expect(store().query).toBe('red hair');
+
+		const before = store();
+		store().setQuery('red hair');
+		expect(store()).toBe(before);
+	});
+
+	it('useGalleryCharacters filters by the query and sorts by name, memoized on the list and the query', () => {
+		const zoe = character({ id: 'chr-000000000003', name: 'zoe', identity_tags: ['1girl', 'red hair'], outfit_tags: [] });
+		seedCharacters([zoe, BOB, ALICE]);
+
+		const { result, rerender } = renderHook(() => useGalleryCharacters());
+		const all = result.current;
+		rerender();
+		expect(result.current).toBe(all);
+		expect(all.map((item) => item.name)).toEqual(['Alice', 'Bob', 'zoe']);
+
+		act(() => store().setQuery('1girl'));
+		expect(result.current.map((item) => item.name)).toEqual(['Alice', 'zoe']);
+		act(() => store().setQuery('1girl, school uniform'));
+		expect(result.current.map((item) => item.name)).toEqual(['Alice']);
+		act(() => store().setQuery('nobody'));
+		expect(result.current).toEqual([]);
+		// The full list is unaffected by the search.
+		expect(renderHook(() => useSortedCharacters()).result.current).toHaveLength(3);
 	});
 });
 
@@ -275,7 +432,7 @@ describe('charactersStore.startCreateFromImage', () => {
 	it("prefills from the image and its LoRAs, the image pending as reference; skipped LoRAs in one warning", async () => {
 		const answer = deferred<ImageLoraCollection | null>();
 		const collectImageLoras = seedImage(() => answer.promise);
-		const revealPane = mockRevealPane();
+		const showSection = mockShowSection();
 
 		const starting = store().startCreateFromImage(KEY);
 		expect(store().preparingImageKey).toBe(KEY);
@@ -291,7 +448,7 @@ describe('charactersStore.startCreateFromImage', () => {
 			form: { name: 'Character from alice', identityText: '1girl, red hair', loras: [{ id: 'detail', weight: 0.6 }], seedText: '777', seedLocked: false },
 			pendingSources: [{ kind: 'url', url: IMAGE.url }],
 		});
-		expect(revealPane).toHaveBeenCalledWith(CHARACTERS_PANE_ID);
+		expect(showSection).toHaveBeenCalledWith('characters');
 		expect(notifications()).toEqual([
 			{
 				intent: 'warning',
@@ -303,7 +460,7 @@ describe('charactersStore.startCreateFromImage', () => {
 
 	it('does not warn when every LoRA is usable', async () => {
 		seedImage(async () => ({ ...COLLECTION, skipped: [] }));
-		mockRevealPane();
+		mockShowSection();
 
 		await store().startCreateFromImage(KEY);
 
@@ -313,18 +470,18 @@ describe('charactersStore.startCreateFromImage', () => {
 
 	it('is a no-op for an unknown image', async () => {
 		const collectImageLoras = seedImage(async () => COLLECTION);
-		const revealPane = mockRevealPane();
+		const showSection = mockShowSection();
 
 		await store().startCreateFromImage('civitai:unknown');
 
 		expect(collectImageLoras).not.toHaveBeenCalled();
-		expect(revealPane).not.toHaveBeenCalled();
+		expect(showSection).not.toHaveBeenCalled();
 		expect(store()).toMatchObject({ editor: null, preparingImageKey: null });
 	});
 
 	it('reports a failure of the LoRA collection', async () => {
 		seedImage(async () => Promise.reject(new Error('resolution crashed')));
-		mockRevealPane();
+		mockShowSection();
 
 		await expect(store().startCreateFromImage(KEY)).resolves.toBeUndefined();
 
@@ -335,7 +492,7 @@ describe('charactersStore.startCreateFromImage', () => {
 
 describe('charactersStore editor edits', () => {
 	function openEditor() {
-		mockRevealPane();
+		mockShowSection();
 		useOutputsStore.setState({ currentId: OUTPUT_ID, record: RECORD });
 		store().startCreateFromOutput();
 	}
@@ -389,7 +546,7 @@ describe('charactersStore editor edits', () => {
 
 describe('charactersStore.saveEditor', () => {
 	it('creates a character with the pending reference images, closes the editor and notifies', async () => {
-		mockRevealPane();
+		mockShowSection();
 		useOutputsStore.setState({ currentId: OUTPUT_ID, record: RECORD });
 		seedCharacters([BOB]);
 		store().startCreateFromOutput();
@@ -404,12 +561,73 @@ describe('charactersStore.saveEditor', () => {
 
 		await expect(saving).resolves.toBe(true);
 		expect(create).toHaveBeenCalledWith({ ...characterValuesFromForm(form), name: 'Alice', reference_sources: [{ kind: 'output', output_id: OUTPUT_ID }] });
-		expect(store()).toMatchObject({ characters: [BOB, ALICE], editor: null });
+		// The new character is selected: the detail panel shows it.
+		expect(store()).toMatchObject({ characters: [BOB, ALICE], editor: null, selectedId: ALICE_ID });
 		expect(notifications()).toEqual([{ intent: 'success', title: null, message: 'Alice was created.' }]);
 	});
 
+	it('opened from another section: stays in Characters, and the notification offers to go back', async () => {
+		useNavigationStore.setState({ section: 'create' });
+		useOutputsStore.setState({ currentId: OUTPUT_ID, record: RECORD });
+		store().startCreateFromOutput();
+		vi.spyOn(api, 'createCharacter').mockResolvedValue(ALICE);
+
+		await store().saveEditor();
+
+		expect(useNavigationStore.getState().section).toBe('characters');
+		const [notification] = useNotificationsStore.getState().notifications;
+		expect(notification).toMatchObject({ message: 'Alice was created.', action: { label: 'Go to Create' } });
+		useNotificationsStore.getState().runAction(notification.id);
+		expect(useNavigationStore.getState().section).toBe('create');
+	});
+
+	it('an update made from another section is notified with the way back; one made in Characters is not', async () => {
+		seedCharacters([ALICE, BOB]);
+		vi.spyOn(api, 'updateCharacter').mockResolvedValue(ALICE);
+		useNavigationStore.setState({ section: 'create' });
+		store().startEdit(ALICE_ID);
+		await store().saveEditor();
+		expect(useNotificationsStore.getState().notifications).toMatchObject([{ message: 'Alice was saved.', action: { label: 'Go to Create' } }]);
+
+		useNotificationsStore.getState().clear();
+		store().startEdit(ALICE_ID);
+		await store().saveEditor();
+		expect(notifications()).toEqual([]);
+	});
+
+	it('clears a gallery search that would hide the saved character, keeps one that shows it', async () => {
+		mockShowSection();
+		seedCharacters([BOB]);
+		vi.spyOn(api, 'createCharacter').mockResolvedValue(ALICE);
+		useCharactersStore.setState({ query: '1boy' });
+		store().startCreate();
+		await store().saveEditor();
+		expect(store()).toMatchObject({ selectedId: ALICE_ID, query: '' });
+
+		useCharactersStore.setState({ query: 'silver' });
+		store().startCreate();
+		await store().saveEditor();
+		expect(store().query).toBe('silver');
+	});
+
+	it('a save that ends after the editor was replaced selects nothing', async () => {
+		mockShowSection();
+		seedCharacters([BOB]);
+		store().startCreate();
+		const answer = deferred<Character>();
+		vi.spyOn(api, 'createCharacter').mockReturnValue(answer.promise);
+
+		const saving = store().saveEditor();
+		store().startEdit(BOB_ID);
+		answer.resolve(ALICE);
+		await saving;
+
+		expect(store()).toMatchObject({ characters: [BOB, ALICE], selectedId: BOB_ID, editor: { characterId: BOB_ID } });
+	});
+
 	it('updates a saved character in place', async () => {
-		mockRevealPane();
+		// Edited from the gallery: no notification (the details show the change).
+		useNavigationStore.setState({ section: 'characters' });
 		seedCharacters([ALICE, BOB]);
 		store().startEdit(ALICE_ID);
 		store().updateForm({ name: 'Alicia', negativeText: '' });
@@ -424,7 +642,7 @@ describe('charactersStore.saveEditor', () => {
 	});
 
 	it('sends nothing while the form has errors', async () => {
-		mockRevealPane();
+		mockShowSection();
 		store().startCreate();
 		store().updateForm({ name: '  ', seedLocked: true });
 		const create = vi.spyOn(api, 'createCharacter');
@@ -436,7 +654,7 @@ describe('charactersStore.saveEditor', () => {
 	});
 
 	it('keeps the editor open with the error on failure', async () => {
-		mockRevealPane();
+		mockShowSection();
 		store().startCreate();
 		vi.spyOn(api, 'createCharacter').mockRejectedValue(new Error('Could not read the output image.'));
 
@@ -448,7 +666,7 @@ describe('charactersStore.saveEditor', () => {
 	});
 
 	it('notifies a failure when the editor was closed meanwhile', async () => {
-		mockRevealPane();
+		mockShowSection();
 		store().startCreate();
 		const answer = deferred<Character>();
 		vi.spyOn(api, 'createCharacter').mockReturnValue(answer.promise);
@@ -469,7 +687,7 @@ describe('charactersStore.saveEditor', () => {
 
 describe('charactersStore.remove', () => {
 	it('drops the character, resets the active one and closes its editor', async () => {
-		mockRevealPane();
+		mockShowSection();
 		seedCharacters([ALICE, BOB], ALICE_ID);
 		store().startEdit(ALICE_ID);
 		const remove = vi.spyOn(api, 'deleteCharacter').mockResolvedValue(undefined);
@@ -477,19 +695,19 @@ describe('charactersStore.remove', () => {
 		await store().remove(ALICE_ID);
 
 		expect(remove).toHaveBeenCalledWith(ALICE_ID);
-		expect(store()).toMatchObject({ characters: [BOB], activeId: null, editor: null, busyIds: {} });
+		expect(store()).toMatchObject({ characters: [BOB], activeId: null, editor: null, busyIds: {}, selectedId: null });
 		expect(notifications()).toEqual([{ intent: 'success', title: null, message: 'Alice was deleted.' }]);
 	});
 
 	it('keeps another active character and editor', async () => {
-		mockRevealPane();
+		mockShowSection();
 		seedCharacters([ALICE, BOB], BOB_ID);
 		store().startEdit(BOB_ID);
 		vi.spyOn(api, 'deleteCharacter').mockResolvedValue(undefined);
 
 		await store().remove(ALICE_ID);
 
-		expect(store()).toMatchObject({ characters: [BOB], activeId: BOB_ID, editor: { characterId: BOB_ID } });
+		expect(store()).toMatchObject({ characters: [BOB], activeId: BOB_ID, editor: { characterId: BOB_ID }, selectedId: BOB_ID });
 	});
 
 	it('reports a failure', async () => {
@@ -693,7 +911,7 @@ describe('charactersStore hooks', () => {
 	});
 
 	it('useCharacterFormErrors follows the editor form', () => {
-		mockRevealPane();
+		mockShowSection();
 		const { result } = renderHook(() => useCharacterFormErrors());
 		expect(result.current).toEqual({});
 

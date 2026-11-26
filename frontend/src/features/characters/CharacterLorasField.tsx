@@ -19,7 +19,7 @@ import { DeleteRegular } from '@fluentui/react-icons';
 import { useMemo, useState } from 'react';
 import type { LoraWeight } from '../../api/types';
 import { useCharactersStore } from '../../stores/charactersStore';
-import { useLibraryStore } from '../../stores/libraryStore';
+import { useLibraryStore, useLoraName } from '../../stores/libraryStore';
 import { useActionClasses } from '../../ui/stateStyles';
 import { LoraWeightField } from '../library/LoraWeightField';
 
@@ -66,7 +66,7 @@ function FormLoraRow({ item }: { item: LoraWeight }): JSX.Element {
 	const styles = useStyles();
 	const intents = useActionClasses();
 	// A LoRA no longer in the library shows its id.
-	const name = useLibraryStore((state) => state.loras.find((lora) => lora.id === item.id)?.name ?? item.id);
+	const name = useLoraName(item.id);
 	const setFormLoraWeight = useCharactersStore((state) => state.setFormLoraWeight);
 	const removeFormLora = useCharactersStore((state) => state.removeFormLora);
 	const removeLabel = `Remove ${name}`;

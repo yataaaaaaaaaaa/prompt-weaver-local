@@ -1,8 +1,8 @@
-// The Reference images (IP-Adapter) section of the Characters pane in the real browser, against the synthetic Hugging
-// Face of the e2e backend: the support of the selected SDXL model per focus (Download), a download in progress with
-// its named progress bars and Cancel (stalled at 30 %), a download that fails (the synthetic bytes never match the
-// pinned SHA-256: Failed, with what failed and Retry), and the support following the model picked in the Generation
-// pane.
+// The 'Reference images (IP-Adapter)' section of the Characters section's detail panel, in the real browser, against
+// the synthetic Hugging Face of the e2e backend: the support of the selected SDXL model per focus (Download), a
+// download in progress with its named progress bars and Cancel (stalled at 30 %; the same download shown in the
+// generation panel's Character section), a download that fails (the synthetic bytes never match the pinned SHA-256:
+// Failed, with what failed and Retry), and the support following the model picked in the generation panel.
 import type { Locator } from '@playwright/test';
 import { expectBaseline } from '../support/baselines';
 import { expect, test } from '../support/fixtures';
@@ -18,8 +18,11 @@ function variantFiles(characters: CharactersDriver, variantLabel: string): Locat
 test('the selected SDXL model offers Download for Face and Whole subject', async ({ app, page }, testInfo) => {
 	const characters = new CharactersDriver(app);
 	await app.open();
-	const pane = await characters.open();
+	await characters.open();
 	const section = characters.ipAdapter();
+	// Under the details of the selected character too.
+	await characters.selectButton(MIRA.name).click();
+	await expect(characters.detailsOf(MIRA.name)).toBeVisible();
 	await section.scrollIntoViewIfNeeded();
 
 	await expect(section.getByRole('heading', { name: `With the selected model ${SDXL_MODEL}` })).toBeVisible();
@@ -35,9 +38,10 @@ test('the selected SDXL model offers Download for Face and Whole subject', async
 	for (const file of await variantFiles(characters, SDXL_FACE).all()) {
 		await expect(file.getByText('Available to download')).toBeVisible();
 	}
+	await expect(section.getByLabel('IP-Adapter folders').locator('dt')).toHaveText(['Adapter folder', 'Image encoder folder']);
 	await assertAppVisible(page);
 	await app.parkPointer();
-	await saveScreenshot(pane, testInfo, 'ip-adapter-section');
+	await saveScreenshot(page, testInfo, 'ip-adapter-section');
 	await expectBaseline(section.getByRole('list', { name: 'Reference support' }), 'ip-adapter-support.png');
 	await section.getByRole('list', { name: 'IP-Adapter variants' }).scrollIntoViewIfNeeded();
 	await expectBaseline(section.getByRole('list', { name: 'IP-Adapter variants' }), 'ip-adapter-files.png');
@@ -49,7 +53,7 @@ test.describe('a download that stalls', () => {
 	test('shows named progress bars with Cancel; Cancel returns to Download without an error', async ({ app, page }, testInfo) => {
 		const characters = new CharactersDriver(app);
 		await app.open();
-		const pane = await characters.open();
+		await characters.open();
 		const face = characters.support('Face');
 		await face.scrollIntoViewIfNeeded();
 		await face.getByRole('button', { name: 'Download' }).click();
@@ -69,21 +73,21 @@ test.describe('a download that stalls', () => {
 		await expect(cancel).toBeEnabled();
 		await assertAppVisible(page, { allowOverlays: true });
 		await app.parkPointer();
-		await saveScreenshot(pane, testInfo, 'downloading');
+		await saveScreenshot(page, testInfo, 'downloading');
+		// The bars and their byte counts depend on timing: masked (the file names are not).
+		await expectBaseline(face, 'ip-adapter-downloading.png', { mask: [downloads.getByRole('progressbar'), downloads.getByText(/ of |Starting the download/)] });
 
-		// The Character section of the (narrow) Generation pane shows the same download for Mira's focus (the face).
+		// The Character section of the generation panel shows the same download for Mira's focus (the face).
 		await characters.toggleActive(MIRA.name, true);
-		const generation = await app.showPane('Generation');
+		await app.goTo('create');
 		const section = characters.generationSection();
 		await expect(section.getByRole('progressbar', { name: `Downloading ${SDXL_FACE_ADAPTER}` })).toBeVisible();
 		await expect(section.getByText(SDXL_FACE_ADAPTER, { exact: true })).toBeVisible();
 		await expect(section.getByRole('button', { name: 'Cancel' })).toBeEnabled();
 		await app.parkPointer();
-		await saveScreenshot(generation, testInfo, 'downloading-generation-pane');
-		await app.bringToFront(pane);
-		// The bars and their byte counts depend on timing: masked (the file names are not).
-		await expectBaseline(face, 'ip-adapter-downloading.png', { mask: [downloads.getByRole('progressbar'), downloads.getByText(/ of |Starting the download/)] });
+		await saveScreenshot(page, testInfo, 'downloading-generation-panel');
 
+		await characters.open();
 		await cancel.click();
 		await expect(face.getByRole('button', { name: 'Download' })).toBeVisible({ timeout: 20_000 });
 		await expect(downloads).toHaveCount(0);
@@ -99,7 +103,7 @@ test.describe('a download that stalls', () => {
 test('a download that fails shows Failed with what failed, and Retry', async ({ app, page }, testInfo) => {
 	const characters = new CharactersDriver(app);
 	await app.open();
-	const pane = await characters.open();
+	await characters.open();
 	const face = characters.support('Face');
 	await face.scrollIntoViewIfNeeded();
 	await face.getByRole('button', { name: 'Download' }).click();
@@ -115,11 +119,11 @@ test('a download that fails shows Failed with what failed, and Retry', async ({ 
 	for (const file of await variantFiles(characters, SDXL_FACE).all()) {
 		await expect(file.getByText('Failed')).toBeVisible();
 	}
-	// The toast says so too (the section may be closed).
+	// The toast says so too (the section may not be shown).
 	await expect(page.getByText(`${SDXL_FACE} could not be installed`)).toBeVisible();
 	await assertAppVisible(page, { allowOverlays: true });
 	await app.parkPointer();
-	await saveScreenshot(pane, testInfo, 'download-failed');
+	await saveScreenshot(page, testInfo, 'download-failed');
 	await expectBaseline(face, 'ip-adapter-failed.png');
 
 	// Retry downloads again (and fails again with the synthetic bytes).
@@ -128,24 +132,25 @@ test('a download that fails shows Failed with what failed, and Retry', async ({ 
 	await expect(failure).toBeVisible({ timeout: 30_000 });
 });
 
-test('picking another model in the Generation pane updates the support', async ({ app, page }, testInfo) => {
+test('picking another model in the generation panel updates the support', async ({ app, page }, testInfo) => {
 	const characters = new CharactersDriver(app);
 	await app.open();
-	const pane = await characters.open();
+	await characters.open();
 	await expect(characters.support('Face').getByText(`Download the IP-Adapter '${SDXL_FACE}' to use reference images.`)).toBeVisible();
 
-	const generation = await app.showPane('Generation');
+	await app.goTo('create');
+	const generation = app.createRegion('generation');
 	const checkpoint = generation.getByRole('combobox', { name: 'Checkpoint' });
 	await checkpoint.scrollIntoViewIfNeeded();
 	await checkpoint.click();
 	await page.getByRole('option', { name: SD15_MODEL, exact: true }).click();
 
-	await app.bringToFront(pane);
+	await characters.open();
 	const section = characters.ipAdapter();
 	await expect(section.getByRole('heading', { name: `With the selected model ${SD15_MODEL}` })).toBeVisible();
 	await expect(characters.support('Face').getByText("Download the IP-Adapter 'SD 1.5 face (IP-Adapter Plus Face)' to use reference images.")).toBeVisible();
 	await expect(characters.support('Whole subject').getByText("Download the IP-Adapter 'SD 1.5 general (IP-Adapter Plus)' to use reference images.")).toBeVisible();
 	await section.scrollIntoViewIfNeeded();
 	await app.parkPointer();
-	await saveScreenshot(pane, testInfo, 'sd15-support');
+	await saveScreenshot(page, testInfo, 'sd15-support');
 });
