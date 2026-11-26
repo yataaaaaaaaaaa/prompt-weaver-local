@@ -1,13 +1,14 @@
 """Output files: OutputRepository and the /api/outputs + /api/trash endpoints."""
 
 import io
+import os
 
 import pytest
 from fastapi.testclient import TestClient
 from PIL import Image
 
 from app.schemas import OutputRecord
-from app.services.outputs import OutputNotFound, OutputRepository
+from app.services.outputs import OUTPUT_THUMBNAIL_MAX_SIDE, OutputNotFound, OutputRepository
 from app.settings import AppPaths
 
 from support import OutputFactory, load_fixture
@@ -195,6 +196,62 @@ def test_output_image_endpoint(client: TestClient, make_output: OutputFactory) -
     assert response.headers["content-type"] == "image/png"
     with Image.open(io.BytesIO(response.content)) as image:
         assert image.size == (4, 6)
+
+
+def test_output_thumbnail_endpoint_serves_a_cached_webp(client: TestClient, app_paths: AppPaths, make_output: OutputFactory) -> None:
+    make_output("0000000001")
+
+    response = client.get("/api/outputs/0000000001/thumbnail")
+
+    assert response.status_code == 200
+    assert response.headers["content-type"] == "image/webp"
+    with Image.open(io.BytesIO(response.content)) as image:
+        assert image.format == "WEBP"
+        assert image.size == (4, 6)
+    assert (app_paths.output_thumbnails_dir / "0000000001.webp").is_file()
+
+
+def test_output_thumbnail_without_png_is_404(client: TestClient, make_output: OutputFactory) -> None:
+    make_output("0000000001", png=False)
+
+    assert client.get("/api/outputs/0000000001/thumbnail").status_code == 404
+    assert client.get("/api/outputs/123/thumbnail").status_code == 422
+
+
+def test_thumbnail_is_downscaled_and_reused_while_the_picture_is_unchanged(app_paths: AppPaths, make_output: OutputFactory) -> None:
+    make_output("0000000001")
+    picture = app_paths.output_dir / "0000000001.png"
+    Image.new("RGB", (1024, 512), (200, 10, 10)).save(picture)
+    repository = OutputRepository(app_paths)
+
+    first = repository.thumbnail_path("0000000001")
+    with Image.open(first) as thumbnail:
+        assert thumbnail.size == (OUTPUT_THUMBNAIL_MAX_SIDE, OUTPUT_THUMBNAIL_MAX_SIDE // 2)
+    written_at = first.stat().st_mtime_ns
+
+    assert repository.thumbnail_path("0000000001") == first
+    assert first.stat().st_mtime_ns == written_at
+    assert not first.with_name(f"{first.name}.new").exists()
+
+
+def test_thumbnail_is_rebuilt_when_the_picture_is_newer(app_paths: AppPaths, make_output: OutputFactory) -> None:
+    make_output("0000000001")
+    repository = OutputRepository(app_paths)
+    thumbnail = repository.thumbnail_path("0000000001")
+    picture = app_paths.output_dir / "0000000001.png"
+    Image.new("RGB", (300, 600), (0, 0, 0)).save(picture)
+    later = thumbnail.stat().st_mtime_ns + 1_000_000_000
+    os.utime(picture, ns=(later, later))
+
+    with Image.open(repository.thumbnail_path("0000000001")) as rebuilt:
+        assert rebuilt.size == (128, OUTPUT_THUMBNAIL_MAX_SIDE)
+
+
+def test_trashed_output_has_no_thumbnail(app_paths: AppPaths, make_output: OutputFactory) -> None:
+    make_output("0000000001", in_trash=True)
+
+    with pytest.raises(OutputNotFound):
+        OutputRepository(app_paths).thumbnail_path("0000000001")
 
 
 def test_output_image_without_png_is_404(client: TestClient, make_output: OutputFactory) -> None:

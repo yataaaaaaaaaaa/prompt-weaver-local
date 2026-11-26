@@ -34,14 +34,15 @@ class E2EResetRequest(_Options):
     files: dict[str, Any] = Field(
         default_factory=dict,
         description="Extra or replaced JSON files of the data dir, written after the fixture data (relative path "
-        "-> JSON value), e.g. 'stores/workspace-store/state.json'. Same placeholders as the fixture files. Output "
+        "-> JSON value), e.g. 'stores/board-store/state.json'. Same placeholders as the fixture files. Output "
         "metadata files (output/<id>.json) get a generated PNG when they have none.",
     )
     remove: list[str] = Field(
         default_factory=list,
         description="Files or folders of the data dir to delete (relative paths), removed after everything else is "
         "seeded, so generated files go too: 'output' (empty history), 'output/0000000004.png' (an output whose "
-        "picture is missing), 'characters' (no characters).",
+        "picture is missing), 'characters' (no characters), 'stores/board-store' + 'stores/layout-store' (the layout is "
+        "migrated from the legacy floating workspace of the fixture, stores/workspace-store).",
     )
 
 

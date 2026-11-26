@@ -5680,6 +5680,49 @@
         ]
       }
     },
+    "/api/outputs/{output_id}/thumbnail": {
+      "get": {
+        "description": "A small WebP copy of the output picture (filmstrips, lists), cached in the data dir.",
+        "operationId": "get_output_thumbnail_api_outputs__output_id__thumbnail_get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "output_id",
+            "required": true,
+            "schema": {
+              "pattern": "^\\d{10}$",
+              "title": "Output Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "image/webp": {}
+            },
+            "description": "Successful Response"
+          },
+          "404": {
+            "description": "Unknown output"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Get Output Thumbnail",
+        "tags": [
+          "outputs"
+        ]
+      }
+    },
     "/api/outputs/{output_id}/trash": {
       "post": {
         "description": "Move the output (png + json) into the app-managed trash.",

@@ -43,6 +43,19 @@ def get_output_image(output_id: OutputId, services: ServicesDep) -> FileResponse
         raise _unknown_output(output_id) from exc
 
 
+@router.get(
+    "/outputs/{output_id}/thumbnail",
+    response_class=FileResponse,
+    responses={200: {"content": {"image/webp": {}}}, 404: {"description": "Unknown output"}},
+)
+def get_output_thumbnail(output_id: OutputId, services: ServicesDep) -> FileResponse:
+    """A small WebP copy of the output picture (filmstrips, lists), cached in the data dir."""
+    try:
+        return FileResponse(services.outputs.thumbnail_path(output_id), media_type="image/webp")
+    except OutputNotFound as exc:
+        raise _unknown_output(output_id) from exc
+
+
 @router.post("/outputs/{output_id}/trash", response_model=OkResponse, responses={404: {"description": "Unknown output"}})
 def trash_output(output_id: OutputId, services: ServicesDep) -> OkResponse:
     """Move the output (png + json) into the app-managed trash."""

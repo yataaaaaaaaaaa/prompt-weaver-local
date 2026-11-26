@@ -52,6 +52,8 @@ class AppPaths(BaseModel):
     settings_file: Path
     # Derived data that can be rebuilt at any time (e.g. the file hash cache).
     cache_dir: Path
+    # Downscaled copies of the output pictures (services/outputs.py thumbnail_path), derived data inside cache_dir.
+    output_thumbnails_dir: Path
     # Image library favorites (services/image_favorites.py).
     image_favorites_file: Path
     # Characters (services/characters.py): characters_file + one PNG per character image in character_images_dir.
@@ -83,6 +85,7 @@ class AppPaths(BaseModel):
             stores_dir=root / "stores",
             settings_file=root / "backend_settings.json",
             cache_dir=root / "cache",
+            output_thumbnails_dir=root / "cache" / "output_thumbnails",
             image_favorites_file=root / "image_favorites.json",
             characters_dir=root / "characters",
             characters_file=root / "characters" / "characters.json",

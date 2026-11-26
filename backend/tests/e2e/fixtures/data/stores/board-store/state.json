@@ -1,0 +1,7 @@
+{
+  "state": {
+    "order": ["subject", "outfit", "background", "weather-effects", "lighting", "mood", "sea-creatures"],
+    "collapsed": []
+  },
+  "version": 0
+}

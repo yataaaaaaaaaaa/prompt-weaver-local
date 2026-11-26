@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { api, ApiError } from './client';
-import { BACKEND_URL, characterImageUrl, outputImageUrl, TASKS_WS_URL } from './config';
+import { BACKEND_URL, characterImageUrl, outputImageUrl, outputThumbnailUrl, TASKS_WS_URL } from './config';
 import { remoteImage } from '../test/imageLibraryData';
 
 function stubFetch(status: number, body: unknown) {
@@ -21,6 +21,7 @@ describe('api client', () => {
 		expect(BACKEND_URL).toMatch(/^https?:\/\//);
 		expect(TASKS_WS_URL).toBe(`${BACKEND_URL.replace(/^http/, 'ws')}/ws/tasks`);
 		expect(outputImageUrl('0000000042')).toBe(`${BACKEND_URL}/api/outputs/0000000042/image`);
+		expect(outputThumbnailUrl('0000000042')).toBe(`${BACKEND_URL}/api/outputs/0000000042/thumbnail`);
 	});
 
 	it('reads a persisted store envelope', async () => {

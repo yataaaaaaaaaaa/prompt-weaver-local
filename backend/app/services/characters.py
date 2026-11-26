@@ -59,6 +59,7 @@ from .files import remove_quietly
 from .http import HttpClientFactory, describe_http_error
 from .json_files import read_resilient_json, sidecar_paths, write_json_atomic
 from .outputs import OutputNotFound, OutputRepository
+from .pictures import fit_within
 
 logger = logging.getLogger(__name__)
 
@@ -353,8 +354,7 @@ class CharacterStore:
             image = _decode(path, f"Image {source.image_id}")
         else:
             image = _decode(self._download(source.url), _display_url(source.url))
-        image.thumbnail((max_side, max_side), Image.Resampling.LANCZOS)
-        return image
+        return fit_within(image, max_side)
 
     def _download(self, url: str) -> bytes:
         """The body of `url` (redirects followed). Raises CharacterImageFetchError (network or HTTP error) and
@@ -409,8 +409,7 @@ class _PendingImages:
 
     def store_thumbnail(self, reference_image: Image.Image, reference: CharacterImage) -> CharacterImage:
         """A thumbnail-sized copy of a reference image just stored."""
-        thumbnail = reference_image.copy()
-        thumbnail.thumbnail((THUMBNAIL_MAX_SIDE, THUMBNAIL_MAX_SIDE), Image.Resampling.LANCZOS)
+        thumbnail = fit_within(reference_image, THUMBNAIL_MAX_SIDE)
         return self.store(thumbnail, CharacterImageCopySource(kind="character_image", image_id=reference.id))
 
 

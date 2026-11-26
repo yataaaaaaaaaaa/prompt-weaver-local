@@ -25,6 +25,10 @@ FIXTURE_STORES = {
     "library-store",
     "settings-store",
     "current-image-store",
+    "layout-store",
+    "board-store",
+    # The legacy floating workspace (version 0), never written by the app: e2e tests remove layout-store and
+    # board-store to exercise its migration.
     "workspace-store",
 }
 
