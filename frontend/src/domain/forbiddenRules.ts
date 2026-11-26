@@ -21,7 +21,7 @@ import { areNameEquivalent, normalizePromptName, normalizeTagId, normalizeTextFo
 
 export type { ForbiddenMatcher, ForbiddenRule, MatcherKind };
 
-/** What a click in the Used sub-prompts pane designates: a sub-prompt, its whole category, or one of its tags. */
+/** What a click in the Used sub-prompts list designates: a sub-prompt, its whole category, or one of its tags. */
 export type AssociationMode = 'prompt' | 'category' | 'tag';
 
 export type AssociationEndpoint = {
@@ -348,7 +348,7 @@ export function renameSubPromptInRules(rules: ForbiddenRule[], categoryName: str
 }
 
 // ---------------------------------------------------------------------------
-// Highlights of the sub-prompt cards against the association source of the Used sub-prompts pane
+// Highlights of the sub-prompt cards against the association source of the Used sub-prompts list
 // ---------------------------------------------------------------------------
 
 /** Non-'none' highlights by subPromptPath. */
@@ -369,7 +369,7 @@ export function isLockedPrompt(categories: readonly Category[], prompt: PromptRe
 	);
 }
 
-/** THE lock rule of every forbidden highlight (category windows and Used sub-prompts pane): 'forbidden-locked' when
+/** THE lock rule of every forbidden highlight (category cards and the Used sub-prompts list): 'forbidden-locked' when
  *  the association source or the forbidden prompt is locked, else 'forbidden'. */
 export function forbiddenHighlightFor(sourceLocked: boolean, promptLocked: boolean): Exclude<ForbiddenHighlight, 'none'> {
 	return sourceLocked || promptLocked ? 'forbidden-locked' : 'forbidden';
@@ -388,7 +388,7 @@ export function strongestForbiddenHighlight(highlights: Iterable<ForbiddenHighli
 	return best;
 }
 
-/** Highlight of a category window: the strongest highlight of its sub-prompts (computeForbiddenHighlights output). */
+/** Highlight of a category card: the strongest highlight of its sub-prompts (computeForbiddenHighlights output). */
 export function categoryForbiddenHighlight(highlights: ForbiddenHighlights, category: Category): ForbiddenHighlight {
 	if (highlights.size === 0) {
 		return 'none';
@@ -400,7 +400,7 @@ export function categoryForbiddenHighlight(highlights: ForbiddenHighlights, cate
 }
 
 /**
- * What the association source designates in the category windows ('associated'): a 'prompt' source its own
+ * What the association source designates on the category cards ('associated'): a 'prompt' source its own
  * sub-prompt, a 'category' source every sub-prompt of its category, a 'tag' source the sub-prompts of its category
  * carrying the tag. The source's own matcher (endpointToMatcher) decides, so designation and the rules it creates
  * always agree.
@@ -409,7 +409,7 @@ export function sourceDesignatesPrompt(source: AssociationEndpoint, prompt: Prom
 	return matcherMatchesPrompt(endpointToMatcher(source), prompt);
 }
 
-/** The association source belongs to this category: its window is 'associated' (whatever the source mode). */
+/** The association source belongs to this category: its card is 'associated' (whatever the source mode). */
 export function sourceDesignatesCategory(source: AssociationEndpoint, categoryName: string): boolean {
 	return sameCategoryName(source.categoryName, categoryName);
 }

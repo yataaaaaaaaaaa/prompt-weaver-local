@@ -5,9 +5,8 @@ import { useLayoutEffect, useRef, useState, type KeyboardEvent } from 'react';
 import type { CategoryKey } from '../../domain/categories';
 import { useBulkText, useCategoriesStore } from '../../stores/categoriesStore';
 
-// The editor fills the window body: the text area takes the height left by the label and the hint and scrolls
-// inside. It never shrinks under its own minimum height: in a very small window the body scrolls instead (the hint is
-// never covered).
+// The editor fills the card body: the text area takes the height left by the label and the hint and scrolls inside.
+// It keeps a usable minimum height: a card with few sub-prompts grows (up to its maximum height) while it is open.
 const useStyles = makeStyles({
 	root: {
 		display: 'flex',
@@ -26,6 +25,7 @@ const useStyles = makeStyles({
 	},
 	textarea: {
 		height: '100%',
+		minHeight: '160px',
 		maxHeight: 'none',
 	},
 	textareaInput: {

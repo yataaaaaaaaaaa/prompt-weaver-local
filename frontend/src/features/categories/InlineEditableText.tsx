@@ -2,8 +2,9 @@
 // display = a subtle Fluent Button showing the text; edit = a Fluent Textarea where
 // Enter commits, Shift+Enter inserts a newline, Escape cancels and blur commits.
 // Pure view: the draft is ephemeral UI state; the owner store receives the committed text through onCommit.
+// Its handle (ref) lets the card focus the text or open the editor (a revealed new category is named right away).
 import { Button, makeStyles, mergeClasses, Textarea, tokens } from '@fluentui/react-components';
-import { useLayoutEffect, useRef, useState, type KeyboardEvent } from 'react';
+import { forwardRef, useImperativeHandle, useLayoutEffect, useRef, useState, type KeyboardEvent } from 'react';
 
 export type InlineEditableTextVariant = 'title' | 'body' | 'caption';
 
@@ -22,6 +23,13 @@ export type InlineEditableTextProps = {
 	displayClassName?: string;
 	/** Accessible description of the display button (e.g. the row's visual state label). */
 	description?: string;
+};
+
+export type InlineEditableTextHandle = {
+	/** Focuses the display (or the open editor) without scrolling any container. */
+	focus: () => void;
+	/** Opens the editor, focused; `selectAll` selects the text so typing replaces it (else the caret goes to the end). */
+	edit: (options?: { selectAll?: boolean }) => void;
 };
 
 const useStyles = makeStyles({
@@ -71,16 +79,10 @@ const useStyles = makeStyles({
 	},
 });
 
-export function InlineEditableText({
-	value,
-	onCommit,
-	label,
-	placeholder,
-	variant = 'body',
-	rows = 2,
-	displayClassName,
-	description,
-}: InlineEditableTextProps): JSX.Element {
+export const InlineEditableText = forwardRef<InlineEditableTextHandle, InlineEditableTextProps>(function InlineEditableText(
+	{ value, onCommit, label, placeholder, variant = 'body', rows = 2, displayClassName, description },
+	ref,
+): JSX.Element {
 	const styles = useStyles();
 	const [draft, setDraft] = useState<string | null>(null);
 	const editorRef = useRef<HTMLTextAreaElement>(null);
@@ -88,27 +90,42 @@ export function InlineEditableText({
 	/** True while an edit session is open: guards against a blur after Escape/Enter already closed it. */
 	const sessionOpenRef = useRef(false);
 	const restoreFocusRef = useRef(false);
+	const selectAllRef = useRef(false);
 	const editing = draft !== null;
 
 	useLayoutEffect(() => {
 		if (editing) {
 			const editor = editorRef.current;
 			if (editor) {
-				editor.focus();
-				editor.setSelectionRange(editor.value.length, editor.value.length);
+				editor.focus({ preventScroll: true });
+				if (selectAllRef.current) {
+					editor.select();
+				} else {
+					editor.setSelectionRange(editor.value.length, editor.value.length);
+				}
+				selectAllRef.current = false;
 				// The editor is taller than the text: keep all of it visible in its scrolling list.
 				editor.scrollIntoView?.({ block: 'nearest' });
 			}
 		} else if (restoreFocusRef.current) {
 			restoreFocusRef.current = false;
-			displayRef.current?.focus();
+			displayRef.current?.focus({ preventScroll: true });
 		}
 	}, [editing]);
 
-	function begin(): void {
+	function begin(selectAll = false): void {
+		if (sessionOpenRef.current) {
+			return;
+		}
 		sessionOpenRef.current = true;
+		selectAllRef.current = selectAll;
 		setDraft(value);
 	}
+
+	useImperativeHandle(ref, () => ({
+		focus: () => (editorRef.current ?? displayRef.current)?.focus({ preventScroll: true }),
+		edit: (options = {}) => begin(options.selectAll ?? false),
+	}));
 
 	function close(commit: boolean, restoreFocus: boolean): void {
 		if (!sessionOpenRef.current) {
@@ -168,9 +185,9 @@ export function InlineEditableText({
 			)}
 			aria-label={`${label}: ${value || placeholder}`}
 			aria-description={description}
-			onClick={begin}
+			onClick={() => begin()}
 		>
 			{value || placeholder}
 		</Button>
 	);
-}
+});

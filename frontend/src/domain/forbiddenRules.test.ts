@@ -320,7 +320,7 @@ describe('association source designation', () => {
 		expect(sourceDesignatesPrompt(source, prompt('Weather effects', 'rain'))).toBe(false);
 	});
 
-	it('the source category window is designated whatever the mode', () => {
+	it('the source category is designated whatever the mode', () => {
 		for (const mode of ['prompt', 'category', 'tag'] as const) {
 			const source = endpoint(mode, 'Weather effects', 'puddles reflections', mode === 'tag' ? 'puddles reflections' : null);
 			expect(sourceDesignatesCategory(source, 'weather effects')).toBe(true);

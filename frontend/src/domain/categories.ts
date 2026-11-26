@@ -1,7 +1,6 @@
 // Prompt categories domain model.
 // The types below are the persisted format of the 'categorie-store' (version 0) and are a CONTRACT:
 // do not change them without a persisted-state migration.
-import type { Rect, Size, Viewport } from './layout';
 import { isFiniteNumber, isRecord, parseNumberText, stringOr } from './guards';
 import { comparePriority, sameKey, splitActivationTerms, textContains, toKey, uniqueKey, uniqueStrings } from './text';
 
@@ -206,36 +205,4 @@ export function removeLoraFromCategories(categories: Category[], loraId: string)
 /** Every LoRA id induced by some sub-prompt, unique, in category/sub-prompt order. */
 export function collectLinkedLoraIds(categories: readonly Category[]): string[] {
 	return uniqueStrings(categories.flatMap((category) => category.subPrompts.flatMap((subPrompt) => subPrompt.extraLoraIds)));
-}
-
-// ---------------------------------------------------------------------------
-// Category windows
-// ---------------------------------------------------------------------------
-
-/** Where the window of the category at `index` (categories order) is drawn without a stored layout: cascaded. */
-export function categoryDefaultLayout(index: number): Rect {
-	return { x: 40 + 24 * index, y: 40 + 24 * index, width: 500, height: 300 };
-}
-
-// ---------------------------------------------------------------------------
-// Window size estimate (used by "Reorganize categories" when a card has no stored size)
-// ---------------------------------------------------------------------------
-
-/** Card size from its content: width from the longest text (capped at 40% of the viewport width),
- *  height from the sub-prompt count (capped at 30% of the viewport height). */
-export function estimateCategorySize(category: Category, viewport: Viewport): Size {
-	const maxWidth = Math.max(320, Math.floor(viewport.width * 0.4));
-	const maxHeight = Math.max(180, Math.floor(viewport.height * 0.3));
-	const longestText = Math.max(
-		18,
-		category.text.length,
-		category.activation_text.length,
-		...category.subPrompts.map((subPrompt) => Math.max(18, subPrompt.text.length)),
-	);
-	const width = Math.max(300, Math.min(maxWidth, 170 + longestText * 6));
-	const visibleSubPromptCount = Math.max(1, category.subPrompts.length);
-	const headerHeight = category.activation_text.trim() ? 108 : 82;
-	const estimatedHeight = headerHeight + visibleSubPromptCount * 38 + 20;
-	const height = Math.max(168, Math.min(maxHeight, estimatedHeight));
-	return { width, height };
 }

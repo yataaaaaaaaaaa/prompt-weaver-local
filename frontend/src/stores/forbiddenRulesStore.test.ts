@@ -17,11 +17,13 @@ import { useCategoriesStore } from './categoriesStore';
 import { useCharactersStore } from './charactersStore';
 import {
 	buildUsedSelectionRows,
-	categoryWindowVisualState,
+	categoryCardVisualState,
 	highlightVisualState,
+	selectCategoryCardStates,
 	subPromptVisualState,
+	useCategoryCardStates,
 	useCategoryForbiddenHighlight,
-	useCategoryWindowState,
+	useCategoryCardState,
 	useForbiddenHighlight,
 	useForbiddenRulesStore,
 	useIsCategoryDesignated,
@@ -288,13 +290,13 @@ describe('visual states (pure mappings)', () => {
 
 	const plainWindow = { uiState: 'normal', highlight: 'none', designated: false } as const;
 
-	it('categoryWindowVisualState: forbiddenLocked > forbidden > associated > indirectlyDisabled > skipped', () => {
-		expect(categoryWindowVisualState(plainWindow)).toBeNull();
-		expect(categoryWindowVisualState({ ...plainWindow, uiState: 'skip' })).toBe('skipped');
-		expect(categoryWindowVisualState({ ...plainWindow, uiState: 'indirectly-disabled' })).toBe('indirectlyDisabled');
-		expect(categoryWindowVisualState({ ...plainWindow, uiState: 'indirectly-disabled', designated: true })).toBe('associated');
-		expect(categoryWindowVisualState({ ...plainWindow, uiState: 'skip', designated: true, highlight: 'forbidden' })).toBe('forbidden');
-		expect(categoryWindowVisualState({ uiState: 'skip', designated: true, highlight: 'forbidden-locked' })).toBe('forbiddenLocked');
+	it('categoryCardVisualState: forbiddenLocked > forbidden > associated > indirectlyDisabled > skipped', () => {
+		expect(categoryCardVisualState(plainWindow)).toBeNull();
+		expect(categoryCardVisualState({ ...plainWindow, uiState: 'skip' })).toBe('skipped');
+		expect(categoryCardVisualState({ ...plainWindow, uiState: 'indirectly-disabled' })).toBe('indirectlyDisabled');
+		expect(categoryCardVisualState({ ...plainWindow, uiState: 'indirectly-disabled', designated: true })).toBe('associated');
+		expect(categoryCardVisualState({ ...plainWindow, uiState: 'skip', designated: true, highlight: 'forbidden' })).toBe('forbidden');
+		expect(categoryCardVisualState({ uiState: 'skip', designated: true, highlight: 'forbidden-locked' })).toBe('forbiddenLocked');
 	});
 });
 
@@ -362,7 +364,7 @@ describe('Used sub-prompts states (buildUsedSelectionRows)', () => {
 	});
 });
 
-describe('row and window visual-state hooks', () => {
+describe('row and card visual-state hooks', () => {
 	function fixtureCategory(text: string, subPrompts: [string, SubPromptState?][], extra: Partial<Category> = {}): Category {
 		return {
 			text,
@@ -405,11 +407,11 @@ describe('row and window visual-state hooks', () => {
 				jellyfish: useSubPromptVisualState('sea', 'jellyfish'),
 			},
 			windows: {
-				subject: useCategoryWindowState('subject'),
-				outfit: useCategoryWindowState('outfit'),
-				background: useCategoryWindowState('background'),
-				lighting: useCategoryWindowState('lighting'),
-				sea: useCategoryWindowState('sea'),
+				subject: useCategoryCardState('subject'),
+				outfit: useCategoryCardState('outfit'),
+				background: useCategoryCardState('background'),
+				lighting: useCategoryCardState('lighting'),
+				sea: useCategoryCardState('sea'),
 			},
 		}));
 	}
@@ -464,7 +466,38 @@ describe('row and window visual-state hooks', () => {
 		expect(result.current.windows.background).toBe('associated');
 	});
 
-	it('the designation and window highlight hooks', () => {
+	it('computes every card state in one pass, the same as useCategoryCardState, once per input change', () => {
+		const { result } = renderStates();
+		act(() => useForbiddenRulesStore.getState().pickAssociationEndpoint(endpoint('prompt', 'Outfit', 'red dress')));
+		const { categories } = useCategoriesStore.getState();
+		const { rules: currentRules, associationSource } = useForbiddenRulesStore.getState();
+
+		const states = selectCategoryCardStates(categories, currentRules, associationSource);
+
+		expect(Object.fromEntries([...states].map(([key, card]) => [key, card.state]))).toEqual(result.current.windows);
+		expect(states.get('outfit')).toEqual({ uiState: 'normal', highlight: 'none', designated: true, state: 'associated' });
+		expect(states.get('background')).toEqual({ uiState: 'normal', highlight: 'forbidden', designated: false, state: 'forbidden' });
+		expect(states.get('lighting')).toEqual({ uiState: 'skip', highlight: 'none', designated: false, state: 'skipped' });
+		expect(states.get('sea')).toMatchObject({ uiState: 'indirectly-disabled', state: 'indirectlyDisabled' });
+		// Memoized on the input identities: the board filter and every card share one computation.
+		expect(selectCategoryCardStates(categories, currentRules, associationSource)).toBe(states);
+		expect(selectCategoryCardStates([...categories], currentRules, associationSource)).not.toBe(states);
+		expect(selectCategoryCardStates(categories, currentRules, associationSource).get('missing')).toBeUndefined();
+	});
+
+	it('keeps the strongest card state and every fact: an associated card with a forbidden sub-prompt stays both', () => {
+		useCategoriesStore.setState({ categories: fixture });
+		useForbiddenRulesStore.setState({
+			rules: [makeRule(specificMatcher('Outfit', 'red dress'), specificMatcher('Outfit', 'swimsuit'))],
+			associationSource: endpoint('prompt', 'Outfit', 'red dress'),
+		});
+		const { result } = renderHook(() => ({ all: useCategoryCardStates(), outfit: useCategoryCardState('outfit') }));
+
+		expect(result.current.all.get('outfit')).toEqual({ uiState: 'normal', highlight: 'forbidden', designated: true, state: 'forbidden' });
+		expect(result.current.outfit).toBe('forbidden');
+	});
+
+	it('the designation and card highlight hooks', () => {
 		useCategoriesStore.setState({ categories: fixture });
 		useForbiddenRulesStore.setState({ rules: fixtureRules, associationSource: endpoint('prompt', 'Outfit', 'red dress') });
 		const { result } = renderHook(() => ({

@@ -1,13 +1,13 @@
-// Prompt categories store: single truth holder of categories and sub-prompts (persisted as 'categorie-store').
+// Prompt categories store: single truth holder of categories and sub-prompts (persisted as 'categorie-store'). Their
+// arrangement on the prompt board (card order, collapsed cards, filter) belongs to the board store, which these actions
+// keep in step (rename, delete, add, sort by priority).
 // Category algorithms live in src/domain/categories.ts; reachability in src/domain/reachability.ts (it includes the
 // active character's pinned categories, read from useCharactersStore in the hooks, never at module top level).
 import { create } from 'zustand';
 import { persist } from 'zustand/middleware';
 import { useShallow } from 'zustand/react/shallow';
 import {
-	categoryDefaultLayout,
 	categoryKeyOf,
-	estimateCategorySize,
 	joinBulkText,
 	makeCategory,
 	makeSubPrompt,
@@ -29,28 +29,28 @@ import {
 } from '../domain/categories';
 import { characterCategories, type CharacterGenerationInput } from '../domain/characters';
 import type { ForbiddenRule } from '../domain/forbiddenRules';
-import { categoryWindowKey, type ArrangeItem, type Viewport } from '../domain/layout';
 import { buildReachabilitySnapshot, categoryUiStateOf, subPromptUiStateOf, type ReachabilitySnapshot } from '../domain/reachability';
 import { uniqueStrings } from '../domain/text';
 import { persistedStoreOptions } from '../persistence/persist';
 import { STORE_NAMES } from '../persistence/storeNames';
+import { useBoardStore } from './boardStore';
 import { selectActiveCharacter, useCharactersStore } from './charactersStore';
 import { useForbiddenRulesStore } from './forbiddenRulesStore';
 import { useNotificationsStore } from './notificationsStore';
-import { useWorkspaceStore } from './workspaceStore';
 
 export type CategoriesState = {
 	categories: Category[];
 };
 
 export type CategoriesActions = {
-	/** Appends 'new category' (made unique) with one empty sub-prompt; its window opens at its cascade position
-	 *  (categoryDefaultLayout) in front of every other window. Returns its key. */
+	/** Appends 'new category' (made unique) with one empty sub-prompt; its card comes last on the board, which reveals
+	 *  it (boardStore.revealCategory: scrolled into view, its name editor open so it is named right away). Returns its
+	 *  key. */
 	addCategory: () => CategoryKey;
-	/** Removes the category, the forbidden rules naming it and its workspace window. */
+	/** Removes the category, the forbidden rules naming it and its place on the board. */
 	removeCategory: (key: CategoryKey) => void;
 	/** Renames; rejects (notification, returns false) when the new key collides with another category.
-	 *  Moves the workspace window key and rewrites forbidden rules naming the old category. */
+	 *  Moves its board position / collapsed state to the new key and rewrites forbidden rules naming the old category. */
 	renameCategory: (key: CategoryKey, text: string) => boolean;
 	setActivationText: (key: CategoryKey, text: string) => void;
 	setPriority: (key: CategoryKey, priority: number) => void;
@@ -72,8 +72,8 @@ export type CategoriesActions = {
 	/** Replaces the sub-prompts from the bulk editor text (entries separated by '\n|\n'); sub-prompts whose
 	 *  text is unchanged keep their state and extraLoraIds; duplicates are dropped. */
 	applyBulkText: (key: CategoryKey, text: string) => void;
-	/** Sorts by priority then name, renumbers priorities 1..n and arranges the category windows in a grid
-	 *  (useWorkspaceStore.arrangeCategoryWindows). */
+	/** "Sort by priority" (Ctrl+O): sorts by priority then name, renumbers priorities 1..n and makes that the board
+	 *  order (boardStore.setOrder). */
 	reorganize: () => void;
 	/** Removes a LoRA id from every sub-prompt's extraLoraIds. */
 	unlinkLora: (loraId: string) => void;
@@ -91,10 +91,6 @@ function warnDuplicateSubPrompt(category: Category): void {
 	useNotificationsStore
 		.getState()
 		.notify('warning', `Category '${displayName(category)}' cannot contain multiple sub-prompts with the same id.`);
-}
-
-function currentViewport(): Viewport {
-	return { width: window.innerWidth, height: window.innerHeight };
 }
 
 export const useCategoriesStore = create<CategoriesStore>()(
@@ -127,10 +123,7 @@ export const useCategoriesStore = create<CategoriesStore>()(
 					const category = makeCategory(newCategoryName(categories));
 					set({ categories: [...categories, category] });
 					const key = categoryKeyOf(category.text);
-					// A window without a stored layout is drawn behind every other one: the new window would be hidden.
-					const workspace = useWorkspaceStore.getState();
-					workspace.commitWindowRect(categoryWindowKey(key), categoryDefaultLayout(categories.length));
-					workspace.focusWindow(categoryWindowKey(key));
+					useBoardStore.getState().revealCategory(key, { editName: true });
 					return key;
 				},
 				removeCategory: (key) => {
@@ -139,7 +132,7 @@ export const useCategoriesStore = create<CategoriesStore>()(
 						return;
 					}
 					set({ categories: get().categories.filter((item) => item !== category) });
-					useWorkspaceStore.getState().removeWindow(categoryWindowKey(key));
+					useBoardStore.getState().forgetCategory(key);
 					useForbiddenRulesStore.getState().removeRulesForCategory(category.text);
 				},
 				renameCategory: (key, text) => {
@@ -157,7 +150,7 @@ export const useCategoriesStore = create<CategoriesStore>()(
 					}
 					updateCategory(key, (item) => ({ ...item, text }));
 					if (newKey !== key) {
-						useWorkspaceStore.getState().renameWindow(categoryWindowKey(key), categoryWindowKey(newKey));
+						useBoardStore.getState().renameCategoryKey(key, newKey);
 					}
 					useForbiddenRulesStore.getState().renameCategoryInRules(category.text, text);
 					return true;
@@ -256,13 +249,7 @@ export const useCategoriesStore = create<CategoriesStore>()(
 						category.priority === index + 1 ? category : { ...category, priority: index + 1 },
 					);
 					set({ categories: ordered });
-					const viewport = currentViewport();
-					// The workspace store keeps a window's stored size and uses the estimate for the others.
-					const items: ArrangeItem[] = ordered.map((category) => ({
-						key: categoryWindowKey(categoryKeyOf(category.text)),
-						preferred: estimateCategorySize(category, viewport),
-					}));
-					useWorkspaceStore.getState().arrangeCategoryWindows(items, viewport);
+					useBoardStore.getState().setOrder(ordered.map((category) => categoryKeyOf(category.text)));
 				},
 				unlinkLora: (loraId) => {
 					const categories = get().categories;

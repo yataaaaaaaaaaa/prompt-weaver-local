@@ -1,6 +1,6 @@
 import { act, renderHook } from '@testing-library/react';
 import { describe, expect, it, vi } from 'vitest';
-import { categoryDefaultLayout, type Category, type SubPrompt } from '../domain/categories';
+import type { Category, SubPrompt } from '../domain/categories';
 import { categoryMatcher, makeRule, specificMatcher, tagMatcher } from '../domain/forbiddenRules';
 import { flushPersistence, hydratePersistedStores } from '../persistence/persist';
 import { createMemoryStoreBackend, setStoreBackend } from '../persistence/storeBackend';
@@ -15,10 +15,10 @@ import {
 	useSubPromptKeys,
 	useSubPromptUiState,
 } from './categoriesStore';
+import { useBoardStore } from './boardStore';
 import { useCharactersStore } from './charactersStore';
 import { useForbiddenRulesStore } from './forbiddenRulesStore';
 import { useNotificationsStore } from './notificationsStore';
-import { useWorkspaceStore } from './workspaceStore';
 
 function category(text: string, subPrompts: (string | Partial<SubPrompt>)[], extra: Partial<Category> = {}): Category {
 	return {
@@ -38,9 +38,9 @@ function seed(...categories: Category[]): void {
 const store = () => useCategoriesStore.getState();
 const categories = () => useCategoriesStore.getState().categories;
 
-function mockWorkspace() {
-	const actions = { renameWindow: vi.fn(), removeWindow: vi.fn(), arrangeCategoryWindows: vi.fn() };
-	useWorkspaceStore.setState(actions);
+function mockBoard() {
+	const actions = { renameCategoryKey: vi.fn(), forgetCategory: vi.fn(), setOrder: vi.fn(), revealCategory: vi.fn() };
+	useBoardStore.setState(actions);
 	return actions;
 }
 
@@ -66,32 +66,50 @@ describe('categories', () => {
 		expect(categories()[1]).toEqual(category('new-category-2', ['']));
 	});
 
-	it('opens the new window at its cascade position, in front of every other window', () => {
+	it('reveals the new category on the board with its name editor open', () => {
+		const board = mockBoard();
 		seed(category('Alpha', ['a']));
-		useWorkspaceStore.setState({ windows: { 'pane:image': { x: 16, y: 16, width: 400, height: 400, z: 7 } } });
 
 		const key = store().addCategory();
 
-		const layout = useWorkspaceStore.getState().windows[`category:${key}`];
-		expect(layout).toMatchObject({ ...categoryDefaultLayout(1), z: 8 });
+		expect(board.revealCategory).toHaveBeenCalledWith(key, { editName: true });
 	});
 
-	it('removes a category with its window and its forbidden rules', () => {
-		const workspace = mockWorkspace();
+	it('keeps the real board in step: a new card last and revealed, a rename keeps its place, a deletion drops it', () => {
+		seed(category('Alpha', ['a']), category('Beta', ['b']));
+		useBoardStore.setState({ order: ['beta', 'alpha'], collapsed: ['alpha'] });
+
+		const key = store().addCategory();
+		expect(useBoardStore.getState().revealRequest).toEqual({ key, serial: 1, editName: true });
+
+		store().renameCategory(key, 'Gamma');
+		expect(useBoardStore.getState().revealRequest?.key).toBe('gamma');
+		store().renameCategory('alpha', 'Alpha 2');
+		expect(useBoardStore.getState()).toMatchObject({ order: ['beta', 'alpha-2'], collapsed: ['alpha-2'] });
+
+		store().removeCategory('alpha-2');
+		expect(useBoardStore.getState()).toMatchObject({ order: ['beta'], collapsed: [] });
+
+		store().reorganize();
+		expect(useBoardStore.getState().order).toEqual(['beta', 'gamma']);
+	});
+
+	it('removes a category with its board place and its forbidden rules', () => {
+		const board = mockBoard();
 		const rules = mockRules();
 		seed(category('Alpha', ['a']), category('Beta', ['b']));
 
 		store().removeCategory('alpha');
 
 		expect(categories().map((item) => item.text)).toEqual(['Beta']);
-		expect(workspace.removeWindow).toHaveBeenCalledWith('category:alpha');
+		expect(board.forgetCategory).toHaveBeenCalledWith('alpha');
 		expect(rules.removeRulesForCategory).toHaveBeenCalledWith('Alpha');
 		store().removeCategory('unknown');
-		expect(workspace.removeWindow).toHaveBeenCalledOnce();
+		expect(board.forgetCategory).toHaveBeenCalledOnce();
 	});
 
 	it('really drops the rules naming a removed category (forbidden rules store)', () => {
-		mockWorkspace();
+		mockBoard();
 		const kept = makeRule(specificMatcher('Beta', 'b'), specificMatcher('Gamma', 'g'));
 		useForbiddenRulesStore.setState({ rules: [makeRule(categoryMatcher('alpha'), specificMatcher('Beta', 'b')), kept] });
 		seed(category('Alpha', ['a']), category('Beta', ['b']));
@@ -101,20 +119,20 @@ describe('categories', () => {
 		expect(useForbiddenRulesStore.getState().rules).toEqual([kept]);
 	});
 
-	it('renames a category, its window key and its rules', () => {
-		const workspace = mockWorkspace();
+	it('renames a category, its board key and its rules', () => {
+		const board = mockBoard();
 		const rules = mockRules();
 		seed(category('Alpha', ['a']), category('Beta', ['b']));
 
 		expect(store().renameCategory('alpha', 'Alpha 2')).toBe(true);
 
 		expect(categories()[0].text).toBe('Alpha 2');
-		expect(workspace.renameWindow).toHaveBeenCalledWith('category:alpha', 'category:alpha-2');
+		expect(board.renameCategoryKey).toHaveBeenCalledWith('alpha', 'alpha-2');
 		expect(rules.renameCategoryInRules).toHaveBeenCalledWith('Alpha', 'Alpha 2');
 	});
 
-	it('keeps the window key when the key does not change and ignores no-op renames', () => {
-		const workspace = mockWorkspace();
+	it('keeps the board key when the key does not change and ignores no-op renames', () => {
+		const board = mockBoard();
 		const rules = mockRules();
 		seed(category('Alpha', ['a']));
 
@@ -122,19 +140,19 @@ describe('categories', () => {
 		expect(store().renameCategory('alpha', 'ALPHA')).toBe(true);
 
 		expect(categories()[0].text).toBe('ALPHA');
-		expect(workspace.renameWindow).not.toHaveBeenCalled();
+		expect(board.renameCategoryKey).not.toHaveBeenCalled();
 		expect(rules.renameCategoryInRules).toHaveBeenCalledOnce();
 	});
 
 	it('rejects a rename onto another category key with a warning', () => {
-		const workspace = mockWorkspace();
+		const board = mockBoard();
 		seed(category('Alpha', ['a']), category('Beta', ['b']));
 
 		expect(store().renameCategory('alpha', 'beta')).toBe(false);
 		expect(store().renameCategory('unknown', 'x')).toBe(false);
 
 		expect(categories().map((item) => item.text)).toEqual(['Alpha', 'Beta']);
-		expect(workspace.renameWindow).not.toHaveBeenCalled();
+		expect(board.renameCategoryKey).not.toHaveBeenCalled();
 		expect(notifications()).toEqual([{ intent: 'warning', message: "A category named 'beta' already exists." }]);
 	});
 
@@ -152,9 +170,8 @@ describe('categories', () => {
 		expect(categories()[0]).toMatchObject({ activation_text: 'clothed', priority: 2.5, state: 'skip' });
 	});
 
-	it('reorganizes: sorts, renumbers priorities and arranges the windows with estimated sizes', () => {
-		// The workspace store replaces an estimate by the window's stored size (workspaceStore.test.ts).
-		const workspace = mockWorkspace();
+	it('sorts by priority: renumbers priorities and makes it the board order', () => {
+		const board = mockBoard();
 		seed(category('Gamma', ['g'], { priority: 7 }), category('Beta', ['b'], { priority: 2 }), category('Alpha', ['a'], { priority: 2 }));
 
 		store().reorganize();
@@ -164,14 +181,7 @@ describe('categories', () => {
 			['Beta', 2],
 			['Gamma', 3],
 		]);
-		expect(workspace.arrangeCategoryWindows).toHaveBeenCalledWith(
-			[
-				{ key: 'category:alpha', preferred: { width: 300, height: 168 } },
-				{ key: 'category:beta', preferred: { width: 300, height: 168 } },
-				{ key: 'category:gamma', preferred: { width: 300, height: 168 } },
-			],
-			{ width: window.innerWidth, height: window.innerHeight },
-		);
+		expect(board.setOrder).toHaveBeenCalledWith(['alpha', 'beta', 'gamma']);
 	});
 
 	it('replaceAll sanitizes the categories', () => {

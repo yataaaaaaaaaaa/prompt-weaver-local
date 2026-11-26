@@ -1,4 +1,4 @@
-// One sub-prompt of a category window: state icon + inline-editable text + Skip / Lock toggles + Delete.
+// One sub-prompt of a category card: state icon + inline-editable text + Skip / Lock toggles + Delete.
 // Its visual state (forbidden, forbidden by a lock, associated, used by the current output, locked, indirectly
 // disabled, skipped) is derived by the forbidden-rules store (useSubPromptVisualState); its colors, text decoration
 // and icon come from src/ui/stateStyles.tsx only. Color is never the only cue: the icon, the dashed border, the

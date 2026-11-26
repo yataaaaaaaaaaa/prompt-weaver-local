@@ -3,7 +3,6 @@ import {
 	categoryKeyOf,
 	collectLinkedLoraIds,
 	compareCategories,
-	estimateCategorySize,
 	hasActivationTerms,
 	isActivationTriggered,
 	joinBulkText,
@@ -156,15 +155,5 @@ describe('LoRA links', () => {
 		expect(next[0].subPrompts.map((item) => item.extraLoraIds)).toEqual([['x'], []]);
 		expect(next[1]).toBe(categories[1]);
 		expect(removeLoraFromCategories(categories, 'unknown')).toBe(categories);
-	});
-});
-
-describe('estimateCategorySize', () => {
-	const viewport = { width: 1920, height: 1080 };
-
-	it('grows with the content within bounds', () => {
-		expect(estimateCategorySize(category('A', 1), viewport)).toEqual({ width: 300, height: 168 });
-		const big = category('A', 1, Array.from({ length: 30 }, (_, index) => ({ text: `${'x'.repeat(200)} ${index}` })), { activation_text: 'x' });
-		expect(estimateCategorySize(big, viewport)).toEqual({ width: 768, height: 324 });
 	});
 });

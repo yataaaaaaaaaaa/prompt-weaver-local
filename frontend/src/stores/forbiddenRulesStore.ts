@@ -1,13 +1,15 @@
 // Forbidden rules store: single truth holder of forbidden rules (persisted as 'forbidden-associations-store')
-// and of the association source picked in the Used sub-prompts pane (ephemeral, not persisted).
+// and of the association source picked in the Used sub-prompts list (ephemeral, not persisted).
 // It also derives the semantic visual state (src/ui/stateColors.ts VisualState) of every view showing prompts against
-// the association source: sub-prompt rows and category windows (useSubPromptVisualState, useCategoryWindowState) and
-// the Used sub-prompts pane (useUsedSelectionRows).
+// the association source: sub-prompt rows (useSubPromptVisualState), category cards (selectCategoryCardStates: every
+// card in one pass, read by useCategoryCardState and by the prompt board's state filter) and the Used sub-prompts list
+// (useUsedSelectionRows).
 import { useMemo } from 'react';
 import { create } from 'zustand';
 import { persist } from 'zustand/middleware';
 import type { GenerationSelection } from '../api/types';
 import {
+	categoryKeyOf,
 	sameCategoryName,
 	type Category,
 	type CategoryKey,
@@ -23,6 +25,7 @@ import {
 	forbiddenHighlightOf,
 	hasAssociation,
 	isLockedPrompt,
+	NO_FORBIDDEN_HIGHLIGHTS,
 	removeRulesForCategory,
 	removeRulesForSubPrompt,
 	renameCategoryInRules,
@@ -39,23 +42,24 @@ import {
 	type ForbiddenHighlights,
 	type ForbiddenRule,
 } from '../domain/forbiddenRules';
+import { categoryUiStateOf } from '../domain/reachability';
 import { splitPromptTags } from '../domain/text';
 import { persistedStoreOptions } from '../persistence/persist';
 import { STORE_NAMES } from '../persistence/storeNames';
 import { strongestVisualState, type VisualState } from '../ui/stateColors';
-import { findCategory, findSubPrompt, useCategoriesStore, useCategoryUiState, useSubPromptUiState } from './categoriesStore';
+import { findCategory, findSubPrompt, selectReachability, useCategoriesStore, useSubPromptUiState } from './categoriesStore';
 import { selectActiveCharacter, useCharactersStore } from './charactersStore';
 import { selectCurrentSelections, useIsSubPromptInCurrentOutput, useOutputsStore } from './outputsStore';
 
 export type ForbiddenRulesState = {
 	rules: ForbiddenRule[];
-	/** First click of a two-click association in the Used sub-prompts pane. Not persisted. */
+	/** First click of a two-click association in the Used sub-prompts list. Not persisted. */
 	associationSource: AssociationEndpoint | null;
 };
 
 export type ForbiddenRulesActions = {
 	replaceAll: (rules: ForbiddenRule[]) => void;
-	/** Click on P / C / a tag chip in the Used sub-prompts pane:
+	/** Click on P / C / a tag chip in the Used sub-prompts list:
 	 *  no source -> becomes the source; same endpoint or same row -> clears the source;
 	 *  otherwise toggles the rule source<->endpoint and clears the source
 	 *  (category endpoints in the source's own category only clear it). */
@@ -158,8 +162,8 @@ export function subPromptVisualState({ uiState, highlight, designated, current }
 	]);
 }
 
-/** Everything that decides how a category window looks. */
-export type CategoryWindowVisualInput = {
+/** Everything that decides how a category card looks. */
+export type CategoryCardVisualInput = {
 	/** Reachability state (categoriesStore useCategoryUiState). */
 	uiState: CategoryUiState;
 	/** Strongest highlight of its sub-prompts (useCategoryForbiddenHighlight). */
@@ -168,9 +172,12 @@ export type CategoryWindowVisualInput = {
 	designated: boolean;
 };
 
-/** The window's state: forbiddenLocked > forbidden > associated > indirectlyDisabled > skipped (current and locked
- *  are row-level only); null for a plain window. */
-export function categoryWindowVisualState({ uiState, highlight, designated }: CategoryWindowVisualInput): VisualState | null {
+/** The facts of one category card and the state they give (categoryCardVisualState). */
+export type CategoryCardState = CategoryCardVisualInput & { state: VisualState | null };
+
+/** The card's state: forbiddenLocked > forbidden > associated > indirectlyDisabled > skipped (current and locked
+ *  are row-level only); null for a plain card. */
+export function categoryCardVisualState({ uiState, highlight, designated }: CategoryCardVisualInput): VisualState | null {
 	return strongestVisualState([
 		highlightVisualState(highlight),
 		designated && 'associated',
@@ -183,7 +190,7 @@ export function categoryWindowVisualState({ uiState, highlight, designated }: Ca
 // View models / hooks
 // ---------------------------------------------------------------------------
 
-/** Association flags and visual state of one endpoint of the Used sub-prompts pane (P, C or a tag chip). */
+/** Association flags and visual state of one endpoint of the Used sub-prompts list (P, C or a tag chip). */
 export type UsedSelectionEndpointState = {
 	/** It is the association source ('associated'). */
 	isSource: boolean;
@@ -197,7 +204,7 @@ export type UsedSelectionTag = UsedSelectionEndpointState & {
 	endpoint: AssociationEndpoint;
 };
 
-/** One row of the Used sub-prompts pane (one selection of the current output). */
+/** One row of the Used sub-prompts list (one selection of the current output). */
 export type UsedSelectionRow = {
 	index: number;
 	categoryName: string;
@@ -223,10 +230,10 @@ function endpoint(selection: GenerationSelection, mode: AssociationEndpoint['mod
 }
 
 /**
- * Pure view model of the Used sub-prompts pane: one row per selection, flags and visual states against the
+ * Pure view model of the Used sub-prompts list: one row per selection, flags and visual states against the
  * association source (the source is 'associated'; an endpoint a rule forbids with it is 'forbidden', or
  * 'forbiddenLocked' when the source or the row's prompt is locked: forbiddenHighlightFor, the rule of the category
- * windows). `lockSources`: the categories whose locked sub-prompts count as locked (the user categories and the
+ * cards). `lockSources`: the categories whose locked sub-prompts count as locked (the user categories and the
  * active character's pinned ones).
  */
 export function buildUsedSelectionRows(
@@ -295,7 +302,7 @@ let highlightsMemo: {
 } | null = null;
 
 /** Highlights of every sub-prompt against the association source, computed once per (categories, rules, source,
- *  active character): a source from the character's pinned categories (Used sub-prompts pane) is locked. */
+ *  active character): a source from the character's pinned categories (Used sub-prompts list) is locked. */
 export function selectForbiddenHighlights(
 	categories: readonly Category[],
 	rules: readonly ForbiddenRule[],
@@ -326,7 +333,7 @@ export function useForbiddenHighlight(key: CategoryKey, promptKey: SubPromptKey)
 	);
 }
 
-/** The strongest highlight of the category's sub-prompts (its window is red / purple). */
+/** The strongest highlight of the category's sub-prompts (its card is red / purple). */
 export function useCategoryForbiddenHighlight(key: CategoryKey): ForbiddenHighlight {
 	const rules = useForbiddenRulesStore((state) => state.rules);
 	const source = useForbiddenRulesStore((state) => state.associationSource);
@@ -348,7 +355,7 @@ export function useIsSubPromptDesignated(key: CategoryKey, promptKey: SubPromptK
 	});
 }
 
-/** The association source belongs to this category (its window is 'associated'). */
+/** The association source belongs to this category (its card is 'associated'). */
 export function useIsCategoryDesignated(key: CategoryKey): boolean {
 	const source = useForbiddenRulesStore((state) => state.associationSource);
 	return useCategoriesStore((state) => {
@@ -367,11 +374,65 @@ export function useSubPromptVisualState(key: CategoryKey, promptKey: SubPromptKe
 	return subPromptVisualState({ uiState, highlight, designated, current });
 }
 
-/** Visual state of a category window: categoryWindowVisualState of its reachability, strongest forbidden highlight and
- *  designation by the association source. */
-export function useCategoryWindowState(key: CategoryKey): VisualState | null {
-	const uiState = useCategoryUiState(key);
-	const highlight = useCategoryForbiddenHighlight(key);
-	const designated = useIsCategoryDesignated(key);
-	return categoryWindowVisualState({ uiState, highlight, designated });
+/** Card states by category key. */
+export type CategoryCardStates = ReadonlyMap<CategoryKey, CategoryCardState>;
+
+// One card-state computation for every card and the board's state filter (memoized on the input identities).
+let cardStatesMemo: {
+	categories: readonly Category[];
+	rules: readonly ForbiddenRule[];
+	source: AssociationEndpoint | null;
+	character: CharacterGenerationInput | null;
+	states: CategoryCardStates;
+} | null = null;
+
+/** The card state of every category in one pass, computed once per (categories, rules, source, active character):
+ *  reachability (selectReachability), the strongest forbidden highlight of its sub-prompts (selectForbiddenHighlights)
+ *  and its designation by the association source, mapped by categoryCardVisualState. */
+export function selectCategoryCardStates(
+	categories: readonly Category[],
+	rules: readonly ForbiddenRule[],
+	source: AssociationEndpoint | null,
+	character: CharacterGenerationInput | null = null,
+): CategoryCardStates {
+	if (
+		cardStatesMemo &&
+		cardStatesMemo.categories === categories &&
+		cardStatesMemo.rules === rules &&
+		cardStatesMemo.source === source &&
+		cardStatesMemo.character === character
+	) {
+		return cardStatesMemo.states;
+	}
+	const reachability = selectReachability(categories, rules, character);
+	const highlights = source ? selectForbiddenHighlights(categories, rules, source, character) : NO_FORBIDDEN_HIGHLIGHTS;
+	const states = new Map<CategoryKey, CategoryCardState>();
+	for (const category of categories) {
+		const key = categoryKeyOf(category.text);
+		const input: CategoryCardVisualInput = {
+			uiState: categoryUiStateOf(reachability, key) ?? category.state,
+			highlight: categoryForbiddenHighlight(highlights, category),
+			designated: source !== null && sourceDesignatesCategory(source, category.text),
+		};
+		states.set(key, { ...input, state: categoryCardVisualState(input) });
+	}
+	cardStatesMemo = { categories, rules, source, character, states };
+	return states;
+}
+
+/** Every category's card state (selectCategoryCardStates of the current stores). */
+export function useCategoryCardStates(): CategoryCardStates {
+	const rules = useForbiddenRulesStore((state) => state.rules);
+	const source = useForbiddenRulesStore((state) => state.associationSource);
+	const character = useCharactersStore(selectActiveCharacter);
+	return useCategoriesStore((state) => selectCategoryCardStates(state.categories, rules, source, character));
+}
+
+/** Visual state of a category card: its entry of selectCategoryCardStates (reachability, strongest forbidden
+ *  highlight, designation by the association source); null for a plain card or an unknown category. */
+export function useCategoryCardState(key: CategoryKey): VisualState | null {
+	const rules = useForbiddenRulesStore((state) => state.rules);
+	const source = useForbiddenRulesStore((state) => state.associationSource);
+	const character = useCharactersStore(selectActiveCharacter);
+	return useCategoriesStore((state) => selectCategoryCardStates(state.categories, rules, source, character).get(key)?.state ?? null);
 }
