@@ -1,33 +1,37 @@
-// The Image pane and the Output browser in the real app: navigation (arrow keys on the surface, ignored while typing;
-// First / Previous / Next / Last and their disabled states), the category windows following the output being viewed,
-// the details of a legacy output, trash and undo (Ctrl+Z and the app bar), undo of a generation, the empty history,
-// a missing image file, the danger Delete action, small windows, and the visual baselines of both panes.
+// The viewer of the Create section in the real app: navigation (arrow keys on the page, ignored while typing; First /
+// Previous / Next / Last and their disabled states), the board cards following the output being viewed, the output
+// details (a legacy output, LoRA lines), trash and undo (Ctrl+Z and the toolbar's Undo), undo of a generation, the empty
+// history, missing pictures, the red Delete, the picture fit, the narrowest viewer at 1280 x 720, and the visual baselines.
+// The filmstrip and the details panel have their own specs (filmstrip.spec.ts, details.spec.ts).
 import { realpathSync, unlinkSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { ACTION_COLORS } from '../../src/ui/stateColors';
-import { resizeWindowTo } from '../generation/generationPane';
+import { narrowRegionsLayout } from '../generation/generationPane';
 import { expectBaseline } from '../support/baselines';
 import { STORE_NAMES, storeFile, type E2EBackend } from '../support/backend';
-import { computedStyle, MIN_TEXT_CONTRAST, resolveColor, textContrast } from '../support/colors';
+import { computedStyle, MIN_GRAPHICS_CONTRAST, MIN_TEXT_CONTRAST, paintedBackground, contrastRatio, resolveColor, textContrast } from '../support/colors';
 import { SMALL_VIEWPORT } from '../support/env';
 import { expect, test } from '../support/fixtures';
 import { generateOutput } from '../support/flows';
 import { saveScreenshot } from '../support/screenshots';
-import { assertAppVisible, expectOnTop } from '../support/visibility';
+import { assertAppVisible, boxOf, expectNoHorizontalOverflow, expectOnTop } from '../support/visibility';
 import {
 	backendOutputIds,
 	COMMAND_REPEAT_GAP_MS,
 	expectCurrentOutput,
+	filmstrip,
 	focusSurface,
 	imageOf,
 	navigationButton,
+	outputActions,
 	outputDetail,
+	viewerRegion,
 } from './outputBrowser';
 
 const FIXTURE_IDS = ['0000000001', '0000000002', '0000000003', '0000000004'];
 
-test('the arrow keys move through the outputs when the surface has the focus', async ({ app, page }) => {
+test('the arrow keys move through the outputs when the page has the focus', async ({ app, page }) => {
 	await app.open();
 	await expectCurrentOutput(app, '0000000004', '4 / 4');
 	await focusSurface(page);
@@ -51,7 +55,7 @@ test('the arrow keys move through the outputs when the surface has the focus', a
 
 test('the arrow keys are left to a text field being typed in', async ({ app, page }) => {
 	await app.open();
-	const seed = app.pane('Generation').getByRole('textbox', { name: 'Image seed' });
+	const seed = app.createRegion('generation').getByRole('textbox', { name: 'Image seed' });
 	await seed.click();
 	await page.keyboard.press('End');
 
@@ -76,6 +80,8 @@ test('First / Previous / Next / Last move through the outputs and are disabled a
 	await expect(last).toBeDisabled();
 	await expect(first).toBeEnabled();
 	await expect(previous).toBeEnabled();
+	await previous.hover();
+	await expect(app.page.getByRole('tooltip')).toHaveText('Previous output (← / ↑)');
 
 	await first.click();
 	await expectCurrentOutput(app, '0000000001', '1 / 4');
@@ -83,8 +89,8 @@ test('First / Previous / Next / Last move through the outputs and are disabled a
 	await expect(previous).toBeDisabled();
 	await expect(next).toBeEnabled();
 	await expect(last).toBeEnabled();
-	await app.parkPointer();
-	await saveScreenshot(app.pane('Output browser'), testInfo, 'output-browser-first');
+	await app.parkPointer({ blur: true });
+	await saveScreenshot(viewerRegion(app), testInfo, 'viewer-first');
 
 	await next.click();
 	await expectCurrentOutput(app, '0000000002', '2 / 4');
@@ -94,9 +100,9 @@ test('First / Previous / Next / Last move through the outputs and are disabled a
 	await expectCurrentOutput(app, '0000000003', '3 / 4');
 });
 
-test('the category windows highlight the sub-prompts of the output being viewed', async ({ app }) => {
+test('the board cards highlight the sub-prompts of the output being viewed', async ({ app }) => {
 	await app.open();
-	const current = (category: string) => app.categoryWindow(category).locator('[aria-current="true"]');
+	const current = (category: string) => app.categoryCard(category).locator('[aria-current="true"]');
 	await expect(current('Subject')).toContainText('1girl, silver hair');
 	await expect(current('Outfit')).toContainText('red dress');
 	await expect(current('Mood')).toContainText('smiling');
@@ -121,17 +127,21 @@ test('a legacy output (LoRA ids without weights) shows its details with the defa
 	await expect(outputDetail(app, 'Size')).toHaveText('512 × 768');
 	await expect(outputDetail(app, 'Seed')).toHaveText('51111');
 	await expect(outputDetail(app, 'Prompt seed')).toHaveText('1111');
-	await app.parkPointer();
-	await saveScreenshot(app.pane('Output browser'), testInfo, 'output-browser-legacy');
+	await app.parkPointer({ blur: true });
+	await saveScreenshot(viewerRegion(app), testInfo, 'viewer-legacy');
 });
 
 test('the details of a recent output list one LoRA per line, aligned with their terms', async ({ app }) => {
 	await app.open();
 	const loras = outputDetail(app, 'LoRAs').getByRole('listitem');
 	await expect(loras).toHaveText(['Watercolor Wash v1.2 (0.65)', 'local_detail_tweaker.safetensors (-0.5)']);
+	await expect(outputDetail(app, 'Output')).toHaveText('#0000000004');
+	await expect(outputDetail(app, 'Position')).toHaveText('4 / 4');
+	await expect(outputDetail(app, 'Prompt')).toHaveText('1girl, silver hair, red dress, neon city street, rain, puddles reflections, smiling');
 
 	// Every value starts in the same column; every term is on the line of its value.
-	const rows = await app.pane('Output browser').locator('dl dt').evaluateAll((terms) =>
+	const list = viewerRegion(app).locator('dl[aria-label="Output details"]');
+	const rows = await list.locator('dt').evaluateAll((terms) =>
 		terms.map((term) => {
 			const value = term.nextElementSibling as HTMLElement;
 			return { termTop: term.getBoundingClientRect().top, valueTop: value.getBoundingClientRect().top, valueLeft: value.getBoundingClientRect().left };
@@ -139,7 +149,7 @@ test('the details of a recent output list one LoRA per line, aligned with their 
 	);
 	expect(new Set(rows.map((row) => Math.round(row.valueLeft))).size).toBe(1);
 	for (const term of ['Output', 'LoRAs']) {
-		const cell = app.pane('Output browser').locator('dl dt', { hasText: term }).first();
+		const cell = list.locator('dt', { hasText: term }).first();
 		expect(await textContrast(cell), `contrast of the term ${term}`).toBeGreaterThanOrEqual(MIN_TEXT_CONTRAST);
 	}
 	for (const row of rows) {
@@ -149,19 +159,28 @@ test('the details of a recent output list one LoRA per line, aligned with their 
 	expect(secondLine.top, 'each LoRA starts a new line').toBeGreaterThanOrEqual(firstLine.bottom - 1);
 });
 
-test('Delete moves the output to the trash; Ctrl+Z and the app bar Undo restore it', async ({ app, page, backend }, testInfo) => {
+test('Delete moves the output to the trash; Ctrl+Z and the toolbar Undo restore it', async ({ app, page, backend }, testInfo) => {
 	await app.open();
-	const deleteButton = app.pane('Output browser').getByRole('button', { name: 'Delete' });
-	await app.parkPointer();
-	await expect(deleteButton).toHaveCSS('background-color', await resolveColor(page, ACTION_COLORS.danger.background));
-	await expect(deleteButton).toHaveCSS('color', await resolveColor(page, ACTION_COLORS.danger.foreground));
-	expect(await textContrast(deleteButton), 'contrast of the danger Delete').toBeGreaterThanOrEqual(MIN_TEXT_CONTRAST);
+	const deleteButton = navigationButton(app, 'Delete');
+	const undo = navigationButton(app, 'Undo');
+	await expect(undo).toBeDisabled();
+	await app.parkPointer({ blur: true });
+	// The red danger action: its trash icon in the danger color, readable on the toolbar.
+	await expect(deleteButton).toHaveCSS('color', await resolveColor(page, ACTION_COLORS.danger.subtleForeground));
+	const icon = deleteButton.locator('.fui-Button__icon');
+	await expect(icon).toHaveCSS('color', await resolveColor(page, ACTION_COLORS.danger.subtleForeground));
+	expect(contrastRatio(await computedStyle(icon, 'color'), await paintedBackground(deleteButton)), 'contrast of the red trash icon').toBeGreaterThanOrEqual(
+		MIN_GRAPHICS_CONTRAST,
+	);
+	await deleteButton.hover();
+	await expect(page.getByRole('tooltip')).toHaveText('Move to the app trash (Undo restores it)');
 
 	await deleteButton.click();
 
 	await expect.poll(() => backendOutputIds(backend)).toEqual(FIXTURE_IDS.slice(0, 3));
 	await expectCurrentOutput(app, '0000000003', '3 / 3');
 	await expect(navigationButton(app, 'Next output')).toBeDisabled();
+	await expect(undo).toBeEnabled();
 
 	await focusSurface(page);
 	await page.keyboard.press('Control+z');
@@ -171,10 +190,11 @@ test('Delete moves the output to the trash; Ctrl+Z and the app bar Undo restore 
 
 	await deleteButton.click();
 	await expect.poll(() => backendOutputIds(backend)).toEqual(FIXTURE_IDS.slice(0, 3));
-	await app.parkPointer();
-	await saveScreenshot(page, testInfo, 'workspace-after-delete');
-	const undo = app.appBar().getByRole('button', { name: 'Undo' });
+	await app.parkPointer({ blur: true });
+	await saveScreenshot(page, testInfo, 'create-after-delete');
 	await expect(undo).toBeEnabled();
+	await undo.hover();
+	await expect(page.getByRole('tooltip')).toHaveText('Undo (Ctrl+Z)');
 
 	await undo.click();
 
@@ -185,7 +205,7 @@ test('Delete moves the output to the trash; Ctrl+Z and the app bar Undo restore 
 
 test('undoing a generation goes back to the previous output and restores the seeds', async ({ app, page, backend }) => {
 	await app.open();
-	const generation = app.pane('Generation');
+	const generation = app.createRegion('generation');
 	const imageSeed = generation.getByRole('textbox', { name: 'Image seed' });
 	await expect(imageSeed).toHaveValue('1234567');
 
@@ -206,31 +226,28 @@ test('undoing a generation goes back to the previous output and restores the see
 test.describe('without outputs', () => {
 	test.use({ e2eOptions: { remove: ['output'], files: storeFile(STORE_NAMES.outputs, { currentId: null }, 1) } });
 
-	test('both panes say there is nothing yet; the first generation fills them', async ({ app, page, backend }, testInfo) => {
+	test('the viewer says there is nothing yet and how to start; the first generation fills it', async ({ app, page, backend }, testInfo) => {
 		await app.open();
-		const image = app.pane('Image');
-		const browser = app.pane('Output browser');
-		await expect(image.getByText('No outputs yet.')).toBeVisible();
-		await expect(image.getByText('Generated images appear here.')).toBeVisible();
-		await expect(browser.getByText('No outputs yet: generate an image to see its details here.')).toBeVisible();
-		for (const label of ['First output', 'Previous output', 'Next output', 'Last output']) {
+		const viewer = viewerRegion(app);
+		await expect(viewer.getByText('No outputs yet', { exact: true })).toBeVisible();
+		await expect(viewer.getByText('Press Generate (Ctrl+G) in the Generation panel', { exact: false })).toBeVisible();
+		await expect(viewer.getByText('No details yet', { exact: true })).toBeVisible();
+		await expect(filmstrip(app)).toHaveCount(0);
+		for (const label of ['First output', 'Previous output', 'Next output', 'Last output', 'Delete', 'Copy prompt', 'Create character', 'Undo']) {
 			await expect(navigationButton(app, label)).toBeDisabled();
 		}
-		for (const name of ['Delete', 'Copy prompt', 'Create character']) {
-			await expect(browser.getByRole('button', { name })).toBeDisabled();
-		}
-		await app.parkPointer();
+		await expect(outputActions(app).getByText('— / 0', { exact: true })).toBeVisible();
+		await app.parkPointer({ blur: true });
 		await assertAppVisible(page);
-		await saveScreenshot(image, testInfo, 'image-pane-empty');
-		await saveScreenshot(browser, testInfo, 'output-browser-empty');
-		await expectBaseline(image, 'image-pane-empty.png');
-		await expectBaseline(browser, 'output-browser-empty.png');
+		await saveScreenshot(viewer, testInfo, 'viewer-empty');
+		await expectBaseline(viewer, 'viewer-empty.png');
 
 		const created = await generateOutput(app, backend);
 
 		expect(created).toBe('0000000001');
 		await expectCurrentOutput(app, '0000000001', '1 / 1');
-		await expect(browser.getByRole('button', { name: 'Delete' })).toBeEnabled();
+		await expect(navigationButton(app, 'Delete')).toBeEnabled();
+		await expect(viewer.getByText('No outputs yet', { exact: true })).toHaveCount(0);
 	});
 });
 
@@ -252,35 +269,34 @@ test.describe('an output whose picture is gone at startup', () => {
 
 		await expectCurrentOutput(app, '0000000003', '3 / 3');
 		await expect(navigationButton(app, 'Next output')).toBeDisabled();
+		await expect(filmstrip(app).getByRole('option')).toHaveCount(3);
 	});
 });
 
-test('a picture deleted while the app runs: the Image pane explains it instead of a broken picture', async ({ app, page, backend, diagnostics }, testInfo) => {
-	// The browser logs the failed image request.
+test('a picture deleted while the app runs: the viewer explains it instead of a broken picture', async ({ app, page, backend, diagnostics }, testInfo) => {
+	// The browser logs the failed image (and thumbnail) requests.
 	diagnostics.allow(/Failed to load resource.*404/);
 	await app.open();
 	await deletePictureOutsideTheApp(backend, '0000000003');
-	const image = app.pane('Image');
+	const viewer = viewerRegion(app);
 
 	await navigationButton(app, 'Previous output').click();
 
-	await expect(image.getByText('The image of output #0000000003 could not be loaded.')).toBeVisible();
-	await expect(image.getByText('Its file may have been moved or deleted outside the app.')).toBeVisible();
-	await expect(image.getByRole('img')).toHaveCount(0);
+	await expect(viewer.getByText('The image of output #0000000003 could not be loaded.')).toBeVisible();
+	await expect(viewer.getByText('Its file may have been moved or deleted outside the app.')).toBeVisible();
+	await expect(imageOf(app, '0000000003')).toHaveCount(0);
 	// The details are still there (the metadata exists).
 	await expect(outputDetail(app, 'Output')).toHaveText('#0000000003');
-	await app.parkPointer();
+	await app.parkPointer({ blur: true });
 	await assertAppVisible(page);
-	await saveScreenshot(image, testInfo, 'image-pane-missing-file');
-	await expectBaseline(image, 'image-pane-missing-file.png');
+	await saveScreenshot(viewer, testInfo, 'viewer-missing-file');
 
 	await navigationButton(app, 'Previous output').click();
 	await expectCurrentOutput(app, '0000000002', '2 / 4');
 });
 
-test('the picture fits the Image pane without distortion, centered, whatever the pane shape', async ({ app }, testInfo) => {
+test('the picture fits the space left without distortion, centered', async ({ app }, testInfo) => {
 	await app.open();
-	const image = app.pane('Image');
 	const picture = imageOf(app, '0000000004');
 	await app.settle();
 
@@ -298,6 +314,7 @@ test('the picture fits the Image pane without distortion, centered, whatever the
 			centerDx: Math.abs(box.left + box.width / 2 - (container.left + container.width / 2)),
 			centerDy: Math.abs(box.top + box.height / 2 - (container.top + container.height / 2)),
 			inside: box.left >= container.left - 0.5 && box.right <= container.right + 0.5 && box.top >= container.top - 0.5 && box.bottom <= container.bottom + 0.5,
+			painted,
 		};
 	});
 	expect(fit.objectFit).toBe('contain');
@@ -305,55 +322,47 @@ test('the picture fits the Image pane without distortion, centered, whatever the
 	expect(fit.centerDx).toBeLessThanOrEqual(1);
 	expect(fit.centerDy).toBeLessThanOrEqual(1);
 	expect(fit.inside).toBe(true);
-	await app.parkPointer();
-	await saveScreenshot(image, testInfo, 'image-pane');
+	expect(fit.painted.height, 'the picture is drawn big enough to see').toBeGreaterThan(300);
+	await app.parkPointer({ blur: true });
+	await saveScreenshot(viewerRegion(app), testInfo, 'viewer');
 });
 
-test('the Output browser and the Image pane fit a narrow window (280 px)', async ({ app, page }, testInfo) => {
-	await app.open();
-	const browser = app.pane('Output browser');
-	await resizeWindowTo(app, browser, { width: 280, height: 592 });
-	await resizeWindowTo(app, app.pane('Image'), { width: 280, height: 400 });
-	await app.parkPointer();
+test.describe('the narrowest viewer at the smallest supported window size', () => {
+	test.use({ viewport: SMALL_VIEWPORT, e2eOptions: { files: narrowRegionsLayout() } });
 
-	const overflow = await browser.evaluate((pane) => {
-		const paneRight = pane.getBoundingClientRect().right;
-		return Array.from(pane.querySelectorAll('button, dd, dt, li'))
-			.filter((element) => element.getBoundingClientRect().right > paneRight + 0.5)
-			.map((element) => element.getAttribute('aria-label') ?? element.textContent);
+	test('the toolbar wraps, nothing is cut, the picture and the filmstrip stay visible', async ({ app, page }, testInfo) => {
+		await app.open();
+		const viewer = viewerRegion(app);
+		expect(Math.round((await boxOf(viewer)).width)).toBeLessThanOrEqual(330);
+		await app.parkPointer({ blur: true });
+
+		await expectNoHorizontalOverflow(viewer);
+		for (const label of ['First output', 'Previous output', 'Next output', 'Last output', 'Copy prompt', 'Create character', 'Undo', 'Delete', 'Output details']) {
+			await expectOnTop(navigationButton(app, label));
+		}
+		await expect(imageOf(app, '0000000004')).toBeVisible();
+		expect((await boxOf(imageOf(app, '0000000004'))).height, 'the picture keeps a usable height').toBeGreaterThan(120);
+		await expectOnTop(filmstrip(app).getByRole('option', { name: 'Output 0000000004' }));
+		// One line per LoRA: a long name is truncated, its weight stays whole and visible.
+		const loraLines = outputDetail(app, 'LoRAs').getByRole('listitem');
+		await expect(loraLines).toHaveCount(2);
+		for (const line of await loraLines.all()) {
+			const lineHeight = Number.parseFloat(await computedStyle(line, 'line-height'));
+			expect((await line.boundingBox())?.height ?? Infinity).toBeLessThanOrEqual(lineHeight + 2);
+		}
+		await viewer.getByRole('tabpanel').evaluate((panel) => panel.scrollTo(0, 400));
+		for (const weight of ['(0.65)', '(-0.5)']) {
+			await expectOnTop(outputDetail(app, 'LoRAs').getByText(weight, { exact: true }));
+		}
+		await assertAppVisible(page);
+		await saveScreenshot(page, testInfo, 'create-1280x720-narrow-viewer');
+		await saveScreenshot(viewer, testInfo, 'viewer-narrow');
 	});
-	expect(overflow, 'content sticking out of the narrow Output browser').toEqual([]);
-	await expectOnTop(browser.getByRole('button', { name: 'Delete' }));
-	await expectOnTop(navigationButton(app, 'First output'));
-	// One line per LoRA: a long name is truncated, its weight stays whole and visible.
-	const loraLines = outputDetail(app, 'LoRAs').getByRole('listitem');
-	await expect(loraLines).toHaveCount(2);
-	for (const line of await loraLines.all()) {
-		const lineHeight = Number.parseFloat(await computedStyle(line, 'line-height'));
-		expect((await line.boundingBox())?.height ?? Infinity).toBeLessThanOrEqual(lineHeight + 2);
-	}
-	for (const weight of ['(0.65)', '(-0.5)']) {
-		await expectOnTop(outputDetail(app, 'LoRAs').getByText(weight, { exact: true }));
-	}
-	await expect(imageOf(app, '0000000004')).toBeVisible();
-	await assertAppVisible(page);
-	await saveScreenshot(browser, testInfo, 'output-browser-narrow');
-	await saveScreenshot(app.pane('Image'), testInfo, 'image-pane-narrow');
 });
 
-test('the Output browser stays readable at the smallest supported window size', async ({ app, page }, testInfo) => {
-	await page.setViewportSize(SMALL_VIEWPORT);
+test('visual baselines of the viewer', async ({ app }) => {
 	await app.open();
-	const browser = await app.showPane('Output browser');
-	await expectOnTop(navigationButton(app, 'Previous output'));
-	await expectOnTop(browser.getByRole('button', { name: 'Delete' }));
-	await assertAppVisible(page);
-	await saveScreenshot(page, testInfo, 'workspace-1280x720');
-});
-
-test('visual baselines of the Image pane and the Output browser', async ({ app }) => {
-	await app.open();
-	await app.parkPointer();
-	await expectBaseline(app.pane('Image'), 'image-pane.png');
-	await expectBaseline(app.pane('Output browser'), 'output-browser.png');
+	await app.parkPointer({ blur: true });
+	await expectBaseline(outputActions(app), 'output-actions.png');
+	await expectBaseline(viewerRegion(app), 'viewer.png');
 });

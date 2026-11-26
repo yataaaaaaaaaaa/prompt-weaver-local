@@ -9,6 +9,7 @@ import { outputImageUrl } from '../api/config';
 import type { GenerationSelection, OutputRecord } from '../api/types';
 import type { CategoryKey, SubPromptKey } from '../domain/categories';
 import {
+	FILMSTRIP_RADIUS,
 	formatOutputId,
 	indexSelections,
 	insertOutputId,
@@ -16,6 +17,7 @@ import {
 	nextOutputId,
 	normalizeOutputIds,
 	outputDetails,
+	outputIdWindow,
 	previousOutputId,
 	removeOutputId,
 	type CurrentOutputDetails,
@@ -272,6 +274,14 @@ export const selectNavigation = (state: OutputsState): OutputNavigation => {
 	const hasLater = index >= 0 && index < count - 1;
 	return { index, count, canFirst: index > 0, canPrevious: index > 0, canNext: hasLater, canLast: hasLater };
 };
+
+/** The ids of the filmstrip: a window of at most 2 * radius + 1 ids around the current output (domain outputIdWindow),
+ *  so a history of thousands of outputs never renders thousands of thumbnails. Use with useShallow (new array). */
+export const selectFilmstripIds = (state: OutputsState, radius: number = FILMSTRIP_RADIUS): string[] =>
+	outputIdWindow(state.ids, state.currentId, radius);
+
+/** The latest output id (the one "Jump to latest" shows), or null without outputs. */
+export const selectLatestOutputId = (state: OutputsState): string | null => state.ids[state.ids.length - 1] ?? null;
 
 const EMPTY_SELECTIONS: GenerationSelection[] = [];
 

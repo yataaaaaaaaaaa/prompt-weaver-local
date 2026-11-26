@@ -11,6 +11,7 @@ import {
 	normalizeOutputIds,
 	outputCharacterText,
 	outputDetails,
+	outputIdWindow,
 	parseOutputId,
 	previousOutputId,
 	removeOutputId,
@@ -66,6 +67,40 @@ describe('neighbours', () => {
 		expect(nearestOutputId(ids, '0000000009')).toBe('0000000005');
 		expect(nearestOutputId(['0000000001'], '0000000000')).toBe('0000000001');
 		expect(nearestOutputId([], '0000000001')).toBeNull();
+	});
+});
+
+describe('outputIdWindow', () => {
+	const ids = Array.from({ length: 20 }, (_, index) => formatOutputId(index + 1));
+
+	it('centers the window on the current output', () => {
+		expect(outputIdWindow(ids, ids[9], 2)).toEqual(ids.slice(7, 12));
+	});
+
+	it('keeps its full size at both ends of the list', () => {
+		expect(outputIdWindow(ids, ids[0], 2)).toEqual(ids.slice(0, 5));
+		expect(outputIdWindow(ids, ids[1], 2)).toEqual(ids.slice(0, 5));
+		expect(outputIdWindow(ids, ids[19], 2)).toEqual(ids.slice(15, 20));
+		expect(outputIdWindow(ids, ids[18], 2)).toEqual(ids.slice(15, 20));
+	});
+
+	it('ends at the latest output without a (listed) current output', () => {
+		expect(outputIdWindow(ids, null, 1)).toEqual(ids.slice(17));
+		expect(outputIdWindow(ids, '0000000999', 1)).toEqual(ids.slice(17));
+	});
+
+	it('returns every id of a short list, and a copy', () => {
+		const short = ids.slice(0, 3);
+		const window = outputIdWindow(short, short[1], 5);
+		expect(window).toEqual(short);
+		expect(window).not.toBe(short);
+		expect(outputIdWindow([], null, 3)).toEqual([]);
+	});
+
+	it('never renders thousands of ids', () => {
+		const many = Array.from({ length: 5000 }, (_, index) => formatOutputId(index + 1));
+		expect(outputIdWindow(many, many[2500], 15)).toHaveLength(31);
+		expect(outputIdWindow(many, many[2500], 0)).toEqual([many[2500]]);
 	});
 });
 

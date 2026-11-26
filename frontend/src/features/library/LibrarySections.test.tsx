@@ -6,8 +6,12 @@ import { useCategoriesStore } from '../../stores/categoriesStore';
 import { useLibraryStore, useLoraRows, useLoraSummary, type LoraRow } from '../../stores/libraryStore';
 import { renderWithProviders } from '../../test/render';
 import { hasActionIntent } from '../../test/stateClasses';
-import { LoraSection } from './LoraSection';
-import { ModelSection } from './ModelSection';
+import { useNavigationStore } from '../../stores/navigationStore';
+import { LoraFileActions, LoraSection, PromptLinkedLoras } from './LoraSection';
+import { ModelFileActions, ModelSection } from './ModelSection';
+import { SelectedLoraWeights } from './SelectedLoraWeights';
+
+// Several user-event interactions with Fluent popovers and tooltips per test: slow on a busy machine.
 
 // Prompt links are derived by the library store from the categories store: the view is tested against
 // the contract of useLoraRows / useLoraSummary.
@@ -66,31 +70,40 @@ beforeEach(() => {
 });
 
 describe('ModelSection', () => {
-	it('shows the empty state without models', () => {
-		seedLibraryActions();
-		renderWithProviders(<ModelSection />);
+	it('without models: the disabled picker and a call to action (add a model file, browse Models)', async () => {
+		const actions = seedLibraryActions();
+		const { user } = renderWithProviders(<ModelSection />);
 
 		const dropdown = screen.getByRole('combobox', { name: 'Checkpoint' });
 		expect(dropdown).toBeDisabled();
 		expect(dropdown).toHaveTextContent('No model available');
+		expect(screen.getByText('No model yet')).toBeInTheDocument();
+		await user.click(screen.getByRole('button', { name: 'Add model file' }));
+		expect(actions.addModelFile).toHaveBeenCalledTimes(1);
+		await user.click(screen.getByRole('button', { name: 'Browse models' }));
+		expect(useNavigationStore.getState().section).toBe('models');
 	});
 
-	it('selects a model', async () => {
+	it('selects a model; Browse models stays one click away', async () => {
 		const actions = seedLibraryActions();
 		useLibraryStore.setState({ models: MODELS, selectedModelId: 'm1' });
 		const { user } = renderWithProviders(<ModelSection />);
 		const dropdown = screen.getByRole('combobox', { name: 'Checkpoint' });
 		expect(dropdown).toHaveTextContent('Model One');
+		expect(screen.queryByText('No model yet')).not.toBeInTheDocument();
+		expect(screen.queryByRole('button', { name: 'Add model file' })).not.toBeInTheDocument();
 
 		await user.click(dropdown);
 		await user.click(screen.getByRole('option', { name: 'Model Two' }));
 
 		expect(actions.selectModel).toHaveBeenCalledWith('m2');
+		await user.click(screen.getByRole('button', { name: 'Browse models' }));
+		expect(useNavigationStore.getState().section).toBe('models');
 	});
 
-	it('adds a model file or folder through the store', async () => {
+	it('adds a model file or folder through the store (advanced file actions)', async () => {
 		const actions = seedLibraryActions();
-		const { user } = renderWithProviders(<ModelSection />);
+		const { user } = renderWithProviders(<ModelFileActions />);
 
 		await user.click(screen.getByRole('button', { name: 'Add model file' }));
 		await user.click(screen.getByRole('button', { name: 'Add model folder' }));
@@ -101,16 +114,15 @@ describe('ModelSection', () => {
 });
 
 describe('LoraSection', () => {
-	it('shows the empty state and the summary', () => {
+	it('shows the empty state', () => {
 		seedLibraryActions();
 		renderWithProviders(<LoraSection />);
 
-		expect(screen.getByText('No LoRAs loaded.')).toBeInTheDocument();
-		expect(screen.getByText('Default selected: 0 · Prompt-linked: 0 · Possible active: 0')).toBeInTheDocument();
+		expect(screen.getByText('No LoRAs yet: add files in More options, or find some in Models.')).toBeInTheDocument();
 		expect(screen.getByRole('button', { name: 'Clear' })).toBeDisabled();
 	});
 
-	it('renders rows with selection, prompt links and the summary', () => {
+	it('renders rows with selection and the prompt-linked mark', () => {
 		seedLibraryActions();
 		seedLoras([row(LORA_A, 0.6), row(LORA_B, null, true)], { selected: 1, promptLinked: 1, possibleActive: 2 });
 		renderWithProviders(<LoraSection />);
@@ -122,16 +134,16 @@ describe('LoraSection', () => {
 		expect(within(items[0]).queryByRole('button', { name: /Remove prompt links/ })).not.toBeInTheDocument();
 		expect(within(items[1]).getByRole('checkbox', { name: 'Lora B' })).not.toBeChecked();
 		expect(within(items[1]).getByText('Prompt-linked')).toBeInTheDocument();
-		expect(screen.getByText('Default selected: 1 · Prompt-linked: 1 · Possible active: 2')).toBeInTheDocument();
+		// The unlinking and the summary are prompt link details (More options).
+		expect(within(items[1]).queryByRole('button', { name: /Remove prompt links/ })).not.toBeInTheDocument();
+		expect(screen.queryByText(/^Default selected:/)).not.toBeInTheDocument();
 		// Only selected LoRAs have a weight editor.
 		expect(within(items[0]).getByRole('spinbutton', { name: 'Weight of Lora A' })).toHaveValue('0.6');
 		expect(within(items[1]).queryByRole('spinbutton')).not.toBeInTheDocument();
 	});
 
-	it('selects, unselects, unlinks and removes LoRAs', async () => {
+	it('selects, unselects and removes LoRAs', async () => {
 		const actions = seedLibraryActions();
-		const unlinkLora = vi.fn();
-		useCategoriesStore.setState({ unlinkLora });
 		seedLoras([row(LORA_A, 1), row(LORA_B, null, true)]);
 		const { user } = renderWithProviders(<LoraSection />);
 
@@ -140,21 +152,23 @@ describe('LoraSection', () => {
 		await user.click(screen.getByRole('checkbox', { name: 'Lora B' }));
 		expect(actions.setLoraSelected).toHaveBeenLastCalledWith('b', true);
 
-		await user.click(screen.getByRole('button', { name: 'Remove prompt links to Lora B' }));
-		expect(unlinkLora).toHaveBeenCalledWith('b');
-
 		await user.click(screen.getByRole('button', { name: 'Delete Lora A from the library' }));
 		expect(actions.removeLora).toHaveBeenCalledWith('a');
 	});
 
-	it('clears the selection and adds files or folders', async () => {
+	it('clears the selection; the advanced file actions add LoRA files or a folder', async () => {
 		const actions = seedLibraryActions();
 		seedLoras([row(LORA_A, 1)]);
-		const { user } = renderWithProviders(<LoraSection />);
+		const { user } = renderWithProviders(
+			<>
+				<LoraSection />
+				<LoraFileActions />
+			</>,
+		);
 
 		await user.click(screen.getByRole('button', { name: 'Clear' }));
-		await user.click(screen.getByRole('button', { name: 'Add files' }));
-		await user.click(screen.getByRole('button', { name: 'Add folder' }));
+		await user.click(screen.getByRole('button', { name: 'Add LoRA files' }));
+		await user.click(screen.getByRole('button', { name: 'Add LoRA folder' }));
 
 		expect(actions.clearSelectedLoras).toHaveBeenCalledTimes(1);
 		expect(actions.addLoraFiles).toHaveBeenCalledTimes(1);
@@ -204,8 +218,68 @@ describe('LoraSection', () => {
 		for (const button of screen.getAllByRole('button')) {
 			expect(button).toHaveAccessibleName();
 		}
-		expect(screen.getAllByRole('button', { name: /^Remove prompt links to / })).toHaveLength(2);
 		expect(screen.getAllByRole('button', { name: /from the library$/ })).toHaveLength(2);
+	});
+});
+
+describe('PromptLinkedLoras', () => {
+	it('shows the summary and unlinks a LoRA from every sub-prompt', async () => {
+		seedLibraryActions();
+		const unlinkLora = vi.fn();
+		useCategoriesStore.setState({
+			unlinkLora,
+			categories: [{ text: 'Main', activation_text: '', priority: 1, state: 'normal', subPrompts: [{ text: 'x', state: 'normal', extraLoraIds: ['b'] }] }],
+		});
+		seedLoras([row(LORA_A, 0.6), row(LORA_B, null, true)], { selected: 1, promptLinked: 1, possibleActive: 2 });
+		const { user } = renderWithProviders(<PromptLinkedLoras />);
+
+		expect(screen.getByText('Default selected: 1 · Prompt-linked: 1 · Possible active: 2')).toBeInTheDocument();
+		const linked = within(screen.getByRole('list', { name: 'Prompt-linked LoRAs' })).getAllByRole('listitem');
+		expect(linked.map((item) => item.textContent)).toEqual(['Lora B']);
+		await user.click(screen.getByRole('button', { name: 'Remove prompt links to Lora B' }));
+		expect(unlinkLora).toHaveBeenCalledWith('b');
+	});
+
+	it('says when no sub-prompt pulls in a LoRA', () => {
+		seedLibraryActions();
+		seedLoras([row(LORA_A, 1)]);
+		renderWithProviders(<PromptLinkedLoras />);
+
+		expect(screen.getByText('No sub-prompt pulls in a LoRA.')).toBeInTheDocument();
+		expect(screen.queryByRole('list')).not.toBeInTheDocument();
+	});
+});
+
+describe('SelectedLoraWeights', () => {
+	it('lists the selected LoRAs in selection order with the shared weight field', async () => {
+		const setLoraWeight = vi.fn();
+		seedLibraryActions();
+		useLibraryStore.setState({
+			setLoraWeight,
+			loras: [LORA_A, LORA_B],
+			selectedLoras: [
+				{ id: 'b', weight: -0.5 },
+				{ id: 'a', weight: 0.6 },
+			],
+		});
+		const { user } = renderWithProviders(<SelectedLoraWeights />);
+
+		const items = within(screen.getByRole('list', { name: 'Selected LoRAs' })).getAllByRole('listitem');
+		expect(items.map((item) => within(item).getByRole('spinbutton').getAttribute('aria-label'))).toEqual(['Weight of Lora B', 'Weight of Lora A']);
+		const weight = screen.getByRole('spinbutton', { name: 'Weight of Lora A' });
+		expect(weight).toHaveValue('0.6');
+		await user.click(weight);
+		await user.keyboard('{ArrowUp}');
+		expect(setLoraWeight).toHaveBeenLastCalledWith('a', 0.65);
+		expect(getComputedStyle(within(items[0]).getByText('Lora B')).textOverflow).toBe('ellipsis');
+	});
+
+	it('says when no LoRA is selected', () => {
+		seedLibraryActions();
+		useLibraryStore.setState({ loras: [LORA_A], selectedLoras: [] });
+		renderWithProviders(<SelectedLoraWeights />);
+
+		expect(screen.getByText(/^No LoRA selected/)).toBeInTheDocument();
 	});
 });
 

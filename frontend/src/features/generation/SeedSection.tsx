@@ -1,13 +1,13 @@
 // Prompt-selection and image seeds with their after-generation behaviors (generation settings store).
-// Option lists and labels come from src/domain/seeds.ts. Two columns (seed | behavior) when the pane is wide enough,
-// one column in a narrow pane.
+// Option lists and labels come from src/domain/seeds.ts. Two columns (seed | behavior) when the panel is wide enough,
+// one column in a narrow panel.
 import { Caption1, Dropdown, Field, Input, makeStyles, Option, tokens } from '@fluentui/react-components';
 import { IMAGE_SEED_BEHAVIORS, PROMPT_SEED_BEHAVIORS, SEED_BEHAVIOR_LABELS, type SeedBehavior } from '../../domain/seeds';
 import { selectPromptSeedManagedPerCategory, useGenerationSettingsStore } from '../../stores/generationSettingsStore';
 import { PaneGrid, PaneSection } from '../../ui/PaneLayout';
 
 /** Narrowest column of the seed grid: below two of these the fields stack (one column), so labels such as
- *  'Prompt seed behavior' and values such as 'Auto increment' never wrap or get cut in a narrow pane. */
+ *  'Prompt seed behavior' and values such as 'Auto increment' never wrap or get cut in a narrow panel. */
 const SEED_COLUMN_MIN_WIDTH = '160px';
 
 const useStyles = makeStyles({

@@ -2,6 +2,7 @@ import { renderHook } from '@testing-library/react';
 import { describe, expect, it, vi } from 'vitest';
 import { ApiError, api } from '../api/client';
 import type { OutputRecord } from '../api/types';
+import { FILMSTRIP_RADIUS } from '../domain/outputs';
 import { flushPersistence, hydratePersistedStores } from '../persistence/persist';
 import { createMemoryStoreBackend, setStoreBackend } from '../persistence/storeBackend';
 import { clipboard } from '../services/clipboard';
@@ -10,6 +11,8 @@ import { useNotificationsStore } from './notificationsStore';
 import {
 	migrateOutputsState,
 	selectCurrentImageUrl,
+	selectFilmstripIds,
+	selectLatestOutputId,
 	selectNavigation,
 	useCurrentOutputDetails,
 	useCurrentSelectionKey,
@@ -326,6 +329,40 @@ describe('outputsStore persistence', () => {
 		outputs().showGenerated(makeRecord(id(8)));
 		await flushPersistence();
 		expect(backend.snapshot()['current-image-store']).toEqual({ state: { currentId: id(8) }, version: 1 });
+	});
+});
+
+describe('outputsStore filmstrip', () => {
+	const many = Array.from({ length: 200 }, (_, index) => id(index + 1));
+
+	it('windows the ids around the current output, never the whole history', () => {
+		useOutputsStore.setState({ ids: many, currentId: id(100) });
+		const window = selectFilmstripIds(outputs());
+		expect(window).toHaveLength(2 * FILMSTRIP_RADIUS + 1);
+		expect(window[FILMSTRIP_RADIUS]).toBe(id(100));
+		expect(selectFilmstripIds(outputs(), 2)).toEqual([id(98), id(99), id(100), id(101), id(102)]);
+	});
+
+	it('follows the current output to the ends and ends at the latest without one', () => {
+		useOutputsStore.setState({ ids: many, currentId: id(200) });
+		expect(selectFilmstripIds(outputs(), 2)).toEqual([id(196), id(197), id(198), id(199), id(200)]);
+		useOutputsStore.setState({ currentId: null });
+		expect(selectFilmstripIds(outputs(), 1)).toEqual([id(198), id(199), id(200)]);
+		useOutputsStore.setState({ ids: [], currentId: null });
+		expect(selectFilmstripIds(outputs())).toEqual([]);
+	});
+
+	it('names the latest output', () => {
+		useOutputsStore.setState({ ids: [id(1), id(7)], currentId: id(1) });
+		expect(selectLatestOutputId(outputs())).toBe(id(7));
+		useOutputsStore.setState({ ids: [] });
+		expect(selectLatestOutputId(outputs())).toBeNull();
+	});
+
+	it('a generation moves the window to the new latest output', () => {
+		useOutputsStore.setState({ ids: many, currentId: id(10) });
+		outputs().showGenerated(makeRecord(id(201)));
+		expect(selectFilmstripIds(outputs(), 1)).toEqual([id(199), id(200), id(201)]);
 	});
 });
 

@@ -92,6 +92,25 @@ export function nearestOutputId(ids: readonly string[], goneId: string): string 
 	return nextOutputId(ids, goneId) ?? previousOutputId(ids, goneId);
 }
 
+/** Outputs shown on each side of the current one by the viewer's filmstrip (outputs store selectFilmstripIds). */
+export const FILMSTRIP_RADIUS = 15;
+
+/** The ids of a filmstrip window around `currentId`: up to `radius` ids on each side, shifted at the ends of the list so
+ *  the window keeps its full size (2 * radius + 1) whenever there are enough ids. Without a current output (or when it is
+ *  not listed) the window ends at the latest output. A view never renders more than this, whatever the history size. */
+export function outputIdWindow(ids: readonly string[], currentId: string | null, radius: number): string[] {
+	const size = 2 * Math.max(0, Math.floor(radius)) + 1;
+	if (ids.length <= size) {
+		return ids.slice();
+	}
+	const index = currentId === null ? -1 : ids.indexOf(currentId);
+	if (index < 0) {
+		return ids.slice(ids.length - size);
+	}
+	const start = Math.min(Math.max(0, index - Math.floor(size / 2)), ids.length - size);
+	return ids.slice(start, start + size);
+}
+
 // ---------------------------------------------------------------------------
 // Current output selections
 // ---------------------------------------------------------------------------

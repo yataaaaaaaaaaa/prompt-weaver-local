@@ -11,6 +11,7 @@ import { useOutputsStore } from '../../stores/outputsStore';
 import { PaneContent } from '../../ui/PaneLayout';
 import { STATE_COLORS, type VisualState } from '../../ui/stateColors';
 import { STATE_ICONS, useStateBadgeClasses, useStateSurfaceClasses } from '../../ui/stateStyles';
+import { VIEWER_LABELS } from '../outputs/viewerLabels';
 
 const useStyles = makeStyles({
 	intro: {
@@ -221,7 +222,7 @@ export function UsedSelectionsPane(): JSX.Element {
 				</Caption1>
 			</div>
 			{rows.length > 0 ? (
-				<ul className={styles.list} aria-label="Used sub-prompts">
+				<ul className={styles.list} aria-label={VIEWER_LABELS.usedSubPrompts}>
 					{rows.map((row) => (
 						<UsedSelectionRowView key={`${row.index}:${row.categoryName}:${row.promptText}`} row={row} />
 					))}

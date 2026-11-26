@@ -1,14 +1,14 @@
-// The LoRA library of the Generation pane in the real app: weights (typed, stepped, clamped to -10..10), selecting and
-// unselecting LoRAs, the prompt-linked mark, the summary, the generation using the weights (Output browser LoRAs),
-// persistence across a reload, aligned columns and truncated long names, the warning Clear action, Clear itself, and
-// the desktop-only Add files.
+// The LoRA list of the generation panel in the real app: weights (typed, stepped, clamped to -10..10), selecting and
+// unselecting LoRAs, the prompt-linked mark and its details in More options (summary, unlinking), the generation using
+// the weights (the viewer's details), persistence across a reload, aligned columns and truncated long names, the
+// warning Clear action, Clear itself, and the desktop-only Add LoRA files.
 import { ACTION_COLORS } from '../../src/ui/stateColors';
-import { scrollSectionIntoView, sectionOf } from '../generation/generationPane';
+import { openMoreOptions, scrollSectionIntoView, sectionOf } from '../generation/generationPane';
 import { outputDetail } from '../outputs/outputBrowser';
 import { notifications } from '../support/app';
-import { expectBaseline } from '../support/baselines';
 import type { AppDriver } from '../support/app';
 import { STORE_NAMES, storeFile, type E2EBackend } from '../support/backend';
+import { expectBaseline } from '../support/baselines';
 import { MIN_TEXT_CONTRAST, resolveColor, textContrast } from '../support/colors';
 import { expect, test } from '../support/fixtures';
 import { generateOutput } from '../support/flows';
@@ -32,14 +32,15 @@ async function openLoras(app: AppDriver) {
 	return {
 		loras,
 		row: (name: string) => loras.getByRole('listitem').filter({ has: app.page.getByRole('checkbox', { name, exact: true }) }),
-		weight: (name: string) => loras.getByRole('spinbutton', { name: `Weight of ${name}` }),
+		weight: (name: string) => loras.getByRole('spinbutton', { name: `Weight of ${name}`, exact: true }),
 		checkbox: (name: string) => loras.getByRole('checkbox', { name, exact: true }),
 	};
 }
 
-test('the LoRA list shows the selection with weights, the prompt link and the summary', async ({ app, page }, testInfo) => {
+test('the LoRA list shows the selection with weights and the prompt-linked mark', async ({ app, page }, testInfo) => {
 	const { loras, row, weight, checkbox } = await openLoras(app);
 
+	await expect(loras.getByRole('list', { name: 'LoRA library' })).toBeVisible();
 	await expect(checkbox(WATERCOLOR)).toBeChecked();
 	await expect(checkbox(DETAIL)).toBeChecked();
 	await expect(checkbox(LINEART)).not.toBeChecked();
@@ -47,12 +48,8 @@ test('the LoRA list shows the selection with weights, the prompt link and the su
 	await expect(weight(DETAIL)).toHaveValue('-0.5');
 	await expect(weight(LINEART)).toHaveCount(0);
 	await expect(row(LINEART).getByText('Prompt-linked')).toBeVisible();
-	await expect(row(LINEART).getByRole('button', { name: `Remove prompt links to ${LINEART}` })).toBeVisible();
 	await expect(row(WATERCOLOR).getByText('Prompt-linked')).toHaveCount(0);
-	await expect(loras.getByText('Default selected: 2 · Prompt-linked: 1 · Possible active: 3')).toBeVisible();
-	for (const text of [row(LINEART).getByText('Prompt-linked'), loras.getByText(/^Default selected:/)]) {
-		expect(await textContrast(text)).toBeGreaterThanOrEqual(MIN_TEXT_CONTRAST);
-	}
+	expect(await textContrast(row(LINEART).getByText('Prompt-linked'))).toBeGreaterThanOrEqual(MIN_TEXT_CONTRAST);
 
 	// One column per kind of control: the weight fields and the delete buttons line up whatever the name lengths.
 	const lefts = async (locators: ReturnType<typeof row>[], role: 'spinbutton' | 'button', name: RegExp) =>
@@ -65,13 +62,29 @@ test('the LoRA list shows the selection with weights, the prompt link and the su
 		await expectOnTop(row(name).getByRole('button', { name: /from the library$/ }));
 	}
 
-	await app.parkPointer();
+	await app.parkPointer({ blur: true });
 	await assertAppVisible(page);
-	await saveScreenshot(app.pane('Generation'), testInfo, 'loras');
-	await expectBaseline(app.pane('Generation'), 'loras-section.png');
+	await saveScreenshot(loras, testInfo, 'loras');
+	await expectBaseline(loras, 'loras-section.png');
 });
 
-test('weights are typed, stepped and clamped to -10..10, and persisted', async ({ app, page, backend }) => {
+test('More options: the prompt link summary, and unlinking sharp_lineart drops its mark', async ({ app }, testInfo) => {
+	const { row } = await openLoras(app);
+	const generation = await openMoreOptions(app);
+	const linked = generation.getByRole('group', { name: 'Prompt-linked LoRAs' });
+	await expect(linked.getByText('Default selected: 2 · Prompt-linked: 1 · Possible active: 3')).toBeVisible();
+	await expect(linked.getByRole('listitem')).toHaveText([LINEART]);
+	await app.parkPointer({ blur: true });
+	await saveScreenshot(linked, testInfo, 'prompt-linked-loras');
+
+	await linked.getByRole('button', { name: `Remove prompt links to ${LINEART}`, exact: true }).click();
+
+	await expect(row(LINEART).getByText('Prompt-linked')).toHaveCount(0);
+	await expect(linked.getByText('Default selected: 2 · Prompt-linked: 0 · Possible active: 2')).toBeVisible();
+	await expect(linked.getByText('No sub-prompt pulls in a LoRA.')).toBeVisible();
+});
+
+test('weights are typed, stepped and clamped to -10..10, and persisted', async ({ app, backend }) => {
 	const { weight } = await openLoras(app);
 	const field = weight(WATERCOLOR);
 
@@ -103,23 +116,25 @@ test('weights are typed, stepped and clamped to -10..10, and persisted', async (
 	await field.press('Enter');
 	await expect(field).toHaveValue('-10');
 	await expect.poll(() => persistedSelection(backend)).toContainEqual({ id: 'watercolor-wash-safetensors', weight: -10 });
-	await expect(page.getByRole('spinbutton', { name: `Weight of ${DETAIL}` })).toHaveValue('-0.5');
+	await expect(weight(DETAIL)).toHaveValue('-0.5');
+	// The command bar's LoRA popover shows the same weight.
+	await app.commandBar().getByRole('button', { name: 'LoRAs: 2 LoRAs', exact: true }).click();
+	await expect(app.page.getByRole('dialog', { name: 'LoRAs' }).getByRole('spinbutton', { name: `Weight of ${WATERCOLOR}`, exact: true })).toHaveValue('-10');
 });
 
 test('selecting and unselecting LoRAs shows and hides their weight; Clear unselects all', async ({ app, page, backend }, testInfo) => {
 	const { loras, weight, checkbox } = await openLoras(app);
 	const clear = loras.getByRole('button', { name: 'Clear' });
-	await app.parkPointer();
+	await app.parkPointer({ blur: true });
 	await expect(clear).toHaveCSS('color', await resolveColor(page, ACTION_COLORS.warning.subtleForeground));
 	expect(await textContrast(clear), 'contrast of the warning Clear').toBeGreaterThanOrEqual(MIN_TEXT_CONTRAST);
 
 	await checkbox(LINEART).check();
 	await expect(weight(LINEART)).toHaveValue('1');
-	await expect(loras.getByText('Default selected: 3 · Prompt-linked: 1 · Possible active: 3')).toBeVisible();
+	await expect(app.commandBar().getByRole('button', { name: 'LoRAs: 3 LoRAs', exact: true })).toBeVisible();
 
 	await checkbox(WATERCOLOR).uncheck();
 	await expect(weight(WATERCOLOR)).toHaveCount(0);
-	await expect(loras.getByText('Default selected: 2 · Prompt-linked: 1 · Possible active: 2')).toBeVisible();
 	await expect
 		.poll(() => persistedSelection(backend))
 		.toEqual([
@@ -134,14 +149,14 @@ test('selecting and unselecting LoRAs shows and hides their weight; Clear unsele
 	}
 	await expect(loras.getByRole('spinbutton')).toHaveCount(0);
 	await expect(clear).toBeDisabled();
-	await app.parkPointer();
+	await app.parkPointer({ blur: true });
 	await expect(clear).not.toHaveCSS('color', await resolveColor(page, ACTION_COLORS.warning.subtleForeground));
-	await expect(loras.getByText('Default selected: 0 · Prompt-linked: 1 · Possible active: 1')).toBeVisible();
+	await expect(app.commandBar().getByRole('button', { name: 'LoRAs: No LoRAs', exact: true })).toBeVisible();
 	await expect.poll(() => persistedSelection(backend)).toEqual([]);
-	await saveScreenshot(app.pane('Generation'), testInfo, 'loras-cleared');
+	await saveScreenshot(loras, testInfo, 'loras-cleared');
 });
 
-test('a generation uses the weights: the Output browser lists them, and a reload keeps them', async ({ app, page, backend }) => {
+test('a generation uses the weights: the output details list them, and a reload keeps them', async ({ app, page, backend }) => {
 	const { weight } = await openLoras(app);
 	await weight(WATERCOLOR).fill('0.8');
 	await weight(WATERCOLOR).press('Enter');
@@ -159,25 +174,17 @@ test('a generation uses the weights: the Output browser lists them, and a reload
 	]);
 
 	await page.reload();
-	await expect(app.workspace()).toBeVisible({ timeout: 30_000 });
+	await app.open();
 	await scrollSectionIntoView(app, 'LoRAs');
 	await expect(sectionOf(app, 'LoRAs').getByRole('spinbutton', { name: `Weight of ${WATERCOLOR}` })).toHaveValue('0.8');
 	await expect(sectionOf(app, 'LoRAs').getByRole('spinbutton', { name: `Weight of ${DETAIL}` })).toHaveValue('-0.5');
 });
 
-test('removing the prompt link of sharp_lineart drops its mark', async ({ app }) => {
-	const { loras, row } = await openLoras(app);
+test('Add LoRA files in a browser explains that it needs the desktop app', async ({ app, page }) => {
+	await app.open();
+	const generation = await openMoreOptions(app);
 
-	await row(LINEART).getByRole('button', { name: `Remove prompt links to ${LINEART}` }).click();
-
-	await expect(row(LINEART).getByText('Prompt-linked')).toHaveCount(0);
-	await expect(loras.getByText('Default selected: 2 · Prompt-linked: 0 · Possible active: 2')).toBeVisible();
-});
-
-test('Add files in a browser explains that it needs the desktop app', async ({ app, page }) => {
-	const { loras } = await openLoras(app);
-
-	await loras.getByRole('button', { name: 'Add files' }).click();
+	await generation.getByRole('button', { name: 'Add LoRA files', exact: true }).click();
 
 	await expect(notifications(page).getByText(/need the desktop app/)).toBeVisible();
 });
@@ -195,7 +202,7 @@ test('a long LoRA name is truncated with an ellipsis and shown in full in a tool
 	state.selectedLoras.push({ id: 'long-name', weight: 1.25 });
 	await backend.reset({ files: storeFile(STORE_NAMES.library, state, library.version) });
 
-	const { row, weight } = await openLoras(app);
+	const { loras, row, weight } = await openLoras(app);
 	const label = row(longName).getByText(longName, { exact: true });
 	const truncated = await label.evaluate((element) => element.scrollWidth > element.clientWidth);
 	expect(truncated, 'the long name is truncated').toBe(true);
@@ -206,5 +213,5 @@ test('a long LoRA name is truncated with an ellipsis and shown in full in a tool
 	await label.hover();
 	await expect(page.getByRole('tooltip')).toHaveText(longName);
 	await assertAppVisible(page, { allowOverlays: true });
-	await saveScreenshot(app.pane('Generation'), testInfo, 'loras-long-name');
+	await saveScreenshot(loras, testInfo, 'loras-long-name');
 });

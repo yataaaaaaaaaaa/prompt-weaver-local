@@ -1,11 +1,13 @@
 import { act, screen } from '@testing-library/react';
 import { describe, expect, it } from 'vitest';
-import type { GenerationTaskEvent } from '../../api/types';
+import type { GenerationTaskEvent, ModelSpec } from '../../api/types';
 import { GENERATION_FAILED_TITLE } from '../../stores/generationStore';
-import { useOutputsStore } from '../../stores/outputsStore';
+import { useLibraryStore } from '../../stores/libraryStore';
 import { useTasksStore } from '../../stores/tasksStore';
 import { renderWithProviders } from '../../test/render';
-import { GenerationProgress } from './GenerationProgress';
+import { GenerationProgress, IDLE_MESSAGES } from './GenerationProgress';
+
+const MODEL: ModelSpec = { id: 'm1', name: 'Model One', path: 'C:/models/one.safetensors', default_width: 1024, default_height: 1024, torch_dtype: 'float16', source: null };
 
 function publish(overrides: Partial<GenerationTaskEvent>): void {
 	act(() =>
@@ -22,23 +24,46 @@ function outcome(container: HTMLElement): string | null {
 }
 
 describe('GenerationProgress', () => {
-	it('shows Idle and an empty bar without progress or output', () => {
+	it('says it is ready, with an empty bar, when a checkpoint is selected and nothing ran yet', () => {
+		useLibraryStore.setState({ models: [MODEL], selectedModelId: MODEL.id });
 		const { container } = renderWithProviders(<GenerationProgress />);
 
-		expect(screen.getByText('Idle')).toBeInTheDocument();
+		expect(screen.getByText(IDLE_MESSAGES.ready)).toBeInTheDocument();
 		expect(bar()).toHaveAttribute('aria-valuenow', '0');
 		expect(outcome(container)).toBe('idle');
 	});
 
-	it('names the viewed output when idle', () => {
-		useOutputsStore.setState({ currentId: '0000000042' });
+	it('names what is missing when no checkpoint is selected', () => {
 		renderWithProviders(<GenerationProgress />);
 
-		expect(screen.getByText('Viewing output #0000000042')).toBeInTheDocument();
+		expect(screen.getByText(IDLE_MESSAGES.noModel)).toBeInTheDocument();
+	});
+
+	it("replaces the backend's idle message by its own", () => {
+		useLibraryStore.setState({ models: [MODEL], selectedModelId: MODEL.id });
+		renderWithProviders(<GenerationProgress />);
+		publish({ stage: 'idle', message: 'Idle' });
+
+		expect(screen.getByText(IDLE_MESSAGES.ready)).toBeInTheDocument();
+		expect(screen.queryByText('Idle')).not.toBeInTheDocument();
+	});
+
+	it('compact: the colored bar and the step count, the message as the value text', () => {
+		const { container } = renderWithProviders(<GenerationProgress compact />);
+		publish({ stage: 'sampling', message: 'Sampling step 3/12', current: 3, total: 12 });
+
+		expect(screen.queryByText('Sampling step 3/12')).not.toBeInTheDocument();
+		expect(bar()).toHaveAttribute('aria-valuetext', 'Sampling step 3/12');
+		expect(screen.getByText('3/12')).toBeInTheDocument();
+		expect(outcome(container)).toBe('running');
+
+		publish({ stage: 'error', message: 'CUDA out of memory' });
+		expect(outcome(container)).toBe('error');
+		expect(bar()).toHaveAttribute('aria-valuetext', GENERATION_FAILED_TITLE);
+		expect(screen.queryByText('CUDA out of memory')).not.toBeInTheDocument();
 	});
 
 	it('shows the step message, the step count and the ratio while sampling', () => {
-		useOutputsStore.setState({ currentId: '0000000042' });
 		const { container } = renderWithProviders(<GenerationProgress />);
 		publish({ stage: 'sampling', message: 'Sampling step 3/12', current: 3, total: 12 });
 

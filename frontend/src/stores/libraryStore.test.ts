@@ -14,12 +14,16 @@ import {
 	LIBRARY_STORE_VERSION,
 	migrateLibraryState,
 	selectIsEntrySelected,
+	selectLoraName,
 	selectModelName,
+	selectSelectedLoraCount,
 	selectSelectedLoras,
 	selectSelectedModel,
 	useLibraryStore,
 	useLoraRows,
 	useLoraSummary,
+	usePromptLinkedLoras,
+	useSelectedLoraRows,
 } from './libraryStore';
 import { useNotificationsStore } from './notificationsStore';
 
@@ -79,6 +83,12 @@ describe('selection actions', () => {
 		expect(selectSelectedModel(store())).toBeNull();
 		expect(selectModelName('unknown')(store())).toBe('unknown');
 		expect(selectModelName(MODEL.id)(store())).toBe(MODEL.name);
+	});
+
+	it('names a LoRA by its library name, else by its id', () => {
+		store().replaceAll({ loras: [SHION] });
+		expect(selectLoraName(SHION.id)(store())).toBe(SHION.name);
+		expect(selectLoraName('gone')(store())).toBe('gone');
 	});
 
 	it('toggles LoRAs at the default weight and clears the selection', () => {
@@ -294,6 +304,40 @@ describe('hooks', () => {
 
 		act(() => store().setLoraWeight('shion', 1.5));
 		expect(result.current.rows[0]).toMatchObject({ selected: true, weight: 1.5 });
+	});
+});
+
+describe('selected and prompt-linked LoRAs', () => {
+	it('lists the selected LoRAs in selection order with their weights, and counts them', () => {
+		store().replaceAll({ loras: [SHION, STYLE], selectedLoras: [at('style', -0.5), at('shion', 0.6)] });
+
+		const { result } = renderHook(() => useSelectedLoraRows());
+
+		expect(result.current).toEqual([
+			{ lora: STYLE, weight: -0.5 },
+			{ lora: SHION, weight: 0.6 },
+		]);
+		expect(selectSelectedLoraCount(store())).toBe(2);
+		const before = result.current;
+		act(() => useCategoriesStore.setState({ categories: [linkedCategory(['style'])] }));
+		expect(result.current, 'stable while the selection and the library are unchanged').toBe(before);
+
+		act(() => store().setLoraWeight('shion', 1.25));
+		expect(result.current[1]).toEqual({ lora: SHION, weight: 1.25 });
+		act(() => store().clearSelectedLoras());
+		expect(result.current).toEqual([]);
+		expect(selectSelectedLoraCount(store())).toBe(0);
+	});
+
+	it('lists the library LoRAs a sub-prompt pulls in (unknown linked ids ignored)', () => {
+		store().replaceAll({ loras: [SHION, STYLE], selectedLoras: [] });
+		useCategoriesStore.setState({ categories: [linkedCategory(['style', 'deleted'])] });
+
+		const { result } = renderHook(() => usePromptLinkedLoras());
+
+		expect(result.current).toEqual([STYLE]);
+		act(() => useCategoriesStore.getState().unlinkLora('style'));
+		expect(result.current).toEqual([]);
 	});
 });
 

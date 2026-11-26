@@ -3,10 +3,12 @@
 import { GENERATION_DEFAULTS, LORA_WEIGHT_DEFAULTS } from '../api/defaults.gen';
 import type { InstalledModel, LoraWeight, LoRASpec, ModelKind, ModelSource, ModelSpec, TorchDType } from '../api/types';
 import { isRecord, positiveNumberOr, stringOr } from './guards';
-import type { Size } from './layout';
 import { filterKnownLoras, loraAtDefaultWeight } from './loraSelection';
 import { basename, stripExtension } from './paths';
 import { uniqueKey, uniqueStrings } from './text';
+
+/** A picture size in pixels (default generation size of a new model entry). */
+export type ImageSize = { width: number; height: number };
 
 /** Persisted format of the 'library-store' (version 2). Version 1 held the LoRA selection as `selectedLoraIds:
  *  string[]` (every LoRA at the default weight); version 0 = version 1 without `source` on entries. */
@@ -32,7 +34,7 @@ function samePath(left: string, right: string): boolean {
 /** Adds a model for a checkpoint file or a Diffusers folder (an entry with the same path is reused).
  *  id = unique key of the file name (legacy ids: 'JANKUV5NSFWTrainedNoobai_v50.safetensors' ->
  *  'jankuv5nsfwtrainednoobai-v50-safetensors'). */
-export function addModelPath(models: ModelSpec[], path: string, defaultSize: Size): { models: ModelSpec[]; modelId: string } {
+export function addModelPath(models: ModelSpec[], path: string, defaultSize: ImageSize): { models: ModelSpec[]; modelId: string } {
 	const existing = models.find((model) => samePath(model.path, path));
 	if (existing) {
 		return { models, modelId: existing.id };
@@ -159,7 +161,7 @@ function registerIn<T extends LibraryEntry>(
 export function registerInstalledEntry(
 	library: Pick<LibraryData, 'models' | 'loras'>,
 	installed: InstalledModel,
-	defaultSize: Size,
+	defaultSize: ImageSize,
 ): Pick<LibraryData, 'models' | 'loras'> & { entryId: string | null } {
 	const { models, loras } = library;
 	if (installed.kind === 'embedding') {

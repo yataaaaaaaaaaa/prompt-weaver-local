@@ -14,11 +14,11 @@ import {
 	lorasFromLegacyIds,
 	registerInstalledEntry,
 	sanitizeLibrary,
+	type ImageSize,
 	type LibraryData,
 	type LibraryEntryKind,
 } from '../domain/library';
 import { addLorasToSelection, filterKnownLoras, resolveLoraSelection, withLoraWeight } from '../domain/loraSelection';
-import type { Size } from '../domain/layout';
 import { dirname } from '../domain/paths';
 import { persistedStoreOptions } from '../persistence/persist';
 import { STORE_NAMES } from '../persistence/storeNames';
@@ -95,7 +95,7 @@ export function migrateLibraryState(persisted: unknown, version: number): Librar
 }
 
 /** Default size of new checkpoint entries: the current generation size. */
-function currentGenerationSize(): Size {
+function currentGenerationSize(): ImageSize {
 	const { width, height } = useGenerationSettingsStore.getState();
 	return { width, height };
 }
@@ -238,11 +238,22 @@ export const useLibraryStore = create<LibraryStore>()(
  *  The stored array itself: a stable reference until the selection changes. */
 export const selectSelectedLoras = (state: LibraryState): LoraWeight[] => state.selectedLoras;
 
+/** How many LoRAs are selected for generation (the Create command bar's 'N LoRAs'). */
+export const selectSelectedLoraCount = (state: LibraryState): number => state.selectedLoras.length;
+
 export const selectSelectedModel = (state: LibraryState): ModelSpec | null =>
 	state.models.find((model) => model.id === state.selectedModelId) ?? null;
 
 export const selectModelName = (modelId: string) => (state: LibraryState): string =>
 	state.models.find((model) => model.id === modelId)?.name ?? modelId;
+
+/** Display name of a LoRA: its library name, or its id when it is no longer in the library (a character's LoRAs). */
+export const selectLoraName = (loraId: string) => (state: LibraryState): string =>
+	state.loras.find((lora) => lora.id === loraId)?.name ?? loraId;
+
+export function useLoraName(loraId: string): string {
+	return useLibraryStore(useMemo(() => selectLoraName(loraId), [loraId]));
+}
 
 /** True when the library entry is selected for generation: the selected checkpoint, or one of the selected LoRAs
  *  (false without an entry id or for kinds without library entries). */
@@ -285,6 +296,34 @@ export function useLoraRows(): LoraRow[] {
 			return { lora, selected: weight !== null, weight, promptLinked: linked.has(lora.id) };
 		});
 	}, [loras, selectedLoras, linkedLoraIds]);
+}
+
+export type SelectedLoraRow = {
+	lora: LoRASpec;
+	weight: number;
+};
+
+/** The selected LoRAs with their library entry and weight, in selection order (the command bar's LoRA list). */
+export function useSelectedLoraRows(): SelectedLoraRow[] {
+	const loras = useLibraryStore((state) => state.loras);
+	const selectedLoras = useLibraryStore(selectSelectedLoras);
+	return useMemo(() => {
+		const byId = new Map(loras.map((lora) => [lora.id, lora]));
+		return selectedLoras.flatMap(({ id, weight }) => {
+			const lora = byId.get(id);
+			return lora ? [{ lora, weight }] : [];
+		});
+	}, [loras, selectedLoras]);
+}
+
+/** The library LoRAs some sub-prompt pulls in (extraLoraIds), in library order (the prompt link details). */
+export function usePromptLinkedLoras(): LoRASpec[] {
+	const loras = useLibraryStore((state) => state.loras);
+	const linkedLoraIds = usePromptLinkedLoraIds();
+	return useMemo(() => {
+		const linked = new Set(linkedLoraIds);
+		return loras.filter((lora) => linked.has(lora.id));
+	}, [loras, linkedLoraIds]);
 }
 
 export type LoraSummary = {
