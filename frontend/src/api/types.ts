@@ -47,7 +47,7 @@ export type GenerateRequest = Schemas['GenerateRequest'];
 export type OutputCharacter = Schemas['OutputCharacter'];
 export type OutputReference = Schemas['OutputReference'];
 
-// Background tasks (WebSocket /ws/tasks)
+// Background tasks (WebSocket /ws/tasks; the co-writer's CodexEvent messages come over the same socket)
 export type GenerationTaskEvent = Schemas['GenerationTaskEvent'];
 export type DownloadTaskEvent = Schemas['DownloadTaskEvent'];
 export type TaskSnapshot = Schemas['TaskSnapshot'];
@@ -124,6 +124,27 @@ export type ScenePatch = Schemas['ScenePatch'];
 export type StoryLink = Schemas['StoryLink'];
 /** The story scene an output was generated for (OutputRecord.story). */
 export type OutputStory = Schemas['OutputStory'];
+
+// Co-writer (the user's Codex, backend app/routers/codex.py; its events come over /ws/tasks)
+export type CodexStatus = Schemas['CodexStatus'];
+export type CodexState = CodexStatus['state'];
+export type CodexModelOption = Schemas['CodexModelOption'];
+/** Only the fields sent change; null clears (auto-detect, the default model). */
+export type CodexSettingsUpdate = Schemas['CodexSettingsUpdate'];
+export type CodexConversation = Schemas['CodexConversation'];
+export type CodexEntry = Schemas['CodexEntry'];
+export type CodexEntryKind = CodexEntry['kind'];
+export type CodexEntryStatus = CodexEntry['status'];
+export type CodexTurnRequest = Schemas['CodexTurnRequest'];
+export type CodexToolResult = Schemas['CodexToolResult'];
+/** A WebSocket message of the co-writer (discriminated by `kind`). */
+export type CodexEvent = Schemas['CodexEvent'];
+export type CodexEventKind = CodexEvent['kind'];
+/** A tool call for this window to run (discriminated by `tool`; its `arguments` are validated by the backend). */
+export type CodexToolCall = Schemas['CodexToolCallEvent']['call'];
+export type CodexToolName = CodexToolCall['tool'];
+/** The arguments of one tool. */
+export type CodexToolArguments<T extends CodexToolName> = Extract<CodexToolCall, { tool: T }>['arguments'];
 
 // Persisted stores / bootstrap
 export type PersistedStoreEnvelope = Schemas['PersistedStoreEnvelope-Output'];

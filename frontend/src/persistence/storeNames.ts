@@ -14,6 +14,8 @@ export const STORE_NAMES = {
 	/** The prompt board (category card order, collapsed cards). Derived once from the legacy floating workspace
 	 *  (window positions: top-to-bottom, left-to-right) when absent. */
 	board: 'board-store',
+	/** The Story section's layout (whether its dock, the co-writer panel, is collapsed). */
+	story: 'story-store',
 } as const;
 
 /** Stores of older versions; only read by legacy migrations, never written (they stay untouched on disk). */

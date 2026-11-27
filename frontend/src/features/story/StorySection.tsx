@@ -5,8 +5,8 @@
 //   settings and its scene cards) and the detail panel 'Scene details' (SceneDetail: the selected scene's picture,
 //   text and prompt);
 // - read mode (Read): the results 'Reader' (StoryReader: one scene per page), no list nor detail panel;
-// - in both: the dock, when a panel is registered in STORY_DOCK_PANELS (src/features/story/storyDock.ts), e.g. a
-//   co-writer chat panel; `dock` overrides the registry (tests).
+// - in both: the dock, when a panel is registered in STORY_DOCK_PANELS (src/features/story/storyDock.ts): the co-writer;
+//   `dock` overrides the registry (tests). It collapses to a strip (the story store's dockCollapsed).
 // Thin views over the story store.
 import { makeStyles } from '@fluentui/react-components';
 import { useStoryStore } from '../../stores/storyStore';
@@ -34,8 +34,10 @@ export type StorySectionProps = {
 export function StorySection({ dock = STORY_DOCK_PANELS[0] ?? null }: StorySectionProps): JSX.Element {
 	const styles = useStyles();
 	const reading = useStoryStore((state) => state.reader !== null && state.selectedStoryId !== null);
+	const dockCollapsed = useStoryStore((state) => state.dockCollapsed);
+	const setDockCollapsed = useStoryStore((state) => state.setDockCollapsed);
 	const Dock = dock?.component ?? null;
-	const dockProps = Dock ? { dock: <Dock />, dockLabel: dock?.label } : {};
+	const dockProps = Dock ? { dock: <Dock />, dockLabel: dock?.label, dockCollapsed, onExpandDock: () => setDockCollapsed(false) } : {};
 	return (
 		<div className={styles.root}>
 			{reading ? (

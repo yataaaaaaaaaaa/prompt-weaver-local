@@ -8,6 +8,7 @@ import { BOB, BOB_ID, characterCollection } from '../test/characterData';
 import { story, storyCollection } from '../test/storyData';
 import { useCategoriesStore } from './categoriesStore';
 import { useCharactersStore } from './charactersStore';
+import { useCodexStore } from './codexStore';
 import { useForbiddenRulesStore } from './forbiddenRulesStore';
 import { useGenerationSettingsStore, type GenerationSettingsState } from './generationSettingsStore';
 import { useLibraryStore, type LibraryState } from './libraryStore';
@@ -159,6 +160,12 @@ describe('sessionStore.start', () => {
 		expect(spies.board).toHaveBeenCalledWith(legacyWorkspace);
 		expect(useOutputsStore.getState()).toMatchObject({ ids: payload().output_ids, currentId: '0000000002' });
 		expect(spies.connect).toHaveBeenCalledTimes(1);
+		// The socket's co-writer events go to the co-writer store.
+		const applyEvent = vi.fn();
+		useCodexStore.setState({ applyEvent });
+		const event = { type: 'codex', kind: 'delta', conversation_id: 'cnv-000000000001', entry_id: 'a', delta: 'Hi' } as const;
+		spies.connect.mock.calls[0][0].onCodexEvent(event);
+		expect(applyEvent).toHaveBeenCalledWith(event);
 	});
 
 	it('does not seed stores that were already persisted, nor the layout and board when a legacy layout store exists', async () => {

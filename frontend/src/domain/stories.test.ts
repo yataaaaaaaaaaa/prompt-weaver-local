@@ -18,6 +18,7 @@ import {
 	sceneIllustrationId,
 	sceneLockOptions,
 	sceneOrderAfterDrop,
+	sceneOrderWithSceneAt,
 	sceneOrderAfterMove,
 	scenePinnedCategories,
 	sceneStatus,
@@ -265,6 +266,14 @@ describe('scene order', () => {
 	it('drops next to another scene', () => {
 		expect(sceneOrderAfterDrop(ids, 'a', 'c', 'after')).toEqual(['b', 'c', 'a']);
 		expect(sceneOrderAfterDrop(ids, 'a', 'b', 'before')).toBeNull();
+	});
+
+	it('puts a scene at a 1-based position (the co-writer), clamped to the story', () => {
+		expect(sceneOrderWithSceneAt(ids, 'c', 1)).toEqual(['c', 'a', 'b']);
+		expect(sceneOrderWithSceneAt(ids, 'a', 2)).toEqual(['b', 'a', 'c']);
+		expect(sceneOrderWithSceneAt(ids, 'a', 99)).toEqual(['b', 'c', 'a']);
+		expect(sceneOrderWithSceneAt(ids, 'b', 2)).toBeNull();
+		expect(sceneOrderWithSceneAt(ids, 'x', 1)).toBeNull();
 	});
 });
 

@@ -1,9 +1,12 @@
-// Background tasks store: latest TaskEvent per task, fed by the /ws/tasks socket (src/api/taskSocket.ts).
-// Generation progress and download progress are read from here. Not persisted.
+// Background tasks store: latest TaskEvent per task, fed by the /ws/tasks socket (src/api/taskSocket.ts), which it owns.
+// Generation progress and download progress are read from here. The socket names this window (CLIENT_ID) and also
+// carries the co-writer's events, handed to the `onCodexEvent` of connect (the session store passes the co-writer
+// store's applyEvent: this store imports no other store, generationStore subscribes to it at load). Not persisted.
 import { useMemo } from 'react';
 import { create } from 'zustand';
+import { CLIENT_ID } from '../api/clientId';
 import { connectTaskSocket } from '../api/taskSocket';
-import type { DownloadStage, DownloadTaskEvent, GenerationStage, GenerationTaskEvent, TaskEvent } from '../api/types';
+import type { CodexEvent, DownloadStage, DownloadTaskEvent, GenerationStage, GenerationTaskEvent, TaskEvent } from '../api/types';
 
 export type TasksState = {
 	/** Latest event per task_id. */
@@ -12,8 +15,9 @@ export type TasksState = {
 };
 
 export type TasksActions = {
-	/** Opens the socket (idempotent); reconnects automatically until disconnect(). */
-	connect: () => void;
+	/** Opens the socket (idempotent); reconnects automatically until disconnect(). `onCodexEvent` receives the
+	 *  co-writer's events. */
+	connect: (handlers?: { onCodexEvent?: (event: CodexEvent) => void }) => void;
 	disconnect: () => void;
 	applyEvent: (event: TaskEvent) => void;
 	/** Resolves with the first terminal event (stage complete | error | cancelled) of `taskId`: immediately when the
@@ -30,14 +34,18 @@ let closeSocket: (() => void) | null = null;
 export const useTasksStore = create<TasksStore>()((set, get) => ({
 	events: {},
 	connected: false,
-	connect: () => {
+	connect: ({ onCodexEvent } = {}) => {
 		if (closeSocket) {
 			return;
 		}
-		closeSocket = connectTaskSocket({
-			onEvent: (event) => get().applyEvent(event),
-			onConnectionChange: (connected) => set({ connected }),
-		});
+		closeSocket = connectTaskSocket(
+			{
+				onEvent: (event) => get().applyEvent(event),
+				onCodexEvent,
+				onConnectionChange: (connected) => set({ connected }),
+			},
+			{ clientId: CLIENT_ID },
+		);
 	},
 	disconnect: () => {
 		const close = closeSocket;

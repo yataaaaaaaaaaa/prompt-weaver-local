@@ -12,6 +12,11 @@ import type {
 	CharacterCreateRequest,
 	CharacterDraft,
 	CharacterImageSource,
+	CodexConversation,
+	CodexSettingsUpdate,
+	CodexStatus,
+	CodexToolResult,
+	CodexTurnRequest,
 	FavoriteImage,
 	GenerateRequest,
 	ImageSearchPage,
@@ -206,6 +211,25 @@ export const api = {
 				params: { path: { story_id: storyId, scene_id: sceneId, output_id: outputId } },
 			}),
 		),
+
+	// Co-writer (backend app/routers/codex.py). Answers stream over /ws/tasks (CodexEvent).
+	/** Whether Codex can work (found, signed in); `refresh` (Retry) looks for it again. */
+	codexStatus: (refresh = false): Promise<CodexStatus> => unwrap(http.GET('/api/codex/status', { params: { query: { refresh } } })),
+	/** Only the fields sent change (path: null = auto-detect; model: null = the user's default). */
+	updateCodexSettings: (update: CodexSettingsUpdate): Promise<CodexStatus> => unwrap(http.PUT('/api/codex/settings', { body: update })),
+	/** The conversation of a story (null: the draft conversation). */
+	codexConversation: (storyId: string | null): Promise<CodexConversation> =>
+		unwrap(http.GET('/api/codex/conversation', { params: { query: { story_id: storyId ?? undefined } } })),
+	/** New conversation for a story (null: the draft). */
+	resetCodexConversation: (storyId: string | null): Promise<CodexConversation> =>
+		unwrap(http.POST('/api/codex/conversation/reset', { body: { story_id: storyId } })),
+	sendCodexMessage: (request: CodexTurnRequest): Promise<CodexConversation> => unwrap(http.POST('/api/codex/turns', { body: request })),
+	interruptCodex: (conversationId: string): Promise<CodexConversation> =>
+		unwrap(http.POST('/api/codex/conversations/{conversation_id}/interrupt', { params: { path: { conversation_id: conversationId } } })),
+	/** The result of a tool call this window ran (404 when the call is already over). */
+	sendCodexToolResult: async (callId: string, result: CodexToolResult): Promise<void> => {
+		await unwrap(http.POST('/api/codex/tool-calls/{call_id}/result', { params: { path: { call_id: callId } }, body: result }));
+	},
 };
 
 export type Api = typeof api;

@@ -1,7 +1,8 @@
 import { screen } from '@testing-library/react';
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 import { F6_REGION_ATTRIBUTE } from '../app/sections';
 import { renderWithProviders } from '../test/render';
+import { EXPAND_DOCK_ATTRIBUTE, expandDockLabel } from './dockLabels';
 import { SectionLayout } from './SectionLayout';
 
 describe('SectionLayout', () => {
@@ -74,5 +75,40 @@ describe('SectionLayout', () => {
 		expect(screen.getByRole('region', { name: 'Reader' })).toBeInTheDocument();
 		expect(screen.queryByRole('complementary')).not.toBeInTheDocument();
 		expect(screen.queryByRole('navigation')).not.toBeInTheDocument();
+	});
+});
+
+describe('SectionLayout dock', () => {
+	function Layout({ collapsed, onExpand }: { collapsed: boolean; onExpand: () => void }) {
+		return (
+			<SectionLayout
+				title="Story"
+				results={<p>Scenes</p>}
+				resultsLabel="Scenes"
+				dock={<button type="button">Collapse helper</button>}
+				dockLabel="Helper"
+				dockCollapsed={collapsed}
+				onExpandDock={onExpand}
+			/>
+		);
+	}
+
+	it('collapses to a strip with Expand, moving the focus there and back', async () => {
+		const onExpand = vi.fn();
+		const { rerender, user } = renderWithProviders(<Layout collapsed={false} onExpand={onExpand} />);
+		const dock = screen.getByRole('complementary', { name: 'Helper' });
+		screen.getByRole('button', { name: 'Collapse helper' }).focus();
+
+		rerender(<Layout collapsed onExpand={onExpand} />);
+		const expand = screen.getByRole('button', { name: expandDockLabel('Helper') });
+		expect(expand).toHaveFocus();
+		expect(expand).toHaveAttribute(EXPAND_DOCK_ATTRIBUTE);
+		expect(screen.queryByRole('button', { name: 'Collapse helper' })).not.toBeInTheDocument();
+		await user.click(expand);
+		expect(onExpand).toHaveBeenCalledTimes(1);
+
+		rerender(<Layout collapsed={false} onExpand={onExpand} />);
+		expect(dock).toHaveFocus();
+		expect(screen.getByRole('button', { name: 'Collapse helper' })).toBeVisible();
 	});
 });

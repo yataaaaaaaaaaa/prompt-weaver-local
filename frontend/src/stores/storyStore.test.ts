@@ -4,6 +4,8 @@ import { api, ApiError } from '../api/client';
 import type { ModelSpec, OutputRecord, ScenePatch, Story } from '../api/types';
 import type { Category } from '../domain/categories';
 import type { SceneGenerationInput } from '../domain/stories';
+import { flushPersistence } from '../persistence/persist';
+import { createMemoryStoreBackend, setStoreBackend } from '../persistence/storeBackend';
 import { desktop } from '../services/desktop';
 import { download } from '../services/download';
 import { ALICE_ID, BOB, BOB_ID, character, outputCharacter } from '../test/characterData';
@@ -495,5 +497,28 @@ describe('hand-offs', () => {
 		await stories().addSceneFromOutput(STORY_ID);
 
 		expect(notifications()).toEqual([{ intent: 'success', title: null, message: 'Scene 4 was added to The lighthouse.', action: null }]);
+	});
+});
+
+describe('the dock', () => {
+	it("keeps the dock's collapse in story-store (version 0), and only that", async () => {
+		const memory = createMemoryStoreBackend({ 'story-store': { state: { dockCollapsed: true }, version: 0 } });
+		setStoreBackend(memory);
+
+		await useStoryStore.persist.rehydrate();
+		expect(stories().dockCollapsed).toBe(true);
+		stories().setDockCollapsed(false);
+		await flushPersistence();
+
+		expect(memory.snapshot()['story-store']).toEqual({ state: { dockCollapsed: false }, version: 0 });
+	});
+
+	it('starts expanded, and ignores a saved value of another shape', async () => {
+		setStoreBackend(createMemoryStoreBackend({ 'story-store': { state: { dockCollapsed: 'yes' }, version: 0 } }));
+		expect(stories().dockCollapsed).toBe(false);
+
+		await useStoryStore.persist.rehydrate();
+
+		expect(stories().dockCollapsed).toBe(false);
 	});
 });

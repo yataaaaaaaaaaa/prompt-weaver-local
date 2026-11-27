@@ -1,5 +1,6 @@
 import { act, fireEvent, screen, within } from '@testing-library/react';
-import { beforeEach, describe, expect, it } from 'vitest';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { api } from '../../api/client';
 import { F6_REGION_ATTRIBUTE } from '../../app/sections';
 import type { ModelSpec } from '../../api/types';
 import { useCategoriesStore } from '../../stores/categoriesStore';
@@ -9,10 +10,12 @@ import { useNavigationStore } from '../../stores/navigationStore';
 import { useOutputsStore } from '../../stores/outputsStore';
 import { useStoryStore } from '../../stores/storyStore';
 import { ALICE_ID, BOB, BOB_ID, character } from '../../test/characterData';
+import { codexStatus, conversation } from '../../test/codexData';
 import { openDialog } from '../../test/dialogs';
 import { renderWithProviders } from '../../test/render';
 import { scene, SCENE_IDS, story, STORY_ID, OTHER_STORY_ID } from '../../test/storyData';
 import { seedStoryActions } from '../../test/storyStores';
+import { CO_WRITER_LABELS } from '../coWriter/coWriterLabels';
 import { StorySection } from './StorySection';
 import { STORY_LABELS } from './storyLabels';
 
@@ -27,6 +30,9 @@ beforeEach(() => {
 	useCharactersStore.setState({ characters: [ALICE, BOB], loadStatus: 'ready' });
 	useOutputsStore.setState({ ids: ['0000000001', '0000000002', '0000000003'], currentId: '0000000003' });
 	useLibraryStore.setState({ models: [MODEL], selectedModelId: MODEL.id });
+	// The co-writer dock reads the status of Codex and the story's conversation.
+	vi.spyOn(api, 'codexStatus').mockResolvedValue(codexStatus());
+	vi.spyOn(api, 'codexConversation').mockImplementation(async (storyId) => conversation({ story_ids: storyId ? [storyId] : [], draft: storyId === null }));
 });
 
 function renderSection(state: Partial<ReturnType<typeof useStoryStore.getState>> = {}) {
@@ -59,11 +65,12 @@ describe('StorySection layout', () => {
 		expect(within(details()).getByText('No scene selected')).toBeInTheDocument();
 	});
 
-	it('marks its header, story list, scenes and details as F6 regions, in that order', () => {
+	it('marks its header, story list, scenes, details and the co-writer dock as F6 regions, in that order', () => {
 		const { container } = renderSection();
 
 		const regions = Array.from(container.querySelectorAll(`[${F6_REGION_ATTRIBUTE}]`)).map((element) => element.getAttribute(F6_REGION_ATTRIBUTE));
-		expect(regions).toEqual(['toolbar', 'navigation', 'results', 'detail']);
+		expect(regions).toEqual(['toolbar', 'navigation', 'results', 'detail', 'dock']);
+		expect(screen.getByRole('complementary', { name: CO_WRITER_LABELS.panel })).toBeInTheDocument();
 	});
 
 	it('says how to start without stories, and offers New story', async () => {
@@ -94,11 +101,25 @@ describe('StorySection layout', () => {
 	});
 
 	it('plugs a dock panel into a docked region after the details', () => {
-		const { container } = renderWithProviders(<StorySection dock={{ label: 'Co-writer', component: () => <p>Chat</p> }} />);
+		const { container } = renderWithProviders(<StorySection dock={{ label: 'Helper', component: () => <p>Chat</p> }} />);
 
-		expect(screen.getByRole('complementary', { name: 'Co-writer' })).toHaveTextContent('Chat');
+		expect(screen.getByRole('complementary', { name: 'Helper' })).toHaveTextContent('Chat');
 		const regions = Array.from(container.querySelectorAll(`[${F6_REGION_ATTRIBUTE}]`)).map((element) => element.getAttribute(F6_REGION_ATTRIBUTE));
 		expect(regions[regions.length - 1]).toBe('dock');
+	});
+
+	it('collapses the dock to a strip and expands it again, the panel kept', async () => {
+		const { user } = renderWithProviders(<StorySection dock={{ label: 'Helper', component: () => <input aria-label="Helper input" defaultValue="draft" /> }} />);
+		const dock = screen.getByRole('complementary', { name: 'Helper' });
+
+		act(() => useStoryStore.getState().setDockCollapsed(true));
+		expect(dock).toHaveAttribute('data-collapsed', 'true');
+		expect(within(dock).queryByRole('textbox', { name: 'Helper input' })).not.toBeInTheDocument();
+		await user.click(within(dock).getByRole('button', { name: 'Expand Helper' }));
+
+		expect(useStoryStore.getState().dockCollapsed).toBe(false);
+		expect(dock).not.toHaveAttribute('data-collapsed');
+		expect(within(dock).getByRole('textbox', { name: 'Helper input' })).toHaveValue('draft');
 	});
 });
 

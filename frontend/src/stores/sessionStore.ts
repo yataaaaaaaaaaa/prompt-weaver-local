@@ -16,6 +16,7 @@ import { LEGACY_STORE_NAMES, STORE_NAMES } from '../persistence/storeNames';
 import { useBoardStore } from './boardStore';
 import { useCategoriesStore } from './categoriesStore';
 import { useCharactersStore } from './charactersStore';
+import { useCodexStore } from './codexStore';
 import { useForbiddenRulesStore } from './forbiddenRulesStore';
 import { useGenerationSettingsStore } from './generationSettingsStore';
 import { useLayoutStore } from './layoutStore';
@@ -43,8 +44,9 @@ export type SessionActions = {
 	 *     (src/domain/legacyImport.ts); the layout and board stores only when no layout store at all exists (theirs,
 	 *     or a legacy floating-workspace store, which their own `legacy` option already migrated);
 	 *  4. useOutputsStore.initialize(payload.output_ids, persisted currentId ?? payload.current_output_id);
-	 *  5. useTasksStore.connect(), then useModelCatalogStore.resumeInstalls() in the background (fire and forget:
-	 *     never fails or delays boot); setPersistErrorHandler -> notifications; phase 'ready'.
+	 *  5. useTasksStore.connect() (the co-writer's events go to useCodexStore.applyEvent), then
+	 *     useModelCatalogStore.resumeInstalls() in the background (fire and forget: never fails or delays boot);
+	 *     setPersistErrorHandler -> notifications; phase 'ready'.
 	 *  Right after step 2, useCharactersStore.load() and useStoryStore.load() start in the background (fire and forget:
 	 *  they never fail or delay boot; a failure only sets that store's loadError, which its section shows). */
 	start: () => Promise<void>;
@@ -82,6 +84,7 @@ function persistedStores() {
 		useOutputsStore,
 		useLayoutStore,
 		useBoardStore,
+		useStoryStore,
 	];
 }
 
@@ -160,7 +163,7 @@ export const useSessionStore = create<SessionStore>()((set, get) => ({
 			seedFromLegacy(payload);
 			const outputs = useOutputsStore.getState();
 			await outputs.initialize(payload.output_ids, outputs.currentId ?? payload.current_output_id);
-			useTasksStore.getState().connect();
+			useTasksStore.getState().connect({ onCodexEvent: (event) => useCodexStore.getState().applyEvent(event) });
 			// Downloads started before a reload are followed again (resumeInstalls never rejects).
 			void useModelCatalogStore.getState().resumeInstalls();
 		} catch (error) {

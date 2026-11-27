@@ -10,9 +10,15 @@
 // `navigationLabel`, the results a region named `resultsLabel`, the detail panel and the dock complementary landmarks
 // named `detailLabel` / `dockLabel`. Without `detailLabel` there is no detail panel (the results take its room). A
 // search box inside `toolbar` should carry SECTION_SEARCH_ATTRIBUTE so Ctrl+F focuses it.
-import { makeStyles, mergeClasses, Title3, tokens } from '@fluentui/react-components';
-import type { ReactNode } from 'react';
+//
+// The dock can be collapsed (`dockCollapsed`, its owner's state): it becomes a narrow strip with an 'Expand <dock>'
+// button and its vertical name, and the detail panel takes the room back; the panel stays mounted (hidden), so it keeps
+// its state. Collapsing moves the focus from the panel to the Expand button, expanding moves it to the dock.
+import { Button, makeStyles, mergeClasses, Title3, Tooltip, tokens, typographyStyles } from '@fluentui/react-components';
+import { PanelRightExpandRegular } from '@fluentui/react-icons';
+import { useEffect, useRef, type ReactNode } from 'react';
 import { F6_REGION_ATTRIBUTE } from '../app/sections';
+import { EXPAND_DOCK_ATTRIBUTE, expandDockLabel } from './dockLabels';
 
 /** Width of the detail panel: about a third of the section, at least 360 px and at most 560 px. */
 export const DETAIL_PANEL_WIDTH = 'clamp(360px, 34%, 560px)';
@@ -22,14 +28,18 @@ export const DOCKED_DETAIL_PANEL_WIDTH = 'clamp(320px, 28%, 480px)';
 export const NAVIGATION_PANE_WIDTH = 'clamp(200px, 18%, 280px)';
 /** Width of the dock after the detail panel. */
 export const DOCK_PANEL_WIDTH = 'clamp(300px, 26%, 420px)';
+/** Width of a collapsed dock (its strip). */
+export const COLLAPSED_DOCK_WIDTH = '48px';
+
+type DockState = 'none' | 'expanded' | 'collapsed';
 
 /** The columns of the body: [navigation] results [detail] [dock]. */
-function bodyColumns(navigation: boolean, detail: boolean, dock: boolean): string {
+function bodyColumns(navigation: boolean, detail: boolean, dock: DockState): string {
 	return [
 		navigation ? NAVIGATION_PANE_WIDTH : null,
 		'minmax(0, 1fr)',
-		detail ? (dock ? DOCKED_DETAIL_PANEL_WIDTH : DETAIL_PANEL_WIDTH) : null,
-		dock ? DOCK_PANEL_WIDTH : null,
+		detail ? (dock === 'expanded' ? DOCKED_DETAIL_PANEL_WIDTH : DETAIL_PANEL_WIDTH) : null,
+		dock === 'none' ? null : dock === 'expanded' ? DOCK_PANEL_WIDTH : COLLAPSED_DOCK_WIDTH,
 	]
 		.filter(Boolean)
 		.join(' ');
@@ -87,6 +97,36 @@ const useStyles = makeStyles({
 		borderLeft: `${tokens.strokeWidthThin} solid ${tokens.colorNeutralStroke2}`,
 		backgroundColor: tokens.colorNeutralBackground1,
 	},
+	dockCollapsed: {
+		backgroundColor: tokens.colorNeutralBackground3,
+	},
+	dockContent: {
+		display: 'flex',
+		flexDirection: 'column',
+		flex: 1,
+		minHeight: 0,
+		minWidth: 0,
+	},
+	hidden: {
+		display: 'none',
+	},
+	strip: {
+		display: 'flex',
+		flexDirection: 'column',
+		alignItems: 'center',
+		gap: tokens.spacingVerticalS,
+		flex: 1,
+		minHeight: 0,
+		paddingTop: tokens.spacingVerticalS,
+		paddingBottom: tokens.spacingVerticalS,
+		overflow: 'hidden',
+	},
+	stripLabel: {
+		writingMode: 'vertical-rl',
+		whiteSpace: 'nowrap',
+		color: tokens.colorNeutralForeground2,
+		...typographyStyles.caption1Strong,
+	},
 	results: {
 		// Positioned: what the results scroll inside it (src/features/categories/scrollWithin.ts) is measured from it.
 		position: 'relative',
@@ -135,6 +175,10 @@ export type SectionLayoutProps = {
 	dock?: ReactNode | null;
 	/** Accessible name of the dock (required with `dock`). */
 	dockLabel?: string;
+	/** The dock is collapsed to its strip. */
+	dockCollapsed?: boolean;
+	/** The strip's Expand button (required with `dockCollapsed`). */
+	onExpandDock?: () => void;
 };
 
 export function SectionLayout({
@@ -149,12 +193,29 @@ export function SectionLayout({
 	navigationLabel,
 	dock = null,
 	dockLabel,
+	dockCollapsed = false,
+	onExpandDock,
 }: SectionLayoutProps): JSX.Element {
 	const styles = useStyles();
 	const region = (id: string) => ({ [F6_REGION_ATTRIBUTE]: id, tabIndex: -1 });
 	const hasNavigation = navigation !== undefined && navigation !== null;
 	const hasDetail = detailLabel !== undefined;
 	const hasDock = dock !== null;
+	const dockState: DockState = !hasDock ? 'none' : dockCollapsed ? 'collapsed' : 'expanded';
+	const dockRef = useRef<HTMLElement>(null);
+	const expandRef = useRef<HTMLButtonElement>(null);
+	const previousDockState = useRef(dockState);
+	useEffect(() => {
+		const previous = previousDockState.current;
+		previousDockState.current = dockState;
+		const focused = document.activeElement;
+		const lost = focused === null || focused === document.body;
+		if (previous === 'expanded' && dockState === 'collapsed' && (lost || dockRef.current?.contains(focused))) {
+			expandRef.current?.focus();
+		} else if (previous === 'collapsed' && dockState === 'expanded' && (lost || focused === expandRef.current)) {
+			dockRef.current?.focus();
+		}
+	}, [dockState]);
 	return (
 		<div className={styles.root}>
 			<header className={mergeClasses(styles.header, styles.focusable)} {...region('toolbar')}>
@@ -163,7 +224,7 @@ export function SectionLayout({
 				</Title3>
 				{toolbar ? <div className={styles.toolbar}>{toolbar}</div> : null}
 			</header>
-			<div className={styles.body} style={{ gridTemplateColumns: bodyColumns(hasNavigation, hasDetail, hasDock) }}>
+			<div className={styles.body} style={{ gridTemplateColumns: bodyColumns(hasNavigation, hasDetail, dockState) }}>
 				{hasNavigation ? (
 					<nav aria-label={navigationLabel} className={mergeClasses(styles.navigation, styles.focusable)} {...region('navigation')}>
 						{navigation}
@@ -178,8 +239,24 @@ export function SectionLayout({
 					</aside>
 				) : null}
 				{hasDock ? (
-					<aside aria-label={dockLabel} className={mergeClasses(styles.dock, styles.focusable)} {...region('dock')}>
-						{dock}
+					<aside
+						ref={dockRef}
+						aria-label={dockLabel}
+						data-collapsed={dockCollapsed ? 'true' : undefined}
+						className={mergeClasses(styles.dock, dockCollapsed && styles.dockCollapsed, styles.focusable)}
+						{...region('dock')}
+					>
+						{dockCollapsed ? (
+							<div className={styles.strip}>
+								<Tooltip content={expandDockLabel(dockLabel ?? '')} relationship="label" positioning="before">
+									<Button ref={expandRef} appearance="subtle" icon={<PanelRightExpandRegular />} onClick={onExpandDock} {...{ [EXPAND_DOCK_ATTRIBUTE]: '' }} />
+								</Tooltip>
+								<span className={styles.stripLabel} aria-hidden>
+									{dockLabel}
+								</span>
+							</div>
+						) : null}
+						<div className={dockCollapsed ? styles.hidden : styles.dockContent}>{dock}</div>
 					</aside>
 				) : null}
 			</div>

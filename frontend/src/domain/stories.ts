@@ -336,6 +336,18 @@ export function sceneOrderAfterMove(sceneIds: readonly string[], sceneId: string
 	return target ? moveKeyNextTo(sceneIds, sceneId, target.target, target.placement) : null;
 }
 
+/** The scene order with `sceneId` at the 1-based `position` (clamped to the story); null when it does not change or the
+ *  story has no such scene. */
+export function sceneOrderWithSceneAt(sceneIds: readonly string[], sceneId: string, position: number): string[] | null {
+	if (!sceneIds.includes(sceneId)) {
+		return null;
+	}
+	const rest = sceneIds.filter((id) => id !== sceneId);
+	const index = Math.max(0, Math.min(rest.length, Math.floor(position) - 1));
+	const order = [...rest.slice(0, index), sceneId, ...rest.slice(index)];
+	return order.every((id, at) => id === sceneIds[at]) ? null : order;
+}
+
 /** The scene order after `sceneId` was dropped before / after `targetId`; null when it does not change. */
 export function sceneOrderAfterDrop(sceneIds: readonly string[], sceneId: string, targetId: string, placement: Placement): string[] | null {
 	const order = moveKeyNextTo(sceneIds, sceneId, targetId, placement);

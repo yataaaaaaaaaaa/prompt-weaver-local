@@ -1,5 +1,6 @@
 import { act, renderHook } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { CLIENT_ID } from '../api/clientId';
 import * as taskSocket from '../api/taskSocket';
 import type { DownloadTaskEvent, GenerationTaskEvent } from '../api/types';
 import {
@@ -73,6 +74,17 @@ const generationEvent = (overrides: Partial<GenerationTaskEvent> = {}): Generati
 const downloadEvent = buildDownloadEvent('d1', { title: 'Model', current: 1, total: 2 });
 
 describe('tasksStore connection', () => {
+	it('names this window and hands the co-writer events to the given handler', () => {
+		const onCodexEvent = vi.fn();
+		useTasksStore.getState().connect({ onCodexEvent });
+
+		expect(vi.mocked(taskSocket.connectTaskSocket).mock.calls[0][1]).toEqual({ clientId: CLIENT_ID });
+		const delta = { type: 'codex', kind: 'delta', conversation_id: 'cnv-000000000001', entry_id: 'a', delta: 'Hi' };
+		FakeSocket.instances[0].emit(delta);
+		expect(onCodexEvent).toHaveBeenCalledWith(delta);
+		expect(useTasksStore.getState().events).toEqual({});
+	});
+
 	it('connects once, tracks the connection and applies socket events', () => {
 		const tasks = useTasksStore.getState();
 		tasks.connect();

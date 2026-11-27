@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { connectTaskSocket, parseTaskEvent } from './taskSocket';
+import { connectTaskSocket, parseCodexEvent, parseTaskEvent } from './taskSocket';
 
 class FakeSocket {
 	public static instances: FakeSocket[] = [];
@@ -72,5 +72,32 @@ describe('connectTaskSocket', () => {
 		vi.advanceTimersByTime(1000);
 		expect(FakeSocket.instances).toHaveLength(2);
 		expect(FakeSocket.instances[1].closed).toBe(true);
+	});
+});
+
+describe('co-writer events', () => {
+	const delta = { type: 'codex', kind: 'delta', conversation_id: 'cnv-000000000001', entry_id: 'a', delta: 'Hi' };
+
+	it('parses codex events of a known kind only', () => {
+		expect(parseCodexEvent(JSON.stringify(delta))).toEqual(delta);
+		expect(parseCodexEvent(JSON.stringify({ ...delta, kind: 'unknown' }))).toBeNull();
+		expect(parseCodexEvent(JSON.stringify({ ...delta, kind: 'toString' }))).toBeNull();
+		expect(parseCodexEvent(JSON.stringify({ type: 'generation', task_id: 'generation', stage: 'idle' }))).toBeNull();
+		expect(parseCodexEvent('[]')).toBeNull();
+		expect(parseTaskEvent(JSON.stringify(delta))).toBeNull();
+	});
+
+	it('names the window and hands codex events to their own handler', () => {
+		const onEvent = vi.fn();
+		const onCodexEvent = vi.fn();
+		connectTaskSocket({ onEvent, onCodexEvent }, { url: 'ws://test/ws/tasks', clientId: 'window-1234', createSocket });
+		const socket = FakeSocket.instances[0];
+
+		socket.emit(delta);
+		socket.emit({ type: 'generation', task_id: 'generation', stage: 'idle', message: '', current: 0, total: 0 });
+
+		expect(socket.url).toBe('ws://test/ws/tasks?client_id=window-1234');
+		expect(onCodexEvent).toHaveBeenCalledWith(delta);
+		expect(onEvent).toHaveBeenCalledTimes(1);
 	});
 });
