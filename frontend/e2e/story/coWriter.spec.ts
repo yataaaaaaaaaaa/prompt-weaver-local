@@ -24,14 +24,14 @@ const OPENING = 'The keeper wakes before dawn. The lamp still turns, and far out
 const HARBOR = rule(
 	'harbor',
 	{ say: 'I will add the harbor scene after the storm.' },
-	{ tool: 'add_scene', arguments: { story_id: '{context.story_id}', title: 'The harbor', text: 'Boats rock in the grey light.', extra_tags: ['harbor', 'fishing boats', 'morning'] } },
-	{ tool: 'update_scene', arguments: { story_id: '{context.story_id}', scene_id: '{last.scene_id}', text: 'Boats rock in the grey light while gulls circle the harbor.' } },
+	{ tool: 'add_scenes', arguments: { story_id: '{context.story_id}', scenes: [{ title: 'The harbor', text: 'Boats rock in the grey light.', extra_tags: ['harbor', 'fishing boats', 'morning'] }] } },
+	{ tool: 'update_scenes', arguments: { story_id: '{context.story_id}', changes: [{ scene_id: '{last.scene_id}', text: 'Boats rock in the grey light while gulls circle the harbor.' }] } },
 	{ say: 'Done: {last.summary}.' },
 );
 const ILLUSTRATE = rule(
 	'illustrate',
 	{ say: 'Generating the picture of Morning calm.' },
-	{ tool: 'generate_scene', arguments: { story_id: STORY, scene_id: MORNING_CALM } },
+	{ tool: 'generate_scenes', arguments: { story_id: STORY, scene_ids: [MORNING_CALM] } },
 	{ say: 'Finished: {last.summary}.' },
 );
 
@@ -84,6 +84,49 @@ test.describe('a streamed answer', () => {
 		await app.parkPointer({ blur: true });
 		await saveScreenshot(page, testInfo, 'co-writer-answer');
 		await expectBaseline(coWriter.dock(), 'co-writer-answer.png');
+	});
+});
+
+const MARKDOWN = [
+	'## Plan for the storm',
+	'Three **scenes**, one *quiet*:',
+	'',
+	'1. `The harbor` at dawn',
+	'2. The storm',
+	'   - lightning, rain',
+	'',
+	'See [the tag guide](https://example.com/tags). <img src=x onerror=alert(1)>',
+	'',
+	'```',
+	'storm, night, crashing waves',
+	'```',
+].join(String.fromCharCode(10));
+
+test.describe('Markdown answers', () => {
+	test.use({ e2eOptions: { codex: { delta_delay_ms: 5, default_steps: [{ say: MARKDOWN }] } } });
+
+	test('show as formatted text, never as HTML; links open outside the app', async ({ app, page }, testInfo) => {
+		const { coWriter } = await open(app);
+		await coWriter.send('Plan the storm');
+		await coWriter.waitForAnswer();
+
+		const answer = coWriter.entries('assistant').last();
+		await expect(answer.getByRole('heading', { level: 3, name: 'Plan for the storm', exact: true })).toBeVisible();
+		await expect(answer.locator('strong')).toHaveText('scenes');
+		await expect(answer.locator('em')).toHaveText('quiet');
+		await expect(answer.locator('ol > li')).toHaveCount(2);
+		await expect(answer.locator('ol ul > li')).toHaveText('lightning, rain');
+		await expect(answer.locator('p code')).toHaveText('The harbor');
+		await expect(answer.locator('pre')).toHaveText('storm, night, crashing waves');
+		const link = answer.getByRole('link', { name: 'the tag guide', exact: true });
+		await expect(link).toHaveAttribute('href', 'https://example.com/tags');
+		await expect(link).toHaveAttribute('target', '_blank');
+		await expect(answer).toContainText('<img src=x onerror=alert(1)>');
+		await expect(coWriter.dock().locator('img')).toHaveCount(0);
+		await expectNoHorizontalOverflow(coWriter.dock());
+		await app.parkPointer({ blur: true });
+		await saveScreenshot(page, testInfo, 'co-writer-markdown');
+		await expectBaseline(coWriter.dock(), 'co-writer-markdown.png');
 	});
 });
 
