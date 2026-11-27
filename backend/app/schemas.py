@@ -31,6 +31,9 @@ TorchDType = Literal["float16", "bfloat16", "float32"]
 OUTPUT_ID_PATTERN = r"^\d{10}$"
 # Names of frontend persisted stores (directory names under <data_dir>/stores).
 STORE_NAME_PATTERN = r"^[a-z0-9][a-z0-9-]{0,63}$"
+# Story ids are "sty-<12 hex>", scene ids "scn-<12 hex>" (assigned by the backend, services/stories.py).
+STORY_ID_PATTERN = r"^sty-[0-9a-f]{12}$"
+SCENE_ID_PATTERN = r"^scn-[0-9a-f]{12}$"
 
 
 
@@ -316,6 +319,21 @@ class OutputCharacter(ApiModel):
     reference: OutputReference
 
 
+class StoryLink(ApiModel):
+    """The story scene a generation illustrates (GenerateRequest.story)."""
+
+    story_id: str = Field(pattern=STORY_ID_PATTERN)
+    scene_id: str = Field(pattern=SCENE_ID_PATTERN)
+
+
+class OutputStory(StoryLink):
+    """The story scene an output was generated for (snapshot of the titles when the output was made). The scene also
+    lists the output as one of its variants (Scene.variants, services/stories.py)."""
+
+    story_title: str
+    scene_title: str
+
+
 class OutputRecord(ApiModel):
     """Metadata of one generated image (the adjacent <output_id>.json file).
 
@@ -346,6 +364,11 @@ class OutputRecord(ApiModel):
         default=None,
         description="The character active for this generation (GenerateRequest.character_id) and how its reference "
         "images were used; null without a character and in files written before characters existed.",
+    )
+    story: OutputStory | None = Field(
+        default=None,
+        description="The story scene this output illustrates (GenerateRequest.story); null for other generations and "
+        "in files written before stories existed (no `story` key).",
     )
 
     @model_validator(mode="before")
@@ -397,6 +420,13 @@ class GenerateRequest(ApiModel):
         "are already part of this request (the frontend prompt engine injects them); the backend applies its reference "
         "images through the IP-Adapter when one is installed for the model's family (services/ip_adapters.py) and "
         "records OutputRecord.character.",
+    )
+    story: StoryLink | None = Field(
+        default=None,
+        description="The story scene this generation illustrates. The scene's prompt overrides and characters are already "
+        "part of this request (the frontend prompt engine pins them, src/domain/stories.ts); the backend checks that the "
+        "scene exists (409 otherwise), records OutputRecord.story and adds the output to the scene's variants as its "
+        "chosen illustration.",
     )
 
 
@@ -767,7 +797,9 @@ def _clean_tags(tags: list[str]) -> list[str]:
     return [tag.strip() for tag in tags if tag.strip()]
 
 
-CharacterTags = Annotated[list[str], AfterValidator(_clean_tags)]
+# Prompt tags (characters, story scenes): trimmed, empty ones dropped.
+PromptTags = Annotated[list[str], AfterValidator(_clean_tags)]
+CharacterTags = PromptTags
 CharacterName = Annotated[str, StringConstraints(strip_whitespace=True, min_length=1, max_length=120)]
 
 
@@ -966,6 +998,160 @@ class IpAdapterInstallResponse(ApiModel):
         description="Downloads of the missing files (state 'downloading'; a running download is joined); follow "
         "them on /ws/tasks, then ask GET /api/ip-adapters again."
     )
+
+
+# ---------------------------------------------------------------------------
+# Stories (services/stories.py, <data dir>/stories/): illustrated storyboards. A story is an ordered list of scenes;
+# each scene has a title, a narrative text and illustrations generated through the regular generation path with the
+# scene's prompt overrides (src/domain/stories.ts pins them like the characters' tags). The backend owns the stories;
+# the frontend story store reads and edits them through /api/stories only.
+# ---------------------------------------------------------------------------
+
+StoryTitle = Annotated[str, StringConstraints(strip_whitespace=True, min_length=1, max_length=200)]
+SceneTitle = Annotated[str, StringConstraints(strip_whitespace=True, min_length=1, max_length=200)]
+SceneText = Annotated[str, StringConstraints(max_length=50_000)]
+CharacterRef = Annotated[str, Field(pattern=CHARACTER_ID_PATTERN)]
+SceneSeed = Annotated[int, Field(ge=0)]
+
+
+class SceneLock(ApiModel):
+    """A sub-prompt chosen for one scene: generated as a pinned category named `category_name` whose locked sub-prompt
+    is `prompt_text`, in place of the user category of that name (src/domain/stories.ts sceneCategories)."""
+
+    category_name: str = Field(min_length=1, max_length=200)
+    prompt_text: str = Field(min_length=1, max_length=5_000)
+
+
+class SceneVariant(ApiModel):
+    """An output illustrating a scene: generated for it (OutputRecord.story) or added from the outputs."""
+
+    output_id: str = Field(pattern=OUTPUT_ID_PATTERN)
+    added_at: datetime
+
+
+class SceneFields(ApiModel):
+    """The editable fields of a scene, all with their defaults (base of the create request and of Scene)."""
+
+    text: SceneText = Field(default="", description="The narrative text of the scene.")
+    extra_tags: PromptTags = Field(
+        default_factory=list,
+        description="Tags added to the prompt of the scene's generations (the locked sub-prompt of a pinned 'Scene' "
+        "category).",
+    )
+    negative_tags: PromptTags = Field(
+        default_factory=list, description="Appended to the negative prompt of the scene's generations."
+    )
+    locks: list[SceneLock] = Field(
+        default_factory=list,
+        description="Sub-prompts chosen for this scene, in prompt order (one per category; the first one of a category "
+        "wins).",
+    )
+    character_ids: list[CharacterRef] | None = Field(
+        default=None,
+        description="The characters of this scene, in order; null: the story's characters; []: no character.",
+    )
+    seed: SceneSeed | None = Field(
+        default=None, description="Fixed image seed of the scene's generations (reproducible); null: a new seed each time."
+    )
+
+
+class SceneCreateRequest(SceneFields):
+    """Body of POST /api/stories/{story_id}/scenes."""
+
+    title: SceneTitle | None = Field(default=None, description="null: 'Scene <n>' (n = the scene count after adding).")
+    index: int | None = Field(default=None, ge=0, description="Position of the new scene (0-based); null appends.")
+    output_id: str | None = Field(
+        default=None,
+        pattern=OUTPUT_ID_PATTERN,
+        description="An existing output: the scene's first variant and its chosen illustration (Add to story).",
+    )
+
+
+class ScenePatch(ApiModel):
+    """Body of PATCH /api/stories/{story_id}/scenes/{scene_id}: only the fields sent change (character_ids and seed
+    accept null; the other fields do not)."""
+
+    title: SceneTitle | None = None
+    text: SceneText | None = None
+    extra_tags: PromptTags | None = None
+    negative_tags: PromptTags | None = None
+    locks: list[SceneLock] | None = None
+    character_ids: list[CharacterRef] | None = None
+    seed: SceneSeed | None = None
+
+    @model_validator(mode="after")
+    def _only_nullable_fields_cleared(self) -> "ScenePatch":
+        cleared = [name for name in self.model_fields_set if getattr(self, name) is None and name not in _NULLABLE_SCENE_FIELDS]
+        if cleared:
+            raise ValueError(f"{', '.join(sorted(cleared))} cannot be null.")
+        return self
+
+
+_NULLABLE_SCENE_FIELDS = frozenset({"character_ids", "seed"})
+
+
+class Scene(SceneFields):
+    """One scene of a story."""
+
+    id: str = Field(pattern=SCENE_ID_PATTERN)
+    title: SceneTitle
+    variants: list[SceneVariant] = Field(default_factory=list, description="Its illustrations, oldest first.")
+    chosen_output_id: str | None = Field(
+        default=None, description="The variant illustrating the scene (one of `variants`); null: not illustrated yet."
+    )
+    created_at: datetime
+    updated_at: datetime
+
+
+class StoryCreateRequest(ApiModel):
+    """Body of POST /api/stories."""
+
+    title: StoryTitle
+    character_ids: list[CharacterRef] = Field(
+        default_factory=list, description="The story's characters (Character.id), applied to every scene that does not "
+        "name its own."
+    )
+
+
+class StoryPatch(ApiModel):
+    """Body of PATCH /api/stories/{story_id}: only the fields sent change (neither accepts null)."""
+
+    title: StoryTitle | None = None
+    character_ids: list[CharacterRef] | None = None
+
+    @model_validator(mode="after")
+    def _no_null_fields(self) -> "StoryPatch":
+        cleared = [name for name in self.model_fields_set if getattr(self, name) is None]
+        if cleared:
+            raise ValueError(f"{', '.join(sorted(cleared))} cannot be null.")
+        return self
+
+
+class Story(StoryCreateRequest):
+    """An illustrated story: its scenes in reading order (backend-owned, <data dir>/stories/stories.json)."""
+
+    id: str = Field(pattern=STORY_ID_PATTERN)
+    scenes: list[Scene] = Field(default_factory=list)
+    created_at: datetime
+    updated_at: datetime
+
+
+class StoryCollection(ApiModel):
+    """Every story, in creation order."""
+
+    items: list[Story]
+
+
+class SceneOrderUpdate(ApiModel):
+    """Body of PUT /api/stories/{story_id}/scene-order: every scene id of the story, in the new order."""
+
+    scene_ids: list[str]
+
+
+class SceneVariantRequest(ApiModel):
+    """Body of POST /api/stories/{story_id}/scenes/{scene_id}/variants and PUT .../chosen."""
+
+    output_id: str = Field(pattern=OUTPUT_ID_PATTERN)
 
 
 # ---------------------------------------------------------------------------

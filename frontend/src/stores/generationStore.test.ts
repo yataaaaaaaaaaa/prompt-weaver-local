@@ -44,6 +44,7 @@ function record(request: GenerateRequest, outputId = '0000000004'): OutputRecord
 		prompt_seed: request.prompt_seed ?? null,
 		selections: (request.selections ?? []).map((item) => ({ ...item, locked: item.locked, induced_lora_ids: item.induced_lora_ids ?? [] })),
 		character: null,
+		story: null,
 	};
 }
 

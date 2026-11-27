@@ -49,6 +49,7 @@ function outputRecord(overrides: Partial<OutputRecord> = {}): OutputRecord {
 		image_path: 'D:/data/output/0000000042.png',
 		metadata_path: 'D:/data/output/0000000042.json',
 		character: null,
+		story: null,
 		...overrides,
 	};
 }

@@ -53,6 +53,7 @@ function record(selections: GenerationSelection[]): OutputRecord {
 		model_id: 'model',
 		active_loras: [],
 		character: null,
+		story: null,
 		prompt: selections.map((item) => item.prompt_text).join(', '),
 		negative_prompt: '',
 		width: 1024,

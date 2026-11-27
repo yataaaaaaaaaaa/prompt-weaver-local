@@ -623,6 +623,219 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/stories": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List Stories
+         * @description Every story with its scenes, in creation order.
+         */
+        get: operations["list_stories_api_stories_get"];
+        put?: never;
+        /**
+         * Create Story
+         * @description Creates a story without scenes.
+         */
+        post: operations["create_story_api_stories_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/stories/{story_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Get Story */
+        get: operations["get_story_api_stories__story_id__get"];
+        put?: never;
+        post?: never;
+        /**
+         * Delete Story
+         * @description Deletes the story and its scenes (their outputs are kept).
+         */
+        delete: operations["delete_story_api_stories__story_id__delete"];
+        options?: never;
+        head?: never;
+        /**
+         * Update Story
+         * @description Changes the fields sent (title, characters).
+         */
+        patch: operations["update_story_api_stories__story_id__patch"];
+        trace?: never;
+    };
+    "/api/stories/{story_id}/export": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Export Story
+         * @description The story as one self-contained HTML picture book (the chosen illustrations embedded).
+         */
+        get: operations["export_story_api_stories__story_id__export_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/stories/{story_id}/scene-order": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        /**
+         * Reorder Scenes
+         * @description Puts the scenes in the given order (every scene id of the story, once).
+         */
+        put: operations["reorder_scenes_api_stories__story_id__scene_order_put"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/stories/{story_id}/scenes": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Add Scene
+         * @description Adds a scene (at `index`, else at the end); with `output_id` that output illustrates it.
+         */
+        post: operations["add_scene_api_stories__story_id__scenes_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/stories/{story_id}/scenes/{scene_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        /**
+         * Delete Scene
+         * @description Deletes the scene (its outputs are kept).
+         */
+        delete: operations["delete_scene_api_stories__story_id__scenes__scene_id__delete"];
+        options?: never;
+        head?: never;
+        /**
+         * Update Scene
+         * @description Changes the fields sent (title, text, tags, locked sub-prompts, characters, seed).
+         */
+        patch: operations["update_scene_api_stories__story_id__scenes__scene_id__patch"];
+        trace?: never;
+    };
+    "/api/stories/{story_id}/scenes/{scene_id}/chosen": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        /**
+         * Choose Scene Variant
+         * @description Makes one of the scene's variants its chosen illustration.
+         */
+        put: operations["choose_scene_variant_api_stories__story_id__scenes__scene_id__chosen_put"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/stories/{story_id}/scenes/{scene_id}/duplicate": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Duplicate Scene
+         * @description Inserts a copy of the scene right after it.
+         */
+        post: operations["duplicate_scene_api_stories__story_id__scenes__scene_id__duplicate_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/stories/{story_id}/scenes/{scene_id}/variants": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Add Scene Variant
+         * @description Adds an existing output to the scene's variants and makes it the chosen illustration.
+         */
+        post: operations["add_scene_variant_api_stories__story_id__scenes__scene_id__variants_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/stories/{story_id}/scenes/{scene_id}/variants/{output_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        /**
+         * Remove Scene Variant
+         * @description Removes a variant from the scene (the output is kept).
+         */
+        delete: operations["remove_scene_variant_api_stories__story_id__scenes__scene_id__variants__output_id__delete"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/tasks": {
         parameters: {
             query?: never;
@@ -1199,6 +1412,8 @@ export interface components {
              * @default 30
              */
             steps: number;
+            /** @description The story scene this generation illustrates. The scene's prompt overrides and characters are already part of this request (the frontend prompt engine pins them, src/domain/stories.ts); the backend checks that the scene exists (409 otherwise), records OutputRecord.story and adds the output to the scene's variants as its chosen illustration. */
+            story?: components["schemas"]["StoryLink"] | null;
             /** Width */
             width: number;
         };
@@ -2030,6 +2245,8 @@ export interface components {
              * @default 30
              */
             steps: number;
+            /** @description The story scene this output illustrates (GenerateRequest.story); null for other generations and in files written before stories existed (no `story` key). */
+            story: components["schemas"]["OutputStory"] | null;
             /** Width */
             width: number;
         };
@@ -2060,6 +2277,21 @@ export interface components {
              * @description IpAdapterVariant.id used; null when not applied.
              */
             variant_id: string | null;
+        };
+        /**
+         * OutputStory
+         * @description The story scene an output was generated for (snapshot of the titles when the output was made). The scene also
+         *     lists the output as one of its variants (Scene.variants, services/stories.py).
+         */
+        OutputStory: {
+            /** Scene Id */
+            scene_id: string;
+            /** Scene Title */
+            scene_title: string;
+            /** Story Id */
+            story_id: string;
+            /** Story Title */
+            story_title: string;
         };
         /** PaneLayout */
         PaneLayout: {
@@ -2405,6 +2637,248 @@ export interface components {
              * @description SHA-256 of the file the image used when known: the published SHA-256, else the resolved version's default file hash.
              */
             sha256: string | null;
+        };
+        /**
+         * Scene
+         * @description One scene of a story.
+         */
+        Scene: {
+            /**
+             * Character Ids
+             * @description The characters of this scene, in order; null: the story's characters; []: no character.
+             */
+            character_ids: string[] | null;
+            /**
+             * Chosen Output Id
+             * @description The variant illustrating the scene (one of `variants`); null: not illustrated yet.
+             */
+            chosen_output_id: string | null;
+            /**
+             * Created At
+             * Format: date-time
+             */
+            created_at: string;
+            /**
+             * Extra Tags
+             * @description Tags added to the prompt of the scene's generations (the locked sub-prompt of a pinned 'Scene' category).
+             */
+            extra_tags: string[];
+            /** Id */
+            id: string;
+            /**
+             * Locks
+             * @description Sub-prompts chosen for this scene, in prompt order (one per category; the first one of a category wins).
+             */
+            locks: components["schemas"]["SceneLock"][];
+            /**
+             * Negative Tags
+             * @description Appended to the negative prompt of the scene's generations.
+             */
+            negative_tags: string[];
+            /**
+             * Seed
+             * @description Fixed image seed of the scene's generations (reproducible); null: a new seed each time.
+             */
+            seed: number | null;
+            /**
+             * Text
+             * @description The narrative text of the scene.
+             * @default
+             */
+            text: string;
+            /** Title */
+            title: string;
+            /**
+             * Updated At
+             * Format: date-time
+             */
+            updated_at: string;
+            /**
+             * Variants
+             * @description Its illustrations, oldest first.
+             */
+            variants: components["schemas"]["SceneVariant"][];
+        };
+        /**
+         * SceneCreateRequest
+         * @description Body of POST /api/stories/{story_id}/scenes.
+         */
+        SceneCreateRequest: {
+            /**
+             * Character Ids
+             * @description The characters of this scene, in order; null: the story's characters; []: no character.
+             */
+            character_ids?: string[] | null;
+            /**
+             * Extra Tags
+             * @description Tags added to the prompt of the scene's generations (the locked sub-prompt of a pinned 'Scene' category).
+             */
+            extra_tags?: string[];
+            /**
+             * Index
+             * @description Position of the new scene (0-based); null appends.
+             */
+            index?: number | null;
+            /**
+             * Locks
+             * @description Sub-prompts chosen for this scene, in prompt order (one per category; the first one of a category wins).
+             */
+            locks?: components["schemas"]["SceneLock"][];
+            /**
+             * Negative Tags
+             * @description Appended to the negative prompt of the scene's generations.
+             */
+            negative_tags?: string[];
+            /**
+             * Output Id
+             * @description An existing output: the scene's first variant and its chosen illustration (Add to story).
+             */
+            output_id?: string | null;
+            /**
+             * Seed
+             * @description Fixed image seed of the scene's generations (reproducible); null: a new seed each time.
+             */
+            seed?: number | null;
+            /**
+             * Text
+             * @description The narrative text of the scene.
+             * @default
+             */
+            text: string;
+            /**
+             * Title
+             * @description null: 'Scene <n>' (n = the scene count after adding).
+             */
+            title?: string | null;
+        };
+        /**
+         * SceneLock
+         * @description A sub-prompt chosen for one scene: generated as a pinned category named `category_name` whose locked sub-prompt
+         *     is `prompt_text`, in place of the user category of that name (src/domain/stories.ts sceneCategories).
+         */
+        SceneLock: {
+            /** Category Name */
+            category_name: string;
+            /** Prompt Text */
+            prompt_text: string;
+        };
+        /**
+         * SceneOrderUpdate
+         * @description Body of PUT /api/stories/{story_id}/scene-order: every scene id of the story, in the new order.
+         */
+        SceneOrderUpdate: {
+            /** Scene Ids */
+            scene_ids: string[];
+        };
+        /**
+         * ScenePatch
+         * @description Body of PATCH /api/stories/{story_id}/scenes/{scene_id}: only the fields sent change (character_ids and seed
+         *     accept null; the other fields do not).
+         */
+        ScenePatch: {
+            /** Character Ids */
+            character_ids?: string[] | null;
+            /** Extra Tags */
+            extra_tags?: string[] | null;
+            /** Locks */
+            locks?: components["schemas"]["SceneLock"][] | null;
+            /** Negative Tags */
+            negative_tags?: string[] | null;
+            /** Seed */
+            seed?: number | null;
+            /** Text */
+            text?: string | null;
+            /** Title */
+            title?: string | null;
+        };
+        /**
+         * SceneVariant
+         * @description An output illustrating a scene: generated for it (OutputRecord.story) or added from the outputs.
+         */
+        SceneVariant: {
+            /**
+             * Added At
+             * Format: date-time
+             */
+            added_at: string;
+            /** Output Id */
+            output_id: string;
+        };
+        /**
+         * SceneVariantRequest
+         * @description Body of POST /api/stories/{story_id}/scenes/{scene_id}/variants and PUT .../chosen.
+         */
+        SceneVariantRequest: {
+            /** Output Id */
+            output_id: string;
+        };
+        /**
+         * Story
+         * @description An illustrated story: its scenes in reading order (backend-owned, <data dir>/stories/stories.json).
+         */
+        Story: {
+            /**
+             * Character Ids
+             * @description The story's characters (Character.id), applied to every scene that does not name its own.
+             */
+            character_ids: string[];
+            /**
+             * Created At
+             * Format: date-time
+             */
+            created_at: string;
+            /** Id */
+            id: string;
+            /** Scenes */
+            scenes: components["schemas"]["Scene"][];
+            /** Title */
+            title: string;
+            /**
+             * Updated At
+             * Format: date-time
+             */
+            updated_at: string;
+        };
+        /**
+         * StoryCollection
+         * @description Every story, in creation order.
+         */
+        StoryCollection: {
+            /** Items */
+            items: components["schemas"]["Story"][];
+        };
+        /**
+         * StoryCreateRequest
+         * @description Body of POST /api/stories.
+         */
+        StoryCreateRequest: {
+            /**
+             * Character Ids
+             * @description The story's characters (Character.id), applied to every scene that does not name its own.
+             */
+            character_ids?: string[];
+            /** Title */
+            title: string;
+        };
+        /**
+         * StoryLink
+         * @description The story scene a generation illustrates (GenerateRequest.story).
+         */
+        StoryLink: {
+            /** Scene Id */
+            scene_id: string;
+            /** Story Id */
+            story_id: string;
+        };
+        /**
+         * StoryPatch
+         * @description Body of PATCH /api/stories/{story_id}: only the fields sent change (neither accepts null).
+         */
+        StoryPatch: {
+            /** Character Ids */
+            character_ids?: string[] | null;
+            /** Title */
+            title?: string | null;
         };
         /**
          * TaskSnapshot
@@ -3912,6 +4386,642 @@ export interface operations {
                 content: {
                     "application/json": components["schemas"]["HTTPValidationError"];
                 };
+            };
+        };
+    };
+    list_stories_api_stories_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["StoryCollection"];
+                };
+            };
+            /** @description stories.json cannot be read (it is never overwritten) */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    create_story_api_stories_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["StoryCreateRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Story"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+            /** @description stories.json cannot be read (it is never overwritten) */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    get_story_api_stories__story_id__get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                story_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Story"];
+                };
+            };
+            /** @description Unknown story, scene, variant or output */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+            /** @description stories.json cannot be read (it is never overwritten) */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    delete_story_api_stories__story_id__delete: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                story_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["OkResponse"];
+                };
+            };
+            /** @description Unknown story, scene, variant or output */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+            /** @description stories.json cannot be read (it is never overwritten) */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    update_story_api_stories__story_id__patch: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                story_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["StoryPatch"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Story"];
+                };
+            };
+            /** @description Unknown story, scene, variant or output */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+            /** @description stories.json cannot be read (it is never overwritten) */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    export_story_api_stories__story_id__export_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                story_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "text/html": string;
+                };
+            };
+            /** @description Unknown story, scene, variant or output */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+            /** @description stories.json cannot be read (it is never overwritten) */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    reorder_scenes_api_stories__story_id__scene_order_put: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                story_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["SceneOrderUpdate"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Story"];
+                };
+            };
+            /** @description Unknown story, scene, variant or output */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description The order does not list every scene of the story exactly once */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description stories.json cannot be read (it is never overwritten) */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    add_scene_api_stories__story_id__scenes_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                story_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["SceneCreateRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Story"];
+                };
+            };
+            /** @description Unknown story, scene, variant or output */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+            /** @description stories.json cannot be read (it is never overwritten) */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    delete_scene_api_stories__story_id__scenes__scene_id__delete: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                story_id: string;
+                scene_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Story"];
+                };
+            };
+            /** @description Unknown story, scene, variant or output */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+            /** @description stories.json cannot be read (it is never overwritten) */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    update_scene_api_stories__story_id__scenes__scene_id__patch: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                story_id: string;
+                scene_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ScenePatch"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Story"];
+                };
+            };
+            /** @description Unknown story, scene, variant or output */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+            /** @description stories.json cannot be read (it is never overwritten) */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    choose_scene_variant_api_stories__story_id__scenes__scene_id__chosen_put: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                story_id: string;
+                scene_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["SceneVariantRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Story"];
+                };
+            };
+            /** @description Unknown story, scene, variant or output */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+            /** @description stories.json cannot be read (it is never overwritten) */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    duplicate_scene_api_stories__story_id__scenes__scene_id__duplicate_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                story_id: string;
+                scene_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Story"];
+                };
+            };
+            /** @description Unknown story, scene, variant or output */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+            /** @description stories.json cannot be read (it is never overwritten) */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    add_scene_variant_api_stories__story_id__scenes__scene_id__variants_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                story_id: string;
+                scene_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["SceneVariantRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Story"];
+                };
+            };
+            /** @description Unknown story, scene, variant or output */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+            /** @description stories.json cannot be read (it is never overwritten) */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    remove_scene_variant_api_stories__story_id__scenes__scene_id__variants__output_id__delete: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                story_id: string;
+                scene_id: string;
+                output_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Story"];
+                };
+            };
+            /** @description Unknown story, scene, variant or output */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+            /** @description stories.json cannot be read (it is never overwritten) */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
             };
         };
     };

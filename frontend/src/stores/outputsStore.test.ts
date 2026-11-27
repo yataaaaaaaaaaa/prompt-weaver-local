@@ -42,6 +42,7 @@ function makeRecord(outputId: string, overrides: Partial<OutputRecord> = {}): Ou
 		image_path: `D:\\data\\output\\${outputId}.png`,
 		metadata_path: `D:\\data\\output\\${outputId}.json`,
 		character: null,
+		story: null,
 		...overrides,
 	};
 }

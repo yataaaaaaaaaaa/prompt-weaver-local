@@ -27,6 +27,8 @@ def test_for_root_computes_the_layout_without_io(tmp_path: Path) -> None:
     assert paths.characters_dir == root / "characters"
     assert paths.characters_file == root / "characters" / "characters.json"
     assert paths.character_images_dir == root / "characters" / "images"
+    assert paths.stories_dir == root / "stories"
+    assert paths.stories_file == root / "stories" / "stories.json"
     assert paths.ip_adapter_dir == models / "ipadapter"
     assert paths.image_encoder_dir == models / "clip_vision"
     assert not root.exists()

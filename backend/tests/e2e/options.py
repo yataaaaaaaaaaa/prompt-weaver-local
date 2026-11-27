@@ -41,7 +41,7 @@ class E2EResetRequest(_Options):
         default_factory=list,
         description="Files or folders of the data dir to delete (relative paths), removed after everything else is "
         "seeded, so generated files go too: 'output' (empty history), 'output/0000000004.png' (an output whose "
-        "picture is missing), 'characters' (no characters), 'stores/board-store' + 'stores/layout-store' (the layout is "
+        "picture is missing), 'characters' (no characters), 'stories' (no stories), 'stores/board-store' + 'stores/layout-store' (the layout is "
         "migrated from the legacy floating workspace of the fixture, stores/workspace-store).",
     )
 

@@ -5,6 +5,12 @@ are already in the request (the frontend prompt engine injects them); this servi
 its reference images (CharacterLookup) applied through the IP-Adapter resolved for the model and the character's
 focus (IpAdapterResolver = services/ip_adapters.py), passed to the runtime as a ReferenceInput, and the
 OutputRecord.character record (applied or the reason why not).
+
+Stories: GenerateRequest.story names the story scene a generation illustrates. The scene's prompt overrides and
+characters are already in the request (the frontend pins them, src/domain/stories.ts); this service checks that the
+scene exists before generating (StoryScenes = services/stories.py StoryStore; an unknown one fails), records
+OutputRecord.story and, once the output is saved, adds it to the scene's variants as its chosen illustration (a scene
+deleted meanwhile only loses that link: the output is kept).
 """
 
 from __future__ import annotations
@@ -27,11 +33,14 @@ from ..schemas import (
     OutputCharacter,
     OutputRecord,
     OutputReference,
+    OutputStory,
     ReferenceFocus,
+    Story,
 )
 from ..settings import AppPaths
 from .characters import CharactersFileError
 from .outputs import OutputRepository
+from .stories import StoriesFileError
 from .task_hub import TaskHub
 
 if TYPE_CHECKING:
@@ -83,6 +92,14 @@ class IpAdapterResolver(Protocol):
     def resolve(self, model_path: str, focus: ReferenceFocus) -> IpAdapterResolution: ...
 
 
+class StoryScenes(Protocol):
+    """What generation needs from the stories (services/stories.py StoryStore)."""
+
+    def scene_link(self, story_id: str, scene_id: str) -> OutputStory: ...
+
+    def add_variant(self, story_id: str, scene_id: str, output_id: str) -> Story: ...
+
+
 class GenerationFailed(RuntimeError):
     """Runtime/model/LoRA/prompt-resolution error (HTTP 409)."""
 
@@ -125,6 +142,7 @@ class GenerationService:
         generator_factory: GeneratorFactory,
         characters: CharacterLookup | None = None,
         ip_adapters: IpAdapterResolver | None = None,
+        stories: StoryScenes | None = None,
     ) -> None:
         """The generator is created lazily on first use (importing torch takes ~25 s). `characters` / `ip_adapters`
         (wired by services/container.py) serve GenerateRequest.character_id: without `characters` a request naming a
@@ -135,6 +153,7 @@ class GenerationService:
         self._generator_factory = generator_factory
         self._characters = characters
         self._ip_adapters = ip_adapters
+        self._stories = stories
         self._generator: GeneratorPort | None = None
         self._generator_lock = threading.Lock()
         # Serializes output id allocation + save so concurrent requests never share an id.
@@ -147,11 +166,15 @@ class GenerationService:
         With request.character_id: an unknown character fails (GenerationFailed); its reference images go to the
         generator when the IP-Adapter for the model + the character's focus is ready, and the saved metadata gets a
         `character` entry (OutputCharacter: applied, or the reason why not). Without it the metadata keeps the
-        legacy key set (no `character` key)."""
+        legacy key set (no `character` key).
+
+        With request.story: an unknown story or scene fails (GenerationFailed) before anything is generated; the saved
+        metadata gets a `story` entry (OutputStory) and the output becomes the scene's chosen variant."""
         model = request.model
         _log_preflight(request)
 
         try:
+            story = self._story_link(request)
             use = self._character_use(request)
             reference = use.reference if use is not None else None
             loading = "model, LoRAs and IP-Adapter" if reference is not None else "model and LoRAs"
@@ -196,6 +219,8 @@ class GenerationService:
         }
         if use is not None:
             metadata["character"] = use.record.model_dump(mode="json")
+        if story is not None:
+            metadata["story"] = story.model_dump(mode="json")
         try:
             with self._save_lock:
                 record = self._outputs.save(result.image, {"output_id": self._outputs.next_id(), **metadata})
@@ -205,6 +230,8 @@ class GenerationService:
             self._publish("error", message)
             raise GenerationFailed(message) from exc
 
+        if story is not None:
+            self._attach_to_scene(story, record.output_id)
         self._publish("complete", "Complete", current=request.steps, total=request.steps)
         return record
 
@@ -275,6 +302,32 @@ class GenerationService:
             ),
             reference=reference,
         )
+
+    def _story_link(self, request: GenerateRequest) -> OutputStory | None:
+        """The story scene of the request (what the output records), or None. Raises GenerationFailed for an unknown
+        story or scene (or unreadable stories)."""
+        link = request.story
+        if link is None:
+            return None
+        if self._stories is None:
+            raise GenerationFailed(f"Unknown story {link.story_id}: stories are not available.")
+        try:
+            return self._stories.scene_link(link.story_id, link.scene_id)
+        except LookupError as exc:
+            raise GenerationFailed(str(exc)) from None
+        except StoriesFileError as exc:
+            raise GenerationFailed(str(exc)) from exc
+
+    def _attach_to_scene(self, story: OutputStory, output_id: str) -> None:
+        """Adds the saved output to the scene's variants (chosen). A scene deleted meanwhile, or stories that cannot be
+        saved, only lose the link: the output is kept and listed."""
+        assert self._stories is not None
+        try:
+            self._stories.add_variant(story.story_id, story.scene_id, output_id)
+        except Exception:
+            logger.warning(
+                "Output %s could not be added to scene %s of story %s", output_id, story.scene_id, story.story_id, exc_info=True
+            )
 
     def _ensure_generator(self) -> GeneratorPort:
         """The generator, created on first use. Factory errors become GenerationFailed."""

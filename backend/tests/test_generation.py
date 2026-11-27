@@ -236,10 +236,10 @@ def test_generate_endpoint_returns_the_saved_record(client: TestClient, app_path
 
     assert response.status_code == 200
     body = response.json()
-    # The API answers every OutputRecord field: `character` is null without an active character (the metadata file
-    # on disk keeps the legacy keys, LEGACY_METADATA_KEYS).
-    assert set(body) == LEGACY_METADATA_KEYS | {"character"}
-    assert body["character"] is None
+    # The API answers every OutputRecord field: `character` and `story` are null without an active character or a
+    # story scene (the metadata file on disk keeps the legacy keys, LEGACY_METADATA_KEYS).
+    assert set(body) == LEGACY_METADATA_KEYS | {"character", "story"}
+    assert (body["character"], body["story"]) == (None, None)
     assert body["output_id"] == "0000000001"
     assert client.get("/api/outputs").json() == {"ids": ["0000000001"]}
     assert client.get("/api/outputs/0000000001").json() == body

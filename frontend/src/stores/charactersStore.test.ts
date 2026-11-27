@@ -76,6 +76,7 @@ const RECORD = {
 	active_loras: [{ id: 'alya', weight: 0.6 }],
 	selections: [selection('Main', '1girl, silver hair'), selection('Character outfit', 'school uniform')],
 	character: null,
+	story: null,
 } as unknown as OutputRecord;
 
 const lora = (id: string): LoRASpec => ({ id, name: `${id}.safetensors`, path: `D:/loras/${id}.safetensors`, source: null });

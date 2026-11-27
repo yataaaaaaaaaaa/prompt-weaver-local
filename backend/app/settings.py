@@ -60,6 +60,9 @@ class AppPaths(BaseModel):
     characters_dir: Path
     characters_file: Path
     character_images_dir: Path
+    # Stories (services/stories.py): stories_file holds every story and its scenes.
+    stories_dir: Path
+    stories_file: Path
     models_root: Path
     checkpoint_dir: Path
     # LoRA folder: download target of LoRAs and the folder inline <lora:name:weight> tags resolve against.
@@ -90,6 +93,8 @@ class AppPaths(BaseModel):
             characters_dir=root / "characters",
             characters_file=root / "characters" / "characters.json",
             character_images_dir=root / "characters" / "images",
+            stories_dir=root / "stories",
+            stories_file=root / "stories" / "stories.json",
             models_root=models_root,
             checkpoint_dir=models_root / MODEL_KIND_SUBDIRS["checkpoint"],
             prompt_lora_dir=models_root / MODEL_KIND_SUBDIRS["lora"],
@@ -115,7 +120,7 @@ class AppPaths(BaseModel):
 
     def ensure_dirs(self) -> None:
         """Creates the data directories. The model folders are created on demand by the downloads, the characters
-        folders by the first character write."""
+        and stories folders by their first write."""
         for directory in (self.root, self.output_dir, self.trash_dir, self.stores_dir, self.cache_dir):
             directory.mkdir(parents=True, exist_ok=True)
 

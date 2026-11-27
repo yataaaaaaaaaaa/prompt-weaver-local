@@ -49,6 +49,7 @@ function outputUsing(...selections: [string, string][]): OutputRecord {
 		model_id: 'model',
 		active_loras: [],
 		character: null,
+		story: null,
 		prompt: '',
 		negative_prompt: '',
 		width: 1024,

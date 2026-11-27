@@ -20,7 +20,8 @@ export type E2EResetOptions = {
 	/** Data dir files written after the fixture data (relative path -> JSON). See storeFile() and fixtureStoreFile(). */
 	files?: Record<string, unknown>;
 	/** Data dir files or folders deleted once everything is seeded (relative paths): 'output' for an empty output
-	 *  history, 'output/0000000004.png' for an output whose picture is missing, 'characters' for no characters. */
+	 *  history, 'output/0000000004.png' for an output whose picture is missing, 'characters' for no characters, 'stories'
+	 *  for no stories. */
 	remove?: string[];
 };
 

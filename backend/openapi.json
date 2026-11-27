@@ -1193,6 +1193,17 @@
             "title": "Steps",
             "type": "integer"
           },
+          "story": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/StoryLink"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "The story scene this generation illustrates. The scene's prompt overrides and characters are already part of this request (the frontend prompt engine pins them, src/domain/stories.ts); the backend checks that the scene exists (409 otherwise), records OutputRecord.story and adds the output to the scene's variants as its chosen illustration."
+          },
           "width": {
             "title": "Width",
             "type": "integer"
@@ -2902,6 +2913,17 @@
             "title": "Steps",
             "type": "integer"
           },
+          "story": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/OutputStory"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "The story scene this output illustrates (GenerateRequest.story); null for other generations and in files written before stories existed (no `story` key)."
+          },
           "width": {
             "title": "Width",
             "type": "integer"
@@ -2924,7 +2946,8 @@
           "image_seed",
           "active_loras",
           "selections",
-          "character"
+          "character",
+          "story"
         ],
         "title": "OutputRecord",
         "type": "object"
@@ -2989,6 +3012,37 @@
           "reason"
         ],
         "title": "OutputReference",
+        "type": "object"
+      },
+      "OutputStory": {
+        "description": "The story scene an output was generated for (snapshot of the titles when the output was made). The scene also\nlists the output as one of its variants (Scene.variants, services/stories.py).",
+        "properties": {
+          "scene_id": {
+            "pattern": "^scn-[0-9a-f]{12}$",
+            "title": "Scene Id",
+            "type": "string"
+          },
+          "scene_title": {
+            "title": "Scene Title",
+            "type": "string"
+          },
+          "story_id": {
+            "pattern": "^sty-[0-9a-f]{12}$",
+            "title": "Story Id",
+            "type": "string"
+          },
+          "story_title": {
+            "title": "Story Title",
+            "type": "string"
+          }
+        },
+        "required": [
+          "story_id",
+          "scene_id",
+          "story_title",
+          "scene_title"
+        ],
+        "title": "OutputStory",
         "type": "object"
       },
       "PaneLayout": {
@@ -3915,6 +3969,562 @@
           "error"
         ],
         "title": "ResolvedImageResource",
+        "type": "object"
+      },
+      "Scene": {
+        "description": "One scene of a story.",
+        "properties": {
+          "character_ids": {
+            "anyOf": [
+              {
+                "items": {
+                  "pattern": "^chr-[0-9a-f]{12}$",
+                  "type": "string"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "The characters of this scene, in order; null: the story's characters; []: no character.",
+            "title": "Character Ids"
+          },
+          "chosen_output_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "The variant illustrating the scene (one of `variants`); null: not illustrated yet.",
+            "title": "Chosen Output Id"
+          },
+          "created_at": {
+            "format": "date-time",
+            "title": "Created At",
+            "type": "string"
+          },
+          "extra_tags": {
+            "description": "Tags added to the prompt of the scene's generations (the locked sub-prompt of a pinned 'Scene' category).",
+            "items": {
+              "type": "string"
+            },
+            "title": "Extra Tags",
+            "type": "array"
+          },
+          "id": {
+            "pattern": "^scn-[0-9a-f]{12}$",
+            "title": "Id",
+            "type": "string"
+          },
+          "locks": {
+            "description": "Sub-prompts chosen for this scene, in prompt order (one per category; the first one of a category wins).",
+            "items": {
+              "$ref": "#/components/schemas/SceneLock"
+            },
+            "title": "Locks",
+            "type": "array"
+          },
+          "negative_tags": {
+            "description": "Appended to the negative prompt of the scene's generations.",
+            "items": {
+              "type": "string"
+            },
+            "title": "Negative Tags",
+            "type": "array"
+          },
+          "seed": {
+            "anyOf": [
+              {
+                "minimum": 0.0,
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Fixed image seed of the scene's generations (reproducible); null: a new seed each time.",
+            "title": "Seed"
+          },
+          "text": {
+            "default": "",
+            "description": "The narrative text of the scene.",
+            "maxLength": 50000,
+            "title": "Text",
+            "type": "string"
+          },
+          "title": {
+            "maxLength": 200,
+            "minLength": 1,
+            "title": "Title",
+            "type": "string"
+          },
+          "updated_at": {
+            "format": "date-time",
+            "title": "Updated At",
+            "type": "string"
+          },
+          "variants": {
+            "description": "Its illustrations, oldest first.",
+            "items": {
+              "$ref": "#/components/schemas/SceneVariant"
+            },
+            "title": "Variants",
+            "type": "array"
+          }
+        },
+        "required": [
+          "text",
+          "extra_tags",
+          "negative_tags",
+          "locks",
+          "character_ids",
+          "seed",
+          "id",
+          "title",
+          "variants",
+          "chosen_output_id",
+          "created_at",
+          "updated_at"
+        ],
+        "title": "Scene",
+        "type": "object"
+      },
+      "SceneCreateRequest": {
+        "description": "Body of POST /api/stories/{story_id}/scenes.",
+        "properties": {
+          "character_ids": {
+            "anyOf": [
+              {
+                "items": {
+                  "pattern": "^chr-[0-9a-f]{12}$",
+                  "type": "string"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "The characters of this scene, in order; null: the story's characters; []: no character.",
+            "title": "Character Ids"
+          },
+          "extra_tags": {
+            "description": "Tags added to the prompt of the scene's generations (the locked sub-prompt of a pinned 'Scene' category).",
+            "items": {
+              "type": "string"
+            },
+            "title": "Extra Tags",
+            "type": "array"
+          },
+          "index": {
+            "anyOf": [
+              {
+                "minimum": 0.0,
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Position of the new scene (0-based); null appends.",
+            "title": "Index"
+          },
+          "locks": {
+            "description": "Sub-prompts chosen for this scene, in prompt order (one per category; the first one of a category wins).",
+            "items": {
+              "$ref": "#/components/schemas/SceneLock"
+            },
+            "title": "Locks",
+            "type": "array"
+          },
+          "negative_tags": {
+            "description": "Appended to the negative prompt of the scene's generations.",
+            "items": {
+              "type": "string"
+            },
+            "title": "Negative Tags",
+            "type": "array"
+          },
+          "output_id": {
+            "anyOf": [
+              {
+                "pattern": "^\\d{10}$",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "An existing output: the scene's first variant and its chosen illustration (Add to story).",
+            "title": "Output Id"
+          },
+          "seed": {
+            "anyOf": [
+              {
+                "minimum": 0.0,
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Fixed image seed of the scene's generations (reproducible); null: a new seed each time.",
+            "title": "Seed"
+          },
+          "text": {
+            "default": "",
+            "description": "The narrative text of the scene.",
+            "maxLength": 50000,
+            "title": "Text",
+            "type": "string"
+          },
+          "title": {
+            "anyOf": [
+              {
+                "maxLength": 200,
+                "minLength": 1,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "null: 'Scene <n>' (n = the scene count after adding).",
+            "title": "Title"
+          }
+        },
+        "title": "SceneCreateRequest",
+        "type": "object"
+      },
+      "SceneLock": {
+        "description": "A sub-prompt chosen for one scene: generated as a pinned category named `category_name` whose locked sub-prompt\nis `prompt_text`, in place of the user category of that name (src/domain/stories.ts sceneCategories).",
+        "properties": {
+          "category_name": {
+            "maxLength": 200,
+            "minLength": 1,
+            "title": "Category Name",
+            "type": "string"
+          },
+          "prompt_text": {
+            "maxLength": 5000,
+            "minLength": 1,
+            "title": "Prompt Text",
+            "type": "string"
+          }
+        },
+        "required": [
+          "category_name",
+          "prompt_text"
+        ],
+        "title": "SceneLock",
+        "type": "object"
+      },
+      "SceneOrderUpdate": {
+        "description": "Body of PUT /api/stories/{story_id}/scene-order: every scene id of the story, in the new order.",
+        "properties": {
+          "scene_ids": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Scene Ids",
+            "type": "array"
+          }
+        },
+        "required": [
+          "scene_ids"
+        ],
+        "title": "SceneOrderUpdate",
+        "type": "object"
+      },
+      "ScenePatch": {
+        "description": "Body of PATCH /api/stories/{story_id}/scenes/{scene_id}: only the fields sent change (character_ids and seed\naccept null; the other fields do not).",
+        "properties": {
+          "character_ids": {
+            "anyOf": [
+              {
+                "items": {
+                  "pattern": "^chr-[0-9a-f]{12}$",
+                  "type": "string"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Character Ids"
+          },
+          "extra_tags": {
+            "anyOf": [
+              {
+                "items": {
+                  "type": "string"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Extra Tags"
+          },
+          "locks": {
+            "anyOf": [
+              {
+                "items": {
+                  "$ref": "#/components/schemas/SceneLock"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Locks"
+          },
+          "negative_tags": {
+            "anyOf": [
+              {
+                "items": {
+                  "type": "string"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Negative Tags"
+          },
+          "seed": {
+            "anyOf": [
+              {
+                "minimum": 0.0,
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Seed"
+          },
+          "text": {
+            "anyOf": [
+              {
+                "maxLength": 50000,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Text"
+          },
+          "title": {
+            "anyOf": [
+              {
+                "maxLength": 200,
+                "minLength": 1,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Title"
+          }
+        },
+        "title": "ScenePatch",
+        "type": "object"
+      },
+      "SceneVariant": {
+        "description": "An output illustrating a scene: generated for it (OutputRecord.story) or added from the outputs.",
+        "properties": {
+          "added_at": {
+            "format": "date-time",
+            "title": "Added At",
+            "type": "string"
+          },
+          "output_id": {
+            "pattern": "^\\d{10}$",
+            "title": "Output Id",
+            "type": "string"
+          }
+        },
+        "required": [
+          "output_id",
+          "added_at"
+        ],
+        "title": "SceneVariant",
+        "type": "object"
+      },
+      "SceneVariantRequest": {
+        "description": "Body of POST /api/stories/{story_id}/scenes/{scene_id}/variants and PUT .../chosen.",
+        "properties": {
+          "output_id": {
+            "pattern": "^\\d{10}$",
+            "title": "Output Id",
+            "type": "string"
+          }
+        },
+        "required": [
+          "output_id"
+        ],
+        "title": "SceneVariantRequest",
+        "type": "object"
+      },
+      "Story": {
+        "description": "An illustrated story: its scenes in reading order (backend-owned, <data dir>/stories/stories.json).",
+        "properties": {
+          "character_ids": {
+            "description": "The story's characters (Character.id), applied to every scene that does not name its own.",
+            "items": {
+              "pattern": "^chr-[0-9a-f]{12}$",
+              "type": "string"
+            },
+            "title": "Character Ids",
+            "type": "array"
+          },
+          "created_at": {
+            "format": "date-time",
+            "title": "Created At",
+            "type": "string"
+          },
+          "id": {
+            "pattern": "^sty-[0-9a-f]{12}$",
+            "title": "Id",
+            "type": "string"
+          },
+          "scenes": {
+            "items": {
+              "$ref": "#/components/schemas/Scene"
+            },
+            "title": "Scenes",
+            "type": "array"
+          },
+          "title": {
+            "maxLength": 200,
+            "minLength": 1,
+            "title": "Title",
+            "type": "string"
+          },
+          "updated_at": {
+            "format": "date-time",
+            "title": "Updated At",
+            "type": "string"
+          }
+        },
+        "required": [
+          "title",
+          "character_ids",
+          "id",
+          "scenes",
+          "created_at",
+          "updated_at"
+        ],
+        "title": "Story",
+        "type": "object"
+      },
+      "StoryCollection": {
+        "description": "Every story, in creation order.",
+        "properties": {
+          "items": {
+            "items": {
+              "$ref": "#/components/schemas/Story"
+            },
+            "title": "Items",
+            "type": "array"
+          }
+        },
+        "required": [
+          "items"
+        ],
+        "title": "StoryCollection",
+        "type": "object"
+      },
+      "StoryCreateRequest": {
+        "description": "Body of POST /api/stories.",
+        "properties": {
+          "character_ids": {
+            "description": "The story's characters (Character.id), applied to every scene that does not name its own.",
+            "items": {
+              "pattern": "^chr-[0-9a-f]{12}$",
+              "type": "string"
+            },
+            "title": "Character Ids",
+            "type": "array"
+          },
+          "title": {
+            "maxLength": 200,
+            "minLength": 1,
+            "title": "Title",
+            "type": "string"
+          }
+        },
+        "required": [
+          "title"
+        ],
+        "title": "StoryCreateRequest",
+        "type": "object"
+      },
+      "StoryLink": {
+        "description": "The story scene a generation illustrates (GenerateRequest.story).",
+        "properties": {
+          "scene_id": {
+            "pattern": "^scn-[0-9a-f]{12}$",
+            "title": "Scene Id",
+            "type": "string"
+          },
+          "story_id": {
+            "pattern": "^sty-[0-9a-f]{12}$",
+            "title": "Story Id",
+            "type": "string"
+          }
+        },
+        "required": [
+          "story_id",
+          "scene_id"
+        ],
+        "title": "StoryLink",
+        "type": "object"
+      },
+      "StoryPatch": {
+        "description": "Body of PATCH /api/stories/{story_id}: only the fields sent change (neither accepts null).",
+        "properties": {
+          "character_ids": {
+            "anyOf": [
+              {
+                "items": {
+                  "pattern": "^chr-[0-9a-f]{12}$",
+                  "type": "string"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Character Ids"
+          },
+          "title": {
+            "anyOf": [
+              {
+                "maxLength": 200,
+                "minLength": 1,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Title"
+          }
+        },
+        "title": "StoryPatch",
         "type": "object"
       },
       "TaskSnapshot": {
@@ -5903,6 +6513,790 @@
         "summary": "Write Store",
         "tags": [
           "stores"
+        ]
+      }
+    },
+    "/api/stories": {
+      "get": {
+        "description": "Every story with its scenes, in creation order.",
+        "operationId": "list_stories_api_stories_get",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/StoryCollection"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "503": {
+            "description": "stories.json cannot be read (it is never overwritten)"
+          }
+        },
+        "summary": "List Stories",
+        "tags": [
+          "stories"
+        ]
+      },
+      "post": {
+        "description": "Creates a story without scenes.",
+        "operationId": "create_story_api_stories_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/StoryCreateRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Story"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          },
+          "503": {
+            "description": "stories.json cannot be read (it is never overwritten)"
+          }
+        },
+        "summary": "Create Story",
+        "tags": [
+          "stories"
+        ]
+      }
+    },
+    "/api/stories/{story_id}": {
+      "delete": {
+        "description": "Deletes the story and its scenes (their outputs are kept).",
+        "operationId": "delete_story_api_stories__story_id__delete",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "story_id",
+            "required": true,
+            "schema": {
+              "pattern": "^sty-[0-9a-f]{12}$",
+              "title": "Story Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/OkResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "404": {
+            "description": "Unknown story, scene, variant or output"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          },
+          "503": {
+            "description": "stories.json cannot be read (it is never overwritten)"
+          }
+        },
+        "summary": "Delete Story",
+        "tags": [
+          "stories"
+        ]
+      },
+      "get": {
+        "operationId": "get_story_api_stories__story_id__get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "story_id",
+            "required": true,
+            "schema": {
+              "pattern": "^sty-[0-9a-f]{12}$",
+              "title": "Story Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Story"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "404": {
+            "description": "Unknown story, scene, variant or output"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          },
+          "503": {
+            "description": "stories.json cannot be read (it is never overwritten)"
+          }
+        },
+        "summary": "Get Story",
+        "tags": [
+          "stories"
+        ]
+      },
+      "patch": {
+        "description": "Changes the fields sent (title, characters).",
+        "operationId": "update_story_api_stories__story_id__patch",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "story_id",
+            "required": true,
+            "schema": {
+              "pattern": "^sty-[0-9a-f]{12}$",
+              "title": "Story Id",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/StoryPatch"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Story"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "404": {
+            "description": "Unknown story, scene, variant or output"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          },
+          "503": {
+            "description": "stories.json cannot be read (it is never overwritten)"
+          }
+        },
+        "summary": "Update Story",
+        "tags": [
+          "stories"
+        ]
+      }
+    },
+    "/api/stories/{story_id}/export": {
+      "get": {
+        "description": "The story as one self-contained HTML picture book (the chosen illustrations embedded).",
+        "operationId": "export_story_api_stories__story_id__export_get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "story_id",
+            "required": true,
+            "schema": {
+              "pattern": "^sty-[0-9a-f]{12}$",
+              "title": "Story Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "text/html": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "404": {
+            "description": "Unknown story, scene, variant or output"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          },
+          "503": {
+            "description": "stories.json cannot be read (it is never overwritten)"
+          }
+        },
+        "summary": "Export Story",
+        "tags": [
+          "stories"
+        ]
+      }
+    },
+    "/api/stories/{story_id}/scene-order": {
+      "put": {
+        "description": "Puts the scenes in the given order (every scene id of the story, once).",
+        "operationId": "reorder_scenes_api_stories__story_id__scene_order_put",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "story_id",
+            "required": true,
+            "schema": {
+              "pattern": "^sty-[0-9a-f]{12}$",
+              "title": "Story Id",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SceneOrderUpdate"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Story"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "404": {
+            "description": "Unknown story, scene, variant or output"
+          },
+          "422": {
+            "description": "The order does not list every scene of the story exactly once"
+          },
+          "503": {
+            "description": "stories.json cannot be read (it is never overwritten)"
+          }
+        },
+        "summary": "Reorder Scenes",
+        "tags": [
+          "stories"
+        ]
+      }
+    },
+    "/api/stories/{story_id}/scenes": {
+      "post": {
+        "description": "Adds a scene (at `index`, else at the end); with `output_id` that output illustrates it.",
+        "operationId": "add_scene_api_stories__story_id__scenes_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "story_id",
+            "required": true,
+            "schema": {
+              "pattern": "^sty-[0-9a-f]{12}$",
+              "title": "Story Id",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SceneCreateRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Story"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "404": {
+            "description": "Unknown story, scene, variant or output"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          },
+          "503": {
+            "description": "stories.json cannot be read (it is never overwritten)"
+          }
+        },
+        "summary": "Add Scene",
+        "tags": [
+          "stories"
+        ]
+      }
+    },
+    "/api/stories/{story_id}/scenes/{scene_id}": {
+      "delete": {
+        "description": "Deletes the scene (its outputs are kept).",
+        "operationId": "delete_scene_api_stories__story_id__scenes__scene_id__delete",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "story_id",
+            "required": true,
+            "schema": {
+              "pattern": "^sty-[0-9a-f]{12}$",
+              "title": "Story Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "scene_id",
+            "required": true,
+            "schema": {
+              "pattern": "^scn-[0-9a-f]{12}$",
+              "title": "Scene Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Story"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "404": {
+            "description": "Unknown story, scene, variant or output"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          },
+          "503": {
+            "description": "stories.json cannot be read (it is never overwritten)"
+          }
+        },
+        "summary": "Delete Scene",
+        "tags": [
+          "stories"
+        ]
+      },
+      "patch": {
+        "description": "Changes the fields sent (title, text, tags, locked sub-prompts, characters, seed).",
+        "operationId": "update_scene_api_stories__story_id__scenes__scene_id__patch",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "story_id",
+            "required": true,
+            "schema": {
+              "pattern": "^sty-[0-9a-f]{12}$",
+              "title": "Story Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "scene_id",
+            "required": true,
+            "schema": {
+              "pattern": "^scn-[0-9a-f]{12}$",
+              "title": "Scene Id",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ScenePatch"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Story"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "404": {
+            "description": "Unknown story, scene, variant or output"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          },
+          "503": {
+            "description": "stories.json cannot be read (it is never overwritten)"
+          }
+        },
+        "summary": "Update Scene",
+        "tags": [
+          "stories"
+        ]
+      }
+    },
+    "/api/stories/{story_id}/scenes/{scene_id}/chosen": {
+      "put": {
+        "description": "Makes one of the scene's variants its chosen illustration.",
+        "operationId": "choose_scene_variant_api_stories__story_id__scenes__scene_id__chosen_put",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "story_id",
+            "required": true,
+            "schema": {
+              "pattern": "^sty-[0-9a-f]{12}$",
+              "title": "Story Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "scene_id",
+            "required": true,
+            "schema": {
+              "pattern": "^scn-[0-9a-f]{12}$",
+              "title": "Scene Id",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SceneVariantRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Story"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "404": {
+            "description": "Unknown story, scene, variant or output"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          },
+          "503": {
+            "description": "stories.json cannot be read (it is never overwritten)"
+          }
+        },
+        "summary": "Choose Scene Variant",
+        "tags": [
+          "stories"
+        ]
+      }
+    },
+    "/api/stories/{story_id}/scenes/{scene_id}/duplicate": {
+      "post": {
+        "description": "Inserts a copy of the scene right after it.",
+        "operationId": "duplicate_scene_api_stories__story_id__scenes__scene_id__duplicate_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "story_id",
+            "required": true,
+            "schema": {
+              "pattern": "^sty-[0-9a-f]{12}$",
+              "title": "Story Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "scene_id",
+            "required": true,
+            "schema": {
+              "pattern": "^scn-[0-9a-f]{12}$",
+              "title": "Scene Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Story"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "404": {
+            "description": "Unknown story, scene, variant or output"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          },
+          "503": {
+            "description": "stories.json cannot be read (it is never overwritten)"
+          }
+        },
+        "summary": "Duplicate Scene",
+        "tags": [
+          "stories"
+        ]
+      }
+    },
+    "/api/stories/{story_id}/scenes/{scene_id}/variants": {
+      "post": {
+        "description": "Adds an existing output to the scene's variants and makes it the chosen illustration.",
+        "operationId": "add_scene_variant_api_stories__story_id__scenes__scene_id__variants_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "story_id",
+            "required": true,
+            "schema": {
+              "pattern": "^sty-[0-9a-f]{12}$",
+              "title": "Story Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "scene_id",
+            "required": true,
+            "schema": {
+              "pattern": "^scn-[0-9a-f]{12}$",
+              "title": "Scene Id",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SceneVariantRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Story"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "404": {
+            "description": "Unknown story, scene, variant or output"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          },
+          "503": {
+            "description": "stories.json cannot be read (it is never overwritten)"
+          }
+        },
+        "summary": "Add Scene Variant",
+        "tags": [
+          "stories"
+        ]
+      }
+    },
+    "/api/stories/{story_id}/scenes/{scene_id}/variants/{output_id}": {
+      "delete": {
+        "description": "Removes a variant from the scene (the output is kept).",
+        "operationId": "remove_scene_variant_api_stories__story_id__scenes__scene_id__variants__output_id__delete",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "story_id",
+            "required": true,
+            "schema": {
+              "pattern": "^sty-[0-9a-f]{12}$",
+              "title": "Story Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "scene_id",
+            "required": true,
+            "schema": {
+              "pattern": "^scn-[0-9a-f]{12}$",
+              "title": "Scene Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "output_id",
+            "required": true,
+            "schema": {
+              "pattern": "^\\d{10}$",
+              "title": "Output Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Story"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "404": {
+            "description": "Unknown story, scene, variant or output"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          },
+          "503": {
+            "description": "stories.json cannot be read (it is never overwritten)"
+          }
+        },
+        "summary": "Remove Scene Variant",
+        "tags": [
+          "stories"
         ]
       }
     },

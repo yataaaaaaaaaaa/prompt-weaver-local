@@ -29,10 +29,8 @@ from __future__ import annotations
 import io
 import logging
 import threading
-import uuid
 from collections.abc import Iterable
 from dataclasses import dataclass
-from datetime import UTC, datetime
 from pathlib import Path
 from types import TracebackType
 from typing import Any
@@ -57,6 +55,7 @@ from ..schemas import (
 from ..settings import AppPaths
 from .files import remove_quietly
 from .http import HttpClientFactory, describe_http_error
+from .ids import new_id, utc_now
 from .json_files import read_resilient_json, sidecar_paths, write_json_atomic
 from .outputs import OutputNotFound, OutputRepository
 from .pictures import fit_within
@@ -73,7 +72,6 @@ IMPORTABLE_IMAGE_FORMATS = frozenset({"PNG", "JPEG", "MPO", "WEBP", "BMP"})
 
 CHARACTER_ID_PREFIX = "chr-"
 CHARACTER_IMAGE_ID_PREFIX = "img-"
-_ID_HEX_LENGTH = 12
 _IMAGE_SUFFIX = ".png"
 
 
@@ -173,7 +171,7 @@ class CharacterStore:
         prepared = [
             (self._decoded(source, None, REFERENCE_IMAGE_MAX_SIDE), source) for source in request.reference_sources
         ]
-        now = _now()
+        now = utc_now()
         with self._lock:
             state = self._loaded()
             with _PendingImages(self._paths.character_images_dir) as files:
@@ -181,7 +179,7 @@ class CharacterStore:
                 thumbnail = files.store_thumbnail(prepared[0][0], references[0]) if references else None
                 character = Character(
                     **_draft_fields(request),
-                    id=_new_id(CHARACTER_ID_PREFIX),
+                    id=new_id(CHARACTER_ID_PREFIX),
                     reference_images=references,
                     thumbnail=thumbnail,
                     created_at=now,
@@ -194,7 +192,7 @@ class CharacterStore:
         """Replaces the editable fields (images, id and created_at kept; updated_at = now)."""
         with self._lock:
             state = self._loaded()
-            updated = state.find(character_id).model_copy(update={**_draft_fields(draft), "updated_at": _now()})
+            updated = state.find(character_id).model_copy(update={**_draft_fields(draft), "updated_at": utc_now()})
             self._save(state.replacing(updated))
         return updated
 
@@ -238,7 +236,7 @@ class CharacterStore:
                     update={
                         "reference_images": [*current.reference_images, reference],
                         "thumbnail": thumbnail,
-                        "updated_at": _now(),
+                        "updated_at": utc_now(),
                     }
                 )
                 self._save(state.replacing(updated))
@@ -252,7 +250,7 @@ class CharacterStore:
             remaining = [image for image in current.reference_images if image.id != image_id]
             if len(remaining) == len(current.reference_images):
                 raise CharacterImageNotFound(f"{current.name} has no reference image {image_id}.")
-            updated = current.model_copy(update={"reference_images": remaining, "updated_at": _now()})
+            updated = current.model_copy(update={"reference_images": remaining, "updated_at": utc_now()})
             self._save(state.replacing(updated))
         self._remove_images([image_id])
         return updated
@@ -264,7 +262,7 @@ class CharacterStore:
             state = self._loaded()
             current = state.find(character_id)
             with _PendingImages(self._paths.character_images_dir) as files:
-                updated = current.model_copy(update={"thumbnail": files.store(image, source), "updated_at": _now()})
+                updated = current.model_copy(update={"thumbnail": files.store(image, source), "updated_at": utc_now()})
                 self._save(state.replacing(updated))
         if current.thumbnail is not None:
             self._remove_images([current.thumbnail.id])
@@ -276,7 +274,7 @@ class CharacterStore:
             current = state.find(character_id)
             if current.thumbnail is None:
                 return current
-            updated = current.model_copy(update={"thumbnail": None, "updated_at": _now()})
+            updated = current.model_copy(update={"thumbnail": None, "updated_at": utc_now()})
             self._save(state.replacing(updated))
         self._remove_images([current.thumbnail.id])
         return updated
@@ -400,12 +398,12 @@ class _PendingImages:
 
     def store(self, image: Image.Image, source: CharacterImageSource) -> CharacterImage:
         """Saves `image` as a new PNG (as is: already downscaled) and describes it."""
-        image_id = _new_id(CHARACTER_IMAGE_ID_PREFIX)
+        image_id = new_id(CHARACTER_IMAGE_ID_PREFIX)
         path = self._folder / f"{image_id}{_IMAGE_SUFFIX}"
         self._folder.mkdir(parents=True, exist_ok=True)
         self._written.append(path)
         image.save(path, format="PNG")
-        return CharacterImage(id=image_id, width=image.width, height=image.height, source=source, added_at=_now())
+        return CharacterImage(id=image_id, width=image.width, height=image.height, source=source, added_at=utc_now())
 
     def store_thumbnail(self, reference_image: Image.Image, reference: CharacterImage) -> CharacterImage:
         """A thumbnail-sized copy of a reference image just stored."""
@@ -487,11 +485,3 @@ def _image_of(character: Character, image_id: str) -> CharacterImage | None:
 def _draft_fields(draft: CharacterDraft) -> dict[str, Any]:
     """The editable fields (CharacterDraft) of a draft, a create request or a character."""
     return {name: getattr(draft, name) for name in CharacterDraft.model_fields}
-
-
-def _new_id(prefix: str) -> str:
-    return f"{prefix}{uuid.uuid4().hex[:_ID_HEX_LENGTH]}"
-
-
-def _now() -> datetime:
-    return datetime.now(UTC)

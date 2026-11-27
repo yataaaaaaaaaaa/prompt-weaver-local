@@ -84,6 +84,14 @@ def test_startup_seeds_the_synthetic_fixture_data(backend: TestClient) -> None:
     thumbnail = backend.get(f"/api/characters/{mira['id']}/images/{mira['thumbnail']['id']}")
     assert thumbnail.status_code == 200 and thumbnail.headers["content-type"] == "image/png"
 
+    # Stories: one illustrated by fixture outputs (Mira's), one not illustrated yet (Bram's).
+    stories = backend.get("/api/stories").json()["items"]
+    assert [(story["title"], len(story["scenes"])) for story in stories] == [("The lighthouse keeper", 3), ("Bram's quest", 1)]
+    lighthouse = stories[0]
+    assert lighthouse["character_ids"] == [mira["id"]]
+    assert [scene["chosen_output_id"] for scene in lighthouse["scenes"]] == ["0000000002", "0000000004", None]
+    assert backend.get(f"/api/stories/{lighthouse['id']}/export").text.count("data:image/jpeg;base64,") == 2
+
 
 def test_the_selected_model_is_a_real_sdxl_checkpoint_header(backend: TestClient) -> None:
     library = library_state(backend)

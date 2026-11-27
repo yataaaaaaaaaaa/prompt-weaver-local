@@ -1,0 +1,118 @@
+{
+  "version": 1,
+  "items": [
+    {
+      "id": "sty-aaaaaaaaaaa1",
+      "title": "The lighthouse keeper",
+      "character_ids": [
+        "chr-aaaaaaaaaaa1"
+      ],
+      "scenes": [
+        {
+          "id": "scn-aaaaaaaaaaa1",
+          "title": "Arrival at the lighthouse",
+          "text": "Mira climbed the hundred stairs of the old lighthouse with a lantern in her hand.\nAt the top, the sea was silver and quiet.",
+          "extra_tags": [
+            "lighthouse",
+            "spiral stairs"
+          ],
+          "negative_tags": [],
+          "locks": [
+            {
+              "category_name": "Mood",
+              "prompt_text": "smiling"
+            }
+          ],
+          "character_ids": null,
+          "seed": null,
+          "variants": [
+            {
+              "output_id": "0000000002",
+              "added_at": "2026-11-24T08:00:00Z"
+            }
+          ],
+          "chosen_output_id": "0000000002",
+          "created_at": "2026-11-24T08:00:00Z",
+          "updated_at": "2026-11-24T08:00:00Z"
+        },
+        {
+          "id": "scn-aaaaaaaaaaa2",
+          "title": "The storm",
+          "text": "At midnight the storm broke. Waves hit the rocks and the light had to keep turning.",
+          "extra_tags": [
+            "storm",
+            "night",
+            "crashing waves"
+          ],
+          "negative_tags": [
+            "sunny"
+          ],
+          "locks": [],
+          "character_ids": null,
+          "seed": 4242,
+          "variants": [
+            {
+              "output_id": "0000000003",
+              "added_at": "2026-11-24T08:10:00Z"
+            },
+            {
+              "output_id": "0000000004",
+              "added_at": "2026-11-24T08:12:00Z"
+            }
+          ],
+          "chosen_output_id": "0000000004",
+          "created_at": "2026-11-24T08:05:00Z",
+          "updated_at": "2026-11-24T08:12:00Z"
+        },
+        {
+          "id": "scn-aaaaaaaaaaa3",
+          "title": "Morning calm",
+          "text": "When the sun rose, a small boat came back to the harbor.",
+          "extra_tags": [
+            "sunrise",
+            "calm sea",
+            "small boat"
+          ],
+          "negative_tags": [],
+          "locks": [],
+          "character_ids": null,
+          "seed": null,
+          "variants": [],
+          "chosen_output_id": null,
+          "created_at": "2026-11-24T08:20:00Z",
+          "updated_at": "2026-11-24T08:20:00Z"
+        }
+      ],
+      "created_at": "2026-11-24T08:00:00Z",
+      "updated_at": "2026-11-24T08:20:00Z"
+    },
+    {
+      "id": "sty-bbbbbbbbbbb1",
+      "title": "Bram's quest",
+      "character_ids": [
+        "chr-bbbbbbbbbbb1"
+      ],
+      "scenes": [
+        {
+          "id": "scn-bbbbbbbbbbb1",
+          "title": "The castle gate",
+          "text": "Bram the knight left the castle at dawn.",
+          "extra_tags": [
+            "castle gate",
+            "dawn"
+          ],
+          "negative_tags": [],
+          "locks": [],
+          "character_ids": null,
+          "seed": null,
+          "variants": [],
+          "chosen_output_id": null,
+          "created_at": "2026-11-25T09:00:00Z",
+          "updated_at": "2026-11-25T09:00:00Z"
+        }
+      ],
+      "created_at": "2026-11-25T09:00:00Z",
+      "updated_at": "2026-11-25T09:00:00Z"
+    }
+  ]
+}

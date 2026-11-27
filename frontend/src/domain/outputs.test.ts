@@ -139,6 +139,7 @@ describe('outputDetails', () => {
 		image_path: 'D:\\data\\output\\0000000112.png',
 		metadata_path: 'D:\\data\\output\\0000000112.json',
 		character: null,
+		story: null,
 	};
 
 	it('resolves names, keeps the LoRA weights and the image file name', () => {
@@ -160,6 +161,7 @@ describe('outputDetails', () => {
 			prompt: 'masterpiece, clothed',
 			negativePrompt: 'ugly',
 			character: null,
+			story: null,
 		});
 	});
 

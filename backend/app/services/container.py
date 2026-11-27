@@ -23,6 +23,7 @@ from .model_providers.civitai import CivitaiProvider
 from .model_providers.civitai_images import CivitaiImageProvider
 from .outputs import OutputRepository
 from .persisted_stores import PersistedStoreRepository
+from .stories import StoryStore
 from .task_hub import TaskHub
 
 FILE_HASH_CACHE_NAME = "file_hashes.json"
@@ -43,6 +44,7 @@ class AppServices:
     images: ImageLibraryService
     characters: CharacterStore
     ip_adapters: IpAdapterService
+    stories: StoryStore
 
 
 def build_services(
@@ -62,6 +64,7 @@ def build_services(
     catalog = ModelCatalogService(paths=paths, providers=providers, local_files=local_files, settings=settings)
     characters = CharacterStore(paths=paths, outputs=outputs, http_client_factory=http_client_factory)
     ip_adapters = IpAdapterService(paths=paths, local_files=local_files, downloads=downloads)
+    stories = StoryStore(paths=paths, outputs=outputs)
     return AppServices(
         paths=paths,
         legacy=LegacyStateService(paths),
@@ -75,6 +78,7 @@ def build_services(
             generator_factory=generator_factory,
             characters=characters,
             ip_adapters=ip_adapters,
+            stories=stories,
         ),
         settings=settings,
         downloads=downloads,
@@ -88,4 +92,5 @@ def build_services(
         ),
         characters=characters,
         ip_adapters=ip_adapters,
+        stories=stories,
     )

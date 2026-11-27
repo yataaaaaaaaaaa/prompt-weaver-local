@@ -20,6 +20,7 @@ from . import (
     models,
     outputs,
     stores,
+    stories,
     tasks,
 )
 
@@ -36,4 +37,5 @@ ROUTERS: tuple[APIRouter, ...] = (
     images.router,
     characters.router,
     ip_adapters.router,
+    stories.router,
 )
