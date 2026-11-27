@@ -170,6 +170,148 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/codex/conversation": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get Conversation
+         * @description The conversation of a story (without story_id: the draft conversation); its history is read from Codex once.
+         */
+        get: operations["get_conversation_api_codex_conversation_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/codex/conversation/reset": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Reset Conversation
+         * @description New conversation: the story (or the draft) gets an empty conversation.
+         */
+        post: operations["reset_conversation_api_codex_conversation_reset_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/codex/conversations/{conversation_id}/interrupt": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Interrupt
+         * @description Stop: interrupts the running answer; its tool calls are abandoned (the window stops a running generation).
+         */
+        post: operations["interrupt_api_codex_conversations__conversation_id__interrupt_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/codex/settings": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        /**
+         * Update Settings
+         * @description The Codex path (null: auto-detect; Codex is looked for again) and the model (null: the user's default).
+         */
+        put: operations["update_settings_api_codex_settings_put"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/codex/status": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Get Status
+         * @description Whether the co-writer can work. Looks for Codex and asks it about its login on the first call; `refresh`
+         *     (Retry) looks again.
+         */
+        get: operations["get_status_api_codex_status_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/codex/tool-calls/{call_id}/result": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Tool Call Result
+         * @description The result of a tool call the frontend ran; 404 when the call is unknown or already over (stopped, timed out).
+         */
+        post: operations["tool_call_result_api_codex_tool_calls__call_id__result_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/codex/turns": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Send Message
+         * @description Sends the user's message (starting Codex when needed); answers the conversation with the message, the answer
+         *     streams over /ws/tasks. A failure to reach Codex shows as an error entry of the conversation.
+         */
+        post: operations["send_message_api_codex_turns_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/downloads/{task_id}/cancel": {
         parameters: {
             query?: never;
@@ -1248,6 +1390,708 @@ export interface components {
         CharacterImageRequest: {
             /** Source */
             source: components["schemas"]["OutputImageSource"] | components["schemas"]["FileImageSource"] | components["schemas"]["UrlImageSource"] | components["schemas"]["CharacterImageCopySource"];
+        };
+        /** CodexAddSceneArgs */
+        CodexAddSceneArgs: {
+            /**
+             * Characters
+             * @description "story": the story's characters; a list: its own.
+             * @default story
+             */
+            characters: "story" | string[];
+            /**
+             * Extra Tags
+             * @description Danbooru-style tags of the scene's picture.
+             */
+            extra_tags: string[];
+            /** Negative Tags */
+            negative_tags: string[];
+            /**
+             * Position
+             * @description 1-based position; null: at the end.
+             */
+            position: number | null;
+            /** Story Id */
+            story_id: string;
+            /**
+             * Text
+             * @description The narrative text of the scene.
+             * @default
+             */
+            text: string;
+            /**
+             * Title
+             * @description null: 'Scene <n>'.
+             */
+            title: string | null;
+        };
+        /** CodexAddSceneCall */
+        CodexAddSceneCall: {
+            arguments: components["schemas"]["CodexAddSceneArgs"];
+            /** Call Id */
+            call_id: string;
+            /** Client Id */
+            client_id: string;
+            /** Conversation Id */
+            conversation_id: string;
+            /**
+             * @description discriminator enum property added by openapi-typescript
+             * @enum {string}
+             */
+            tool: "add_scene";
+        };
+        /**
+         * CodexConversation
+         * @description The co-writer conversation of one or more stories (a story created in a conversation joins it), or the draft
+         *     conversation (used while no story is selected).
+         */
+        CodexConversation: {
+            /**
+             * Draft
+             * @description The conversation used while no story is selected.
+             * @default false
+             */
+            draft: boolean;
+            /** Entries */
+            entries: components["schemas"]["CodexEntry"][];
+            /** Id */
+            id: string;
+            /**
+             * Revision
+             * @description Counts the changes of the conversation: an answer or event with a lower revision than the one shown is older (the HTTP answers and the WebSocket events race).
+             * @default 0
+             */
+            revision: number;
+            /**
+             * Running
+             * @description Codex is answering (a turn is running).
+             * @default false
+             */
+            running: boolean;
+            /** Story Ids */
+            story_ids: string[];
+        };
+        /**
+         * CodexConversationEvent
+         * @description A conversation changed as a whole (created, its stories, a turn started or ended, its history loaded).
+         */
+        CodexConversationEvent: {
+            conversation: components["schemas"]["CodexConversation"];
+            /**
+             * @description discriminator enum property added by openapi-typescript
+             * @enum {string}
+             */
+            kind: "conversation";
+            /**
+             * Type
+             * @default codex
+             * @constant
+             */
+            type: "codex";
+        };
+        /**
+         * CodexConversationReset
+         * @description Body of POST /api/codex/conversation/reset (New conversation): the story (null: the draft) gets a new one.
+         */
+        CodexConversationReset: {
+            /** Story Id */
+            story_id?: string | null;
+        };
+        /** CodexCreateStoryArgs */
+        CodexCreateStoryArgs: {
+            /**
+             * Character Ids
+             * @description The story's characters (list_characters).
+             */
+            character_ids: string[];
+            /** Title */
+            title: string;
+        };
+        /** CodexCreateStoryCall */
+        CodexCreateStoryCall: {
+            arguments: components["schemas"]["CodexCreateStoryArgs"];
+            /** Call Id */
+            call_id: string;
+            /** Client Id */
+            client_id: string;
+            /** Conversation Id */
+            conversation_id: string;
+            /**
+             * @description discriminator enum property added by openapi-typescript
+             * @enum {string}
+             */
+            tool: "create_story";
+        };
+        /** CodexDeleteSceneArgs */
+        CodexDeleteSceneArgs: {
+            /** Scene Id */
+            scene_id: string;
+            /** Story Id */
+            story_id: string;
+            /**
+             * User Confirmed
+             * @description True only when the user confirmed this deletion in the conversation.
+             */
+            user_confirmed: boolean;
+        };
+        /** CodexDeleteSceneCall */
+        CodexDeleteSceneCall: {
+            arguments: components["schemas"]["CodexDeleteSceneArgs"];
+            /** Call Id */
+            call_id: string;
+            /** Client Id */
+            client_id: string;
+            /** Conversation Id */
+            conversation_id: string;
+            /**
+             * @description discriminator enum property added by openapi-typescript
+             * @enum {string}
+             */
+            tool: "delete_scene";
+        };
+        /**
+         * CodexDeltaEvent
+         * @description Streamed text appended to an assistant entry.
+         */
+        CodexDeltaEvent: {
+            /** Conversation Id */
+            conversation_id: string;
+            /** Delta */
+            delta: string;
+            /** Entry Id */
+            entry_id: string;
+            /**
+             * @description discriminator enum property added by openapi-typescript
+             * @enum {string}
+             */
+            kind: "delta";
+            /**
+             * Revision
+             * @description The conversation's revision with this text.
+             */
+            revision: number;
+            /**
+             * Type
+             * @default codex
+             * @constant
+             */
+            type: "codex";
+        };
+        /** CodexDuplicateSceneCall */
+        CodexDuplicateSceneCall: {
+            arguments: components["schemas"]["CodexSceneArgs"];
+            /** Call Id */
+            call_id: string;
+            /** Client Id */
+            client_id: string;
+            /** Conversation Id */
+            conversation_id: string;
+            /**
+             * @description discriminator enum property added by openapi-typescript
+             * @enum {string}
+             */
+            tool: "duplicate_scene";
+        };
+        /**
+         * CodexEntry
+         * @description One entry of a conversation: a message, a tool activity, an error or a notice ('Stopped.').
+         */
+        CodexEntry: {
+            /** Id */
+            id: string;
+            /**
+             * Kind
+             * @enum {string}
+             */
+            kind: "user" | "assistant" | "tool" | "error" | "notice";
+            /** Scene Id */
+            scene_id: string | null;
+            /**
+             * Status
+             * @default completed
+             * @enum {string}
+             */
+            status: "running" | "completed" | "failed";
+            /**
+             * Story Id
+             * @description What a tool entry acted on (its arguments or its result).
+             */
+            story_id: string | null;
+            /**
+             * Text
+             * @description The message; a tool's summary once done; the error or the notice.
+             * @default
+             */
+            text: string;
+            /**
+             * Tool
+             * @description The tool of a tool entry (a CodexToolName for the app's tools).
+             */
+            tool: string | null;
+        };
+        /**
+         * CodexEntryEvent
+         * @description An entry was added or changed (it replaces the entry with its id).
+         */
+        CodexEntryEvent: {
+            /** Conversation Id */
+            conversation_id: string;
+            entry: components["schemas"]["CodexEntry"];
+            /**
+             * @description discriminator enum property added by openapi-typescript
+             * @enum {string}
+             */
+            kind: "entry";
+            /**
+             * Revision
+             * @description The conversation's revision with this entry.
+             */
+            revision: number;
+            /**
+             * Type
+             * @default codex
+             * @constant
+             */
+            type: "codex";
+        };
+        CodexEvent: components["schemas"]["CodexStatusEvent"] | components["schemas"]["CodexConversationEvent"] | components["schemas"]["CodexEntryEvent"] | components["schemas"]["CodexDeltaEvent"] | components["schemas"]["CodexToolCallEvent"] | components["schemas"]["CodexToolCancelEvent"];
+        /** CodexGenerateMissingScenesCall */
+        CodexGenerateMissingScenesCall: {
+            arguments: components["schemas"]["CodexStoryArgs"];
+            /** Call Id */
+            call_id: string;
+            /** Client Id */
+            client_id: string;
+            /** Conversation Id */
+            conversation_id: string;
+            /**
+             * @description discriminator enum property added by openapi-typescript
+             * @enum {string}
+             */
+            tool: "generate_missing_scenes";
+        };
+        /** CodexGenerateSceneCall */
+        CodexGenerateSceneCall: {
+            arguments: components["schemas"]["CodexSceneArgs"];
+            /** Call Id */
+            call_id: string;
+            /** Client Id */
+            client_id: string;
+            /** Conversation Id */
+            conversation_id: string;
+            /**
+             * @description discriminator enum property added by openapi-typescript
+             * @enum {string}
+             */
+            tool: "generate_scene";
+        };
+        /** CodexGetStoryCall */
+        CodexGetStoryCall: {
+            arguments: components["schemas"]["CodexStoryArgs"];
+            /** Call Id */
+            call_id: string;
+            /** Client Id */
+            client_id: string;
+            /** Conversation Id */
+            conversation_id: string;
+            /**
+             * @description discriminator enum property added by openapi-typescript
+             * @enum {string}
+             */
+            tool: "get_story";
+        };
+        /** CodexListCategoriesArgs */
+        CodexListCategoriesArgs: {
+            /**
+             * Query
+             * @description Only the categories whose name contains it.
+             */
+            query: string | null;
+        };
+        /** CodexListCategoriesCall */
+        CodexListCategoriesCall: {
+            arguments: components["schemas"]["CodexListCategoriesArgs"];
+            /** Call Id */
+            call_id: string;
+            /** Client Id */
+            client_id: string;
+            /** Conversation Id */
+            conversation_id: string;
+            /**
+             * @description discriminator enum property added by openapi-typescript
+             * @enum {string}
+             */
+            tool: "list_categories";
+        };
+        /** CodexListCharactersCall */
+        CodexListCharactersCall: {
+            arguments: components["schemas"]["CodexNoArgs"];
+            /** Call Id */
+            call_id: string;
+            /** Client Id */
+            client_id: string;
+            /** Conversation Id */
+            conversation_id: string;
+            /**
+             * @description discriminator enum property added by openapi-typescript
+             * @enum {string}
+             */
+            tool: "list_characters";
+        };
+        /** CodexListStoriesCall */
+        CodexListStoriesCall: {
+            arguments: components["schemas"]["CodexNoArgs"];
+            /** Call Id */
+            call_id: string;
+            /** Client Id */
+            client_id: string;
+            /** Conversation Id */
+            conversation_id: string;
+            /**
+             * @description discriminator enum property added by openapi-typescript
+             * @enum {string}
+             */
+            tool: "list_stories";
+        };
+        /** CodexLockArgs */
+        CodexLockArgs: {
+            /**
+             * Category
+             * @description A prompt category (list_categories).
+             */
+            category: string;
+            /** Scene Id */
+            scene_id: string;
+            /** Story Id */
+            story_id: string;
+            /**
+             * Sub Prompt
+             * @description One of that category's sub-prompts.
+             */
+            sub_prompt: string;
+        };
+        /** CodexLockSubPromptCall */
+        CodexLockSubPromptCall: {
+            arguments: components["schemas"]["CodexLockArgs"];
+            /** Call Id */
+            call_id: string;
+            /** Client Id */
+            client_id: string;
+            /** Conversation Id */
+            conversation_id: string;
+            /**
+             * @description discriminator enum property added by openapi-typescript
+             * @enum {string}
+             */
+            tool: "lock_sub_prompt";
+        };
+        /**
+         * CodexModelOption
+         * @description A model the user's Codex offers (model/list).
+         */
+        CodexModelOption: {
+            /** Id */
+            id: string;
+            /** Name */
+            name: string;
+        };
+        /** CodexMoveSceneArgs */
+        CodexMoveSceneArgs: {
+            /**
+             * Position
+             * @description The new 1-based position.
+             */
+            position: number;
+            /** Scene Id */
+            scene_id: string;
+            /** Story Id */
+            story_id: string;
+        };
+        /** CodexMoveSceneCall */
+        CodexMoveSceneCall: {
+            arguments: components["schemas"]["CodexMoveSceneArgs"];
+            /** Call Id */
+            call_id: string;
+            /** Client Id */
+            client_id: string;
+            /** Conversation Id */
+            conversation_id: string;
+            /**
+             * @description discriminator enum property added by openapi-typescript
+             * @enum {string}
+             */
+            tool: "move_scene";
+        };
+        /** CodexNoArgs */
+        CodexNoArgs: Record<string, never>;
+        /** CodexSceneArgs */
+        CodexSceneArgs: {
+            /** Scene Id */
+            scene_id: string;
+            /** Story Id */
+            story_id: string;
+        };
+        /**
+         * CodexSettingsUpdate
+         * @description Body of PUT /api/codex/settings: only the fields sent change; null clears (auto-detect, the default model).
+         */
+        CodexSettingsUpdate: {
+            /** Model */
+            model?: string | null;
+            /** Path */
+            path?: string | null;
+        };
+        /**
+         * CodexStatus
+         * @description Whether the co-writer can work: Codex found (where, which version), signed in, its models.
+         */
+        CodexStatus: {
+            /**
+             * Account
+             * @description How Codex is signed in (never the credentials).
+             */
+            account: ("chatgpt" | "api_key" | "other") | null;
+            /**
+             * Configured Path
+             * @description The path set by the user (backend settings).
+             */
+            configured_path: string | null;
+            /**
+             * Default Model
+             * @description The model of the user's Codex configuration.
+             */
+            default_model: string | null;
+            /**
+             * Message
+             * @description What to do when the state is not ready (shown as is).
+             * @default
+             */
+            message: string;
+            /**
+             * Model
+             * @description The model chosen for the co-writer (null: the default).
+             */
+            model: string | null;
+            /** Models */
+            models: components["schemas"]["CodexModelOption"][];
+            /**
+             * Path
+             * @description The codex executable used (null: not found).
+             */
+            path: string | null;
+            /**
+             * Running
+             * @description The Codex process is running.
+             * @default false
+             */
+            running: boolean;
+            /**
+             * Searched
+             * @description Where Codex was looked for (when not found).
+             */
+            searched: string[];
+            /** Source */
+            source: ("configured" | "path" | "windows_app" | "npm") | null;
+            /**
+             * State
+             * @enum {string}
+             */
+            state: "not_found" | "signed_out" | "ready" | "error";
+            /** Version */
+            version: string | null;
+        };
+        /** CodexStatusEvent */
+        CodexStatusEvent: {
+            /**
+             * @description discriminator enum property added by openapi-typescript
+             * @enum {string}
+             */
+            kind: "status";
+            status: components["schemas"]["CodexStatus"];
+            /**
+             * Type
+             * @default codex
+             * @constant
+             */
+            type: "codex";
+        };
+        /** CodexStoryArgs */
+        CodexStoryArgs: {
+            /** Story Id */
+            story_id: string;
+        };
+        /** CodexToolCallEvent */
+        CodexToolCallEvent: {
+            /** Call */
+            call: components["schemas"]["CodexListStoriesCall"] | components["schemas"]["CodexGetStoryCall"] | components["schemas"]["CodexListCharactersCall"] | components["schemas"]["CodexListCategoriesCall"] | components["schemas"]["CodexCreateStoryCall"] | components["schemas"]["CodexUpdateStoryCall"] | components["schemas"]["CodexAddSceneCall"] | components["schemas"]["CodexUpdateSceneCall"] | components["schemas"]["CodexLockSubPromptCall"] | components["schemas"]["CodexUnlockCategoryCall"] | components["schemas"]["CodexMoveSceneCall"] | components["schemas"]["CodexDuplicateSceneCall"] | components["schemas"]["CodexDeleteSceneCall"] | components["schemas"]["CodexGenerateSceneCall"] | components["schemas"]["CodexGenerateMissingScenesCall"];
+            /**
+             * @description discriminator enum property added by openapi-typescript
+             * @enum {string}
+             */
+            kind: "tool_call";
+            /**
+             * Type
+             * @default codex
+             * @constant
+             */
+            type: "codex";
+        };
+        /**
+         * CodexToolCancelEvent
+         * @description The tool call was abandoned (Stop, Codex stopped): the window running it stops it (e.g. its generation).
+         */
+        CodexToolCancelEvent: {
+            /** Call Id */
+            call_id: string;
+            /** Client Id */
+            client_id: string;
+            /**
+             * @description discriminator enum property added by openapi-typescript
+             * @enum {string}
+             */
+            kind: "tool_cancel";
+            /**
+             * Type
+             * @default codex
+             * @constant
+             */
+            type: "codex";
+        };
+        /**
+         * CodexToolResult
+         * @description Body of POST /api/codex/tool-calls/{call_id}/result: what the frontend did.
+         */
+        CodexToolResult: {
+            /** Ok */
+            ok: boolean;
+            /** Scene Id */
+            scene_id?: string | null;
+            /**
+             * Story Id
+             * @description The story it acted on (the conversation links to it).
+             */
+            story_id?: string | null;
+            /**
+             * Summary
+             * @description What people read in the conversation ('Added Scene 3 · The storm').
+             */
+            summary: string;
+            /**
+             * Text
+             * @description The answer Codex reads (data, or the reason of a failure).
+             */
+            text: string;
+        };
+        /**
+         * CodexTurnRequest
+         * @description Body of POST /api/codex/turns: a message of the user, about the story (and scene) shown.
+         */
+        CodexTurnRequest: {
+            /** Client Id */
+            client_id: string;
+            /** Scene Id */
+            scene_id?: string | null;
+            /** Story Id */
+            story_id?: string | null;
+            /** Text */
+            text: string;
+        };
+        /** CodexUnlockArgs */
+        CodexUnlockArgs: {
+            /** Category */
+            category: string;
+            /** Scene Id */
+            scene_id: string;
+            /** Story Id */
+            story_id: string;
+        };
+        /** CodexUnlockCategoryCall */
+        CodexUnlockCategoryCall: {
+            arguments: components["schemas"]["CodexUnlockArgs"];
+            /** Call Id */
+            call_id: string;
+            /** Client Id */
+            client_id: string;
+            /** Conversation Id */
+            conversation_id: string;
+            /**
+             * @description discriminator enum property added by openapi-typescript
+             * @enum {string}
+             */
+            tool: "unlock_category";
+        };
+        /**
+         * CodexUpdateSceneArgs
+         * @description Only the fields given change (null: unchanged).
+         */
+        CodexUpdateSceneArgs: {
+            /**
+             * Characters
+             * @description "story": the story's characters; []: none.
+             */
+            characters: "story" | string[] | null;
+            /** Extra Tags */
+            extra_tags: string[] | null;
+            /** Negative Tags */
+            negative_tags: string[] | null;
+            /** Scene Id */
+            scene_id: string;
+            /**
+             * Seed
+             * @description A fixed seed, or "random".
+             */
+            seed: number | "random" | null;
+            /** Story Id */
+            story_id: string;
+            /** Text */
+            text: string | null;
+            /** Title */
+            title: string | null;
+        };
+        /** CodexUpdateSceneCall */
+        CodexUpdateSceneCall: {
+            arguments: components["schemas"]["CodexUpdateSceneArgs"];
+            /** Call Id */
+            call_id: string;
+            /** Client Id */
+            client_id: string;
+            /** Conversation Id */
+            conversation_id: string;
+            /**
+             * @description discriminator enum property added by openapi-typescript
+             * @enum {string}
+             */
+            tool: "update_scene";
+        };
+        /** CodexUpdateStoryArgs */
+        CodexUpdateStoryArgs: {
+            /**
+             * Character Ids
+             * @description null: unchanged.
+             */
+            character_ids: string[] | null;
+            /** Story Id */
+            story_id: string;
+            /**
+             * Title
+             * @description null: unchanged.
+             */
+            title: string | null;
+        };
+        /** CodexUpdateStoryCall */
+        CodexUpdateStoryCall: {
+            arguments: components["schemas"]["CodexUpdateStoryArgs"];
+            /** Call Id */
+            call_id: string;
+            /** Client Id */
+            client_id: string;
+            /** Conversation Id */
+            conversation_id: string;
+            /**
+             * @description discriminator enum property added by openapi-typescript
+             * @enum {string}
+             */
+            tool: "update_story";
         };
         /**
          * DownloadTaskEvent
@@ -3419,6 +4263,289 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content?: never;
+            };
+        };
+    };
+    get_conversation_api_codex_conversation_get: {
+        parameters: {
+            query?: {
+                story_id?: string | null;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CodexConversation"];
+                };
+            };
+            /** @description Unknown story, conversation or tool call */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    reset_conversation_api_codex_conversation_reset_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CodexConversationReset"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CodexConversation"];
+                };
+            };
+            /** @description Unknown story, conversation or tool call */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Codex cannot work now (not found, not signed in) or is still answering */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    interrupt_api_codex_conversations__conversation_id__interrupt_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                conversation_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CodexConversation"];
+                };
+            };
+            /** @description Unknown story, conversation or tool call */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    update_settings_api_codex_settings_put: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CodexSettingsUpdate"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CodexStatus"];
+                };
+            };
+            /** @description Codex cannot work now (not found, not signed in) or is still answering */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    get_status_api_codex_status_get: {
+        parameters: {
+            query?: {
+                refresh?: boolean;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CodexStatus"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    tool_call_result_api_codex_tool_calls__call_id__result_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                call_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CodexToolResult"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["OkResponse"];
+                };
+            };
+            /** @description Unknown story, conversation or tool call */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    send_message_api_codex_turns_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CodexTurnRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CodexConversation"];
+                };
+            };
+            /** @description Unknown story, conversation or tool call */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Codex cannot work now (not found, not signed in) or is still answering */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
             };
         };
     };

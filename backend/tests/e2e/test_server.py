@@ -169,3 +169,24 @@ def test_the_fixture_data_is_synthetic() -> None:
         text = file.read_text(encoding="utf-8")
         assert "D:\\\\Anything" not in text and "D:/Anything" not in text, file
         assert "storage" not in text.lower(), file
+
+
+def test_the_co_writer_uses_the_fake_codex(backend: TestClient) -> None:
+    state = reset(backend, codex={"default_steps": [{"say": "Fake hello"}]})
+    assert state["codex_path"].endswith("fake_codex.py")
+    status = backend.get("/api/codex/status").json()
+    assert (status["state"], status["version"], status["path"]) == ("ready", "0.169.0-fake", state["codex_path"])
+    assert backend.get("/__e2e__/state").json()["codex_starts"] == 1
+
+
+def test_codex_options_not_installed_and_signed_out(backend: TestClient) -> None:
+    reset(backend, codex={"installed": False})
+    assert backend.get("/api/codex/status").json()["state"] == "not_found"
+    path = backend.get("/__e2e__/state").json()["codex_path"]
+    assert backend.put("/api/codex/settings", json={"path": path}).json()["state"] == "ready"
+
+    reset(backend, codex={"account": None})
+    assert backend.get("/api/codex/status").json()["state"] == "signed_out"
+    backend.post("/__e2e__/codex", json={"account": "chatgpt"})
+    assert backend.get("/api/codex/status?refresh=true").json()["state"] == "ready"
+    assert backend.post("/__e2e__/codex", json={"typo": 1}).status_code == 422

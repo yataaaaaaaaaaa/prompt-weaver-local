@@ -7,6 +7,7 @@ from dataclasses import dataclass
 from ..settings import AppPaths
 from .backend_settings import BackendSettingsStore
 from .characters import CharacterStore
+from .codex.service import CodexRuntime, CodexService
 from .downloads import DownloadManager
 from .file_hashes import FileHashCache
 from .generation import GenerationService, GeneratorFactory
@@ -45,12 +46,14 @@ class AppServices:
     characters: CharacterStore
     ip_adapters: IpAdapterService
     stories: StoryStore
+    codex: CodexService
 
 
 def build_services(
     paths: AppPaths,
     generator_factory: GeneratorFactory,
     http_client_factory: HttpClientFactory,
+    codex_runtime: CodexRuntime | None = None,
 ) -> AppServices:
     """Construct every service. Performs no filesystem or network IO (the lifespan calls paths.ensure_dirs())."""
     outputs = OutputRepository(paths)
@@ -93,4 +96,5 @@ def build_services(
         characters=characters,
         ip_adapters=ip_adapters,
         stories=stories,
+        codex=CodexService(paths=paths, settings=settings, stories=stories, tasks=tasks, runtime=codex_runtime or CodexRuntime()),
     )

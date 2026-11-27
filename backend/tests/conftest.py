@@ -11,6 +11,9 @@ app.services.runtime_adapter / the diffusion_lora_runtime package API (loads tor
 diffusion_lora_runtime.prompt_lora (inline <lora:name:weight> syntax), which is torch-free and imported by
 model_providers/civitai_image_meta.py (test_civitai_image_meta.py checks that torch stays unloaded). Use the
 `client` fixture, which runs create_app() on the temp data dir with a FakeGenerator and FakeHttp.
+
+The co-writer never finds the user's real Codex: the `codex_runtime` fixture finds none (codex tests override it with
+the fake app-server of tests/fake_codex.py, codex_support.FakeCodex).
 """
 
 from __future__ import annotations
@@ -29,6 +32,8 @@ from PIL import Image
 from app import settings as settings_module
 from app.factory import create_app
 from app.services import file_hashes
+from app.services.codex.service import CodexRuntime
+from codex_support import no_codex_runtime
 from support import (
     FIXTURES_DIR,
     CountingFactory,
@@ -119,11 +124,23 @@ def generator_factory(fake_generator: FakeGenerator) -> CountingFactory:
 
 
 @pytest.fixture()
-def app(app_paths: settings_module.AppPaths, generator_factory: CountingFactory, fake_http: FakeHttp) -> FastAPI:
+def codex_runtime() -> CodexRuntime:
+    """How the app finds Codex: never (override it to use the fake app-server)."""
+    return no_codex_runtime()
+
+
+@pytest.fixture()
+def app(
+    app_paths: settings_module.AppPaths,
+    generator_factory: CountingFactory,
+    fake_http: FakeHttp,
+    codex_runtime: CodexRuntime,
+) -> FastAPI:
     return create_app(
         paths=app_paths,
         generator_factory=generator_factory,
         http_client_factory=fake_http.client_factory,
+        codex_runtime=codex_runtime,
         install_signal_handlers=False,
     )
 

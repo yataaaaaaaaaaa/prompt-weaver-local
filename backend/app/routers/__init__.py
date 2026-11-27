@@ -11,6 +11,7 @@ from fastapi import APIRouter
 from . import (
     bootstrap,
     characters,
+    codex,
     downloads,
     generation,
     health,
@@ -38,4 +39,5 @@ ROUTERS: tuple[APIRouter, ...] = (
     characters.router,
     ip_adapters.router,
     stories.router,
+    codex.router,
 )

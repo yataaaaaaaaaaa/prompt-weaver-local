@@ -5,10 +5,11 @@
 Never imported by production code. Every reset (POST /__e2e__/reset, body options.E2EResetRequest) replaces the
 running app with a new one on a fresh data dir and model folders under the session root (a temp dir, deleted at
 exit): seeded from the committed synthetic fixtures (seed.py), a paced fake generator (support.FakeGenerator: a
-deterministic picture, one progress event per step, cancellable) and a synthetic Civitai / Hugging Face on
-support.FakeHttp (fake_civitai.py). The previous app is shut down like at exit (its WebSockets close). Every other
-request goes to the current app. GET /__e2e__/state reports the dirs and the requests the synthetic network could
-not answer. GET /__e2e__/remote?url=... answers a URL through the same synthetic network: the Playwright suite routes
+deterministic picture, one progress event per step, cancellable), a synthetic Civitai / Hugging Face on
+support.FakeHttp (fake_civitai.py) and, as the user's Codex, the fake app-server of tests/fake_codex.py (options.codex;
+POST /__e2e__/codex changes its scenario during a test). The previous app is shut down like at exit (its WebSockets
+close, its Codex process stops). Every other request goes to the current app. GET /__e2e__/state reports the dirs and
+the requests the synthetic network could not answer. GET /__e2e__/remote?url=... answers a URL through the same synthetic network: the Playwright suite routes
 every request the browser makes to a non-local host there (frontend/e2e/support/network.ts), so the browser and the
 backend see the same synthetic internet.
 """
@@ -37,7 +38,8 @@ for _path in (str(BACKEND_DIR), str(TESTS_DIR)):
         sys.path.insert(0, _path)
 
 import uvicorn  # noqa: E402
-from fastapi import FastAPI, Response  # noqa: E402
+from fastapi import FastAPI, HTTPException, Response  # noqa: E402
+from pydantic import ValidationError  # noqa: E402
 from starlette.types import Receive, Scope, Send  # noqa: E402
 
 from app.factory import create_app  # noqa: E402
@@ -46,7 +48,8 @@ from app.services.ip_adapters import IP_ADAPTER_CATALOG  # noqa: E402
 from app.settings import AppPaths  # noqa: E402
 from e2e.fake_civitai import SyntheticCivitai, load_catalog  # noqa: E402
 from e2e.images import picture  # noqa: E402
-from e2e.options import E2EResetRequest, E2EState  # noqa: E402
+from codex_support import FAKE_CODEX_SCRIPT, FakeCodex  # noqa: E402
+from e2e.options import CodexOptions, E2EResetRequest, E2EState  # noqa: E402
 from e2e.seed import seed  # noqa: E402
 from support import CountingFactory, FakeGenerator, FakeHttp  # noqa: E402
 
@@ -68,9 +71,10 @@ class _Running:
     civitai: SyntheticCivitai
     generator: FakeGenerator
     paths: AppPaths
+    codex: FakeCodex
 
 
-def build_app(paths: AppPaths, request: E2EResetRequest) -> _Running:
+def build_app(paths: AppPaths, request: E2EResetRequest, codex_home: Path) -> _Running:
     """The real app over `paths` with the e2e fakes (no IO until its lifespan starts)."""
     generator = FakeGenerator(
         reported_steps=None,
@@ -82,10 +86,12 @@ def build_app(paths: AppPaths, request: E2EResetRequest) -> _Running:
     civitai = SyntheticCivitai(load_catalog(), request.network)
     civitai.install(http)
     civitai.install_hugging_face(http, [file.url for variant in IP_ADAPTER_CATALOG.variants for file in variant.files])
+    codex = FakeCodex(codex_home, request.codex.scenario(), installed=request.codex.installed)
     app = create_app(
         paths=paths,
         generator_factory=CountingFactory(generator),
         http_client_factory=http.client_factory,
+        codex_runtime=codex.runtime(),
         install_signal_handlers=False,
     )
     downloads = app.state.services.downloads
@@ -98,7 +104,7 @@ def build_app(paths: AppPaths, request: E2EResetRequest) -> _Running:
         return cancelled
 
     downloads.cancel = cancel_and_release
-    return _Running(app=app, stack=AsyncExitStack(), http=http, civitai=civitai, generator=generator, paths=paths)
+    return _Running(app=app, stack=AsyncExitStack(), http=http, civitai=civitai, generator=generator, paths=paths, codex=codex)
 
 
 class E2EBackend:
@@ -123,6 +129,16 @@ class E2EBackend:
         async def state() -> E2EState:
             return self.state()
 
+        @control.post(f"{CONTROL_PREFIX}/codex", response_model=E2EState)
+        async def codex(changes: dict[str, Any]) -> E2EState:
+            # Validated as CodexOptions fields (e.g. {"account": "chatgpt"}: the user signed in meanwhile).
+            try:
+                CodexOptions.model_validate(changes)
+            except ValidationError as exc:
+                raise HTTPException(status_code=422, detail=exc.errors(include_url=False)) from exc
+            self._require().codex.update_scenario(**{key: value for key, value in changes.items() if key != "installed"})
+            return self.state()
+
         @control.get(f"{CONTROL_PREFIX}/remote")
         def remote(url: str) -> Response:
             # Sync route (threadpool): paced synthetic answers must not block the event loop.
@@ -144,6 +160,8 @@ class E2EBackend:
             resets=self.resets,
             unexpected_requests=list(running.http.unexpected),
             generations=len(running.generator.calls),
+            codex_path=str(FAKE_CODEX_SCRIPT),
+            codex_starts=len(running.codex.starts()),
         )
 
     def _require(self) -> _Running:
@@ -157,7 +175,7 @@ class E2EBackend:
             data_dir = self.root / f"data-{self.resets}"
             models_root = self.root / f"models-{self.resets}"
             await asyncio.to_thread(seed, data_dir, models_root, request)
-            running = build_app(AppPaths.for_root(data_dir, models_root=models_root), request)
+            running = build_app(AppPaths.for_root(data_dir, models_root=models_root), request, self.root / f"codex-{self.resets}")
             await running.stack.enter_async_context(running.app.router.lifespan_context(running.app))
             previous, self._running = self._running, running
             if previous is not None:
@@ -171,6 +189,7 @@ class E2EBackend:
             logger.exception("Stopping a previous e2e app failed")
         await asyncio.to_thread(shutil.rmtree, running.paths.root, True)
         await asyncio.to_thread(shutil.rmtree, running.paths.models_root, True)
+        await asyncio.to_thread(shutil.rmtree, running.codex.home, True)
 
     async def shutdown(self) -> None:
         async with self._lock:

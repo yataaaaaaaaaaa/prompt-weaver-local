@@ -63,6 +63,11 @@ class AppPaths(BaseModel):
     # Stories (services/stories.py): stories_file holds every story and its scenes.
     stories_dir: Path
     stories_file: Path
+    # The co-writer (services/codex/): its conversations index (story -> Codex thread) and the empty working directory
+    # the Codex process runs in (it never holds files: Codex works on the app through its tools only).
+    codex_dir: Path
+    codex_conversations_file: Path
+    codex_workspace_dir: Path
     models_root: Path
     checkpoint_dir: Path
     # LoRA folder: download target of LoRAs and the folder inline <lora:name:weight> tags resolve against.
@@ -95,6 +100,9 @@ class AppPaths(BaseModel):
             character_images_dir=root / "characters" / "images",
             stories_dir=root / "stories",
             stories_file=root / "stories" / "stories.json",
+            codex_dir=root / "codex",
+            codex_conversations_file=root / "codex" / "conversations.json",
+            codex_workspace_dir=root / "codex" / "workspace",
             models_root=models_root,
             checkpoint_dir=models_root / MODEL_KIND_SUBDIRS["checkpoint"],
             prompt_lora_dir=models_root / MODEL_KIND_SUBDIRS["lora"],
@@ -119,8 +127,8 @@ class AppPaths(BaseModel):
         )
 
     def ensure_dirs(self) -> None:
-        """Creates the data directories. The model folders are created on demand by the downloads, the characters
-        and stories folders by their first write."""
+        """Creates the data directories. The model folders are created on demand by the downloads, the characters,
+        stories and codex folders by their first use."""
         for directory in (self.root, self.output_dir, self.trash_dir, self.stores_dir, self.cache_dir):
             directory.mkdir(parents=True, exist_ok=True)
 

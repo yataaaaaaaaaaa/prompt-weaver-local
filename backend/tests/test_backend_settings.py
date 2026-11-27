@@ -144,3 +144,40 @@ def test_the_token_never_appears_in_repr_or_logs(
     assert TOKEN not in str(store)
     assert TOKEN not in caplog.text
     assert settings_file.name in repr(store)
+
+
+# ---------------------------------------------------------------------------
+# The co-writer's Codex settings (same file)
+# ---------------------------------------------------------------------------
+
+
+def test_codex_settings_default_to_auto_detect_and_the_default_model(store: BackendSettingsStore) -> None:
+    assert (store.codex().path, store.codex().model) == (None, None)
+
+
+def test_codex_settings_are_kept_next_to_the_tokens(store: BackendSettingsStore, settings_file: Path) -> None:
+    store.set_token("civitai", TOKEN)
+    store.update_codex(path="  C:/Codex/codex.exe ", model="gpt-x")
+    store.set_token("other", "other-token")
+
+    assert json.loads(settings_file.read_text(encoding="utf-8")) == {
+        "version": 1,
+        "provider_tokens": {"civitai": TOKEN, "other": "other-token"},
+        "codex": {"path": "C:/Codex/codex.exe", "model": "gpt-x"},
+    }
+    store.update_codex(model=None)
+    assert BackendSettingsStore(settings_file).codex().path == "C:/Codex/codex.exe"
+    assert BackendSettingsStore(settings_file).codex().model is None
+    store.update_codex(path="")
+    assert json.loads(settings_file.read_text(encoding="utf-8")) == {"version": 1, "provider_tokens": {"civitai": TOKEN, "other": "other-token"}}
+
+
+def test_a_file_written_before_the_codex_settings_loads_unchanged(settings_file: Path) -> None:
+    settings_file.parent.mkdir(parents=True, exist_ok=True)
+    settings_file.write_text(json.dumps({"version": 1, "provider_tokens": {"civitai": TOKEN}}), encoding="utf-8")
+
+    store = BackendSettingsStore(settings_file)
+
+    assert (store.get_token("civitai"), store.codex().path) == (TOKEN, None)
+    store.update_codex(path="D:/codex.exe")
+    assert store.get_token("civitai") == TOKEN

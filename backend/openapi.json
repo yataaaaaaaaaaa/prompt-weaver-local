@@ -834,6 +834,1712 @@
         "title": "CharacterImageRequest",
         "type": "object"
       },
+      "CodexAddSceneArgs": {
+        "additionalProperties": false,
+        "properties": {
+          "characters": {
+            "anyOf": [
+              {
+                "const": "story",
+                "type": "string"
+              },
+              {
+                "items": {
+                  "pattern": "^chr-[0-9a-f]{12}$",
+                  "type": "string"
+                },
+                "type": "array"
+              }
+            ],
+            "default": "story",
+            "description": "\"story\": the story's characters; a list: its own.",
+            "title": "Characters"
+          },
+          "extra_tags": {
+            "description": "Danbooru-style tags of the scene's picture.",
+            "items": {
+              "type": "string"
+            },
+            "title": "Extra Tags",
+            "type": "array"
+          },
+          "negative_tags": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Negative Tags",
+            "type": "array"
+          },
+          "position": {
+            "anyOf": [
+              {
+                "minimum": 1,
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "1-based position; null: at the end.",
+            "title": "Position"
+          },
+          "story_id": {
+            "pattern": "^sty-[0-9a-f]{12}$",
+            "title": "Story Id",
+            "type": "string"
+          },
+          "text": {
+            "default": "",
+            "description": "The narrative text of the scene.",
+            "maxLength": 50000,
+            "title": "Text",
+            "type": "string"
+          },
+          "title": {
+            "anyOf": [
+              {
+                "maxLength": 200,
+                "minLength": 1,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "null: 'Scene <n>'.",
+            "title": "Title"
+          }
+        },
+        "required": [
+          "story_id",
+          "title",
+          "text",
+          "extra_tags",
+          "negative_tags",
+          "characters",
+          "position"
+        ],
+        "title": "CodexAddSceneArgs",
+        "type": "object"
+      },
+      "CodexAddSceneCall": {
+        "properties": {
+          "arguments": {
+            "$ref": "#/components/schemas/CodexAddSceneArgs"
+          },
+          "call_id": {
+            "title": "Call Id",
+            "type": "string"
+          },
+          "client_id": {
+            "title": "Client Id",
+            "type": "string"
+          },
+          "conversation_id": {
+            "title": "Conversation Id",
+            "type": "string"
+          },
+          "tool": {
+            "const": "add_scene",
+            "title": "Tool",
+            "type": "string"
+          }
+        },
+        "required": [
+          "call_id",
+          "client_id",
+          "conversation_id",
+          "tool",
+          "arguments"
+        ],
+        "title": "CodexAddSceneCall",
+        "type": "object"
+      },
+      "CodexConversation": {
+        "description": "The co-writer conversation of one or more stories (a story created in a conversation joins it), or the draft\nconversation (used while no story is selected).",
+        "properties": {
+          "draft": {
+            "default": false,
+            "description": "The conversation used while no story is selected.",
+            "title": "Draft",
+            "type": "boolean"
+          },
+          "entries": {
+            "items": {
+              "$ref": "#/components/schemas/CodexEntry"
+            },
+            "title": "Entries",
+            "type": "array"
+          },
+          "id": {
+            "pattern": "^cnv-[0-9a-f]{12}$",
+            "title": "Id",
+            "type": "string"
+          },
+          "revision": {
+            "default": 0,
+            "description": "Counts the changes of the conversation: an answer or event with a lower revision than the one shown is older (the HTTP answers and the WebSocket events race).",
+            "title": "Revision",
+            "type": "integer"
+          },
+          "running": {
+            "default": false,
+            "description": "Codex is answering (a turn is running).",
+            "title": "Running",
+            "type": "boolean"
+          },
+          "story_ids": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Story Ids",
+            "type": "array"
+          }
+        },
+        "required": [
+          "id",
+          "story_ids",
+          "draft",
+          "entries",
+          "running",
+          "revision"
+        ],
+        "title": "CodexConversation",
+        "type": "object"
+      },
+      "CodexConversationEvent": {
+        "description": "A conversation changed as a whole (created, its stories, a turn started or ended, its history loaded).",
+        "properties": {
+          "conversation": {
+            "$ref": "#/components/schemas/CodexConversation"
+          },
+          "kind": {
+            "const": "conversation",
+            "default": "conversation",
+            "title": "Kind",
+            "type": "string"
+          },
+          "type": {
+            "const": "codex",
+            "default": "codex",
+            "title": "Type",
+            "type": "string"
+          }
+        },
+        "required": [
+          "type",
+          "kind",
+          "conversation"
+        ],
+        "title": "CodexConversationEvent",
+        "type": "object"
+      },
+      "CodexConversationReset": {
+        "description": "Body of POST /api/codex/conversation/reset (New conversation): the story (null: the draft) gets a new one.",
+        "properties": {
+          "story_id": {
+            "anyOf": [
+              {
+                "pattern": "^sty-[0-9a-f]{12}$",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Story Id"
+          }
+        },
+        "title": "CodexConversationReset",
+        "type": "object"
+      },
+      "CodexCreateStoryArgs": {
+        "additionalProperties": false,
+        "properties": {
+          "character_ids": {
+            "description": "The story's characters (list_characters).",
+            "items": {
+              "pattern": "^chr-[0-9a-f]{12}$",
+              "type": "string"
+            },
+            "title": "Character Ids",
+            "type": "array"
+          },
+          "title": {
+            "maxLength": 200,
+            "minLength": 1,
+            "title": "Title",
+            "type": "string"
+          }
+        },
+        "required": [
+          "title",
+          "character_ids"
+        ],
+        "title": "CodexCreateStoryArgs",
+        "type": "object"
+      },
+      "CodexCreateStoryCall": {
+        "properties": {
+          "arguments": {
+            "$ref": "#/components/schemas/CodexCreateStoryArgs"
+          },
+          "call_id": {
+            "title": "Call Id",
+            "type": "string"
+          },
+          "client_id": {
+            "title": "Client Id",
+            "type": "string"
+          },
+          "conversation_id": {
+            "title": "Conversation Id",
+            "type": "string"
+          },
+          "tool": {
+            "const": "create_story",
+            "title": "Tool",
+            "type": "string"
+          }
+        },
+        "required": [
+          "call_id",
+          "client_id",
+          "conversation_id",
+          "tool",
+          "arguments"
+        ],
+        "title": "CodexCreateStoryCall",
+        "type": "object"
+      },
+      "CodexDeleteSceneArgs": {
+        "additionalProperties": false,
+        "properties": {
+          "scene_id": {
+            "pattern": "^scn-[0-9a-f]{12}$",
+            "title": "Scene Id",
+            "type": "string"
+          },
+          "story_id": {
+            "pattern": "^sty-[0-9a-f]{12}$",
+            "title": "Story Id",
+            "type": "string"
+          },
+          "user_confirmed": {
+            "description": "True only when the user confirmed this deletion in the conversation.",
+            "title": "User Confirmed",
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "story_id",
+          "scene_id",
+          "user_confirmed"
+        ],
+        "title": "CodexDeleteSceneArgs",
+        "type": "object"
+      },
+      "CodexDeleteSceneCall": {
+        "properties": {
+          "arguments": {
+            "$ref": "#/components/schemas/CodexDeleteSceneArgs"
+          },
+          "call_id": {
+            "title": "Call Id",
+            "type": "string"
+          },
+          "client_id": {
+            "title": "Client Id",
+            "type": "string"
+          },
+          "conversation_id": {
+            "title": "Conversation Id",
+            "type": "string"
+          },
+          "tool": {
+            "const": "delete_scene",
+            "title": "Tool",
+            "type": "string"
+          }
+        },
+        "required": [
+          "call_id",
+          "client_id",
+          "conversation_id",
+          "tool",
+          "arguments"
+        ],
+        "title": "CodexDeleteSceneCall",
+        "type": "object"
+      },
+      "CodexDeltaEvent": {
+        "description": "Streamed text appended to an assistant entry.",
+        "properties": {
+          "conversation_id": {
+            "title": "Conversation Id",
+            "type": "string"
+          },
+          "delta": {
+            "title": "Delta",
+            "type": "string"
+          },
+          "entry_id": {
+            "title": "Entry Id",
+            "type": "string"
+          },
+          "kind": {
+            "const": "delta",
+            "default": "delta",
+            "title": "Kind",
+            "type": "string"
+          },
+          "revision": {
+            "description": "The conversation's revision with this text.",
+            "title": "Revision",
+            "type": "integer"
+          },
+          "type": {
+            "const": "codex",
+            "default": "codex",
+            "title": "Type",
+            "type": "string"
+          }
+        },
+        "required": [
+          "type",
+          "kind",
+          "conversation_id",
+          "entry_id",
+          "delta",
+          "revision"
+        ],
+        "title": "CodexDeltaEvent",
+        "type": "object"
+      },
+      "CodexDuplicateSceneCall": {
+        "properties": {
+          "arguments": {
+            "$ref": "#/components/schemas/CodexSceneArgs"
+          },
+          "call_id": {
+            "title": "Call Id",
+            "type": "string"
+          },
+          "client_id": {
+            "title": "Client Id",
+            "type": "string"
+          },
+          "conversation_id": {
+            "title": "Conversation Id",
+            "type": "string"
+          },
+          "tool": {
+            "const": "duplicate_scene",
+            "title": "Tool",
+            "type": "string"
+          }
+        },
+        "required": [
+          "call_id",
+          "client_id",
+          "conversation_id",
+          "tool",
+          "arguments"
+        ],
+        "title": "CodexDuplicateSceneCall",
+        "type": "object"
+      },
+      "CodexEntry": {
+        "description": "One entry of a conversation: a message, a tool activity, an error or a notice ('Stopped.').",
+        "properties": {
+          "id": {
+            "title": "Id",
+            "type": "string"
+          },
+          "kind": {
+            "enum": [
+              "user",
+              "assistant",
+              "tool",
+              "error",
+              "notice"
+            ],
+            "title": "Kind",
+            "type": "string"
+          },
+          "scene_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Scene Id"
+          },
+          "status": {
+            "default": "completed",
+            "enum": [
+              "running",
+              "completed",
+              "failed"
+            ],
+            "title": "Status",
+            "type": "string"
+          },
+          "story_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "What a tool entry acted on (its arguments or its result).",
+            "title": "Story Id"
+          },
+          "text": {
+            "default": "",
+            "description": "The message; a tool's summary once done; the error or the notice.",
+            "title": "Text",
+            "type": "string"
+          },
+          "tool": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "The tool of a tool entry (a CodexToolName for the app's tools).",
+            "title": "Tool"
+          }
+        },
+        "required": [
+          "id",
+          "kind",
+          "text",
+          "status",
+          "tool",
+          "story_id",
+          "scene_id"
+        ],
+        "title": "CodexEntry",
+        "type": "object"
+      },
+      "CodexEntryEvent": {
+        "description": "An entry was added or changed (it replaces the entry with its id).",
+        "properties": {
+          "conversation_id": {
+            "title": "Conversation Id",
+            "type": "string"
+          },
+          "entry": {
+            "$ref": "#/components/schemas/CodexEntry"
+          },
+          "kind": {
+            "const": "entry",
+            "default": "entry",
+            "title": "Kind",
+            "type": "string"
+          },
+          "revision": {
+            "description": "The conversation's revision with this entry.",
+            "title": "Revision",
+            "type": "integer"
+          },
+          "type": {
+            "const": "codex",
+            "default": "codex",
+            "title": "Type",
+            "type": "string"
+          }
+        },
+        "required": [
+          "type",
+          "kind",
+          "conversation_id",
+          "entry",
+          "revision"
+        ],
+        "title": "CodexEntryEvent",
+        "type": "object"
+      },
+      "CodexEvent": {
+        "discriminator": {
+          "mapping": {
+            "conversation": "#/components/schemas/CodexConversationEvent",
+            "delta": "#/components/schemas/CodexDeltaEvent",
+            "entry": "#/components/schemas/CodexEntryEvent",
+            "status": "#/components/schemas/CodexStatusEvent",
+            "tool_call": "#/components/schemas/CodexToolCallEvent",
+            "tool_cancel": "#/components/schemas/CodexToolCancelEvent"
+          },
+          "propertyName": "kind"
+        },
+        "oneOf": [
+          {
+            "$ref": "#/components/schemas/CodexStatusEvent"
+          },
+          {
+            "$ref": "#/components/schemas/CodexConversationEvent"
+          },
+          {
+            "$ref": "#/components/schemas/CodexEntryEvent"
+          },
+          {
+            "$ref": "#/components/schemas/CodexDeltaEvent"
+          },
+          {
+            "$ref": "#/components/schemas/CodexToolCallEvent"
+          },
+          {
+            "$ref": "#/components/schemas/CodexToolCancelEvent"
+          }
+        ]
+      },
+      "CodexGenerateMissingScenesCall": {
+        "properties": {
+          "arguments": {
+            "$ref": "#/components/schemas/CodexStoryArgs"
+          },
+          "call_id": {
+            "title": "Call Id",
+            "type": "string"
+          },
+          "client_id": {
+            "title": "Client Id",
+            "type": "string"
+          },
+          "conversation_id": {
+            "title": "Conversation Id",
+            "type": "string"
+          },
+          "tool": {
+            "const": "generate_missing_scenes",
+            "title": "Tool",
+            "type": "string"
+          }
+        },
+        "required": [
+          "call_id",
+          "client_id",
+          "conversation_id",
+          "tool",
+          "arguments"
+        ],
+        "title": "CodexGenerateMissingScenesCall",
+        "type": "object"
+      },
+      "CodexGenerateSceneCall": {
+        "properties": {
+          "arguments": {
+            "$ref": "#/components/schemas/CodexSceneArgs"
+          },
+          "call_id": {
+            "title": "Call Id",
+            "type": "string"
+          },
+          "client_id": {
+            "title": "Client Id",
+            "type": "string"
+          },
+          "conversation_id": {
+            "title": "Conversation Id",
+            "type": "string"
+          },
+          "tool": {
+            "const": "generate_scene",
+            "title": "Tool",
+            "type": "string"
+          }
+        },
+        "required": [
+          "call_id",
+          "client_id",
+          "conversation_id",
+          "tool",
+          "arguments"
+        ],
+        "title": "CodexGenerateSceneCall",
+        "type": "object"
+      },
+      "CodexGetStoryCall": {
+        "properties": {
+          "arguments": {
+            "$ref": "#/components/schemas/CodexStoryArgs"
+          },
+          "call_id": {
+            "title": "Call Id",
+            "type": "string"
+          },
+          "client_id": {
+            "title": "Client Id",
+            "type": "string"
+          },
+          "conversation_id": {
+            "title": "Conversation Id",
+            "type": "string"
+          },
+          "tool": {
+            "const": "get_story",
+            "title": "Tool",
+            "type": "string"
+          }
+        },
+        "required": [
+          "call_id",
+          "client_id",
+          "conversation_id",
+          "tool",
+          "arguments"
+        ],
+        "title": "CodexGetStoryCall",
+        "type": "object"
+      },
+      "CodexListCategoriesArgs": {
+        "additionalProperties": false,
+        "properties": {
+          "query": {
+            "anyOf": [
+              {
+                "maxLength": 200,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Only the categories whose name contains it.",
+            "title": "Query"
+          }
+        },
+        "required": [
+          "query"
+        ],
+        "title": "CodexListCategoriesArgs",
+        "type": "object"
+      },
+      "CodexListCategoriesCall": {
+        "properties": {
+          "arguments": {
+            "$ref": "#/components/schemas/CodexListCategoriesArgs"
+          },
+          "call_id": {
+            "title": "Call Id",
+            "type": "string"
+          },
+          "client_id": {
+            "title": "Client Id",
+            "type": "string"
+          },
+          "conversation_id": {
+            "title": "Conversation Id",
+            "type": "string"
+          },
+          "tool": {
+            "const": "list_categories",
+            "title": "Tool",
+            "type": "string"
+          }
+        },
+        "required": [
+          "call_id",
+          "client_id",
+          "conversation_id",
+          "tool",
+          "arguments"
+        ],
+        "title": "CodexListCategoriesCall",
+        "type": "object"
+      },
+      "CodexListCharactersCall": {
+        "properties": {
+          "arguments": {
+            "$ref": "#/components/schemas/CodexNoArgs"
+          },
+          "call_id": {
+            "title": "Call Id",
+            "type": "string"
+          },
+          "client_id": {
+            "title": "Client Id",
+            "type": "string"
+          },
+          "conversation_id": {
+            "title": "Conversation Id",
+            "type": "string"
+          },
+          "tool": {
+            "const": "list_characters",
+            "title": "Tool",
+            "type": "string"
+          }
+        },
+        "required": [
+          "call_id",
+          "client_id",
+          "conversation_id",
+          "tool",
+          "arguments"
+        ],
+        "title": "CodexListCharactersCall",
+        "type": "object"
+      },
+      "CodexListStoriesCall": {
+        "properties": {
+          "arguments": {
+            "$ref": "#/components/schemas/CodexNoArgs"
+          },
+          "call_id": {
+            "title": "Call Id",
+            "type": "string"
+          },
+          "client_id": {
+            "title": "Client Id",
+            "type": "string"
+          },
+          "conversation_id": {
+            "title": "Conversation Id",
+            "type": "string"
+          },
+          "tool": {
+            "const": "list_stories",
+            "title": "Tool",
+            "type": "string"
+          }
+        },
+        "required": [
+          "call_id",
+          "client_id",
+          "conversation_id",
+          "tool",
+          "arguments"
+        ],
+        "title": "CodexListStoriesCall",
+        "type": "object"
+      },
+      "CodexLockArgs": {
+        "additionalProperties": false,
+        "properties": {
+          "category": {
+            "description": "A prompt category (list_categories).",
+            "maxLength": 200,
+            "minLength": 1,
+            "title": "Category",
+            "type": "string"
+          },
+          "scene_id": {
+            "pattern": "^scn-[0-9a-f]{12}$",
+            "title": "Scene Id",
+            "type": "string"
+          },
+          "story_id": {
+            "pattern": "^sty-[0-9a-f]{12}$",
+            "title": "Story Id",
+            "type": "string"
+          },
+          "sub_prompt": {
+            "description": "One of that category's sub-prompts.",
+            "maxLength": 5000,
+            "minLength": 1,
+            "title": "Sub Prompt",
+            "type": "string"
+          }
+        },
+        "required": [
+          "story_id",
+          "scene_id",
+          "category",
+          "sub_prompt"
+        ],
+        "title": "CodexLockArgs",
+        "type": "object"
+      },
+      "CodexLockSubPromptCall": {
+        "properties": {
+          "arguments": {
+            "$ref": "#/components/schemas/CodexLockArgs"
+          },
+          "call_id": {
+            "title": "Call Id",
+            "type": "string"
+          },
+          "client_id": {
+            "title": "Client Id",
+            "type": "string"
+          },
+          "conversation_id": {
+            "title": "Conversation Id",
+            "type": "string"
+          },
+          "tool": {
+            "const": "lock_sub_prompt",
+            "title": "Tool",
+            "type": "string"
+          }
+        },
+        "required": [
+          "call_id",
+          "client_id",
+          "conversation_id",
+          "tool",
+          "arguments"
+        ],
+        "title": "CodexLockSubPromptCall",
+        "type": "object"
+      },
+      "CodexModelOption": {
+        "description": "A model the user's Codex offers (model/list).",
+        "properties": {
+          "id": {
+            "title": "Id",
+            "type": "string"
+          },
+          "name": {
+            "title": "Name",
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "name"
+        ],
+        "title": "CodexModelOption",
+        "type": "object"
+      },
+      "CodexMoveSceneArgs": {
+        "additionalProperties": false,
+        "properties": {
+          "position": {
+            "description": "The new 1-based position.",
+            "minimum": 1,
+            "title": "Position",
+            "type": "integer"
+          },
+          "scene_id": {
+            "pattern": "^scn-[0-9a-f]{12}$",
+            "title": "Scene Id",
+            "type": "string"
+          },
+          "story_id": {
+            "pattern": "^sty-[0-9a-f]{12}$",
+            "title": "Story Id",
+            "type": "string"
+          }
+        },
+        "required": [
+          "story_id",
+          "scene_id",
+          "position"
+        ],
+        "title": "CodexMoveSceneArgs",
+        "type": "object"
+      },
+      "CodexMoveSceneCall": {
+        "properties": {
+          "arguments": {
+            "$ref": "#/components/schemas/CodexMoveSceneArgs"
+          },
+          "call_id": {
+            "title": "Call Id",
+            "type": "string"
+          },
+          "client_id": {
+            "title": "Client Id",
+            "type": "string"
+          },
+          "conversation_id": {
+            "title": "Conversation Id",
+            "type": "string"
+          },
+          "tool": {
+            "const": "move_scene",
+            "title": "Tool",
+            "type": "string"
+          }
+        },
+        "required": [
+          "call_id",
+          "client_id",
+          "conversation_id",
+          "tool",
+          "arguments"
+        ],
+        "title": "CodexMoveSceneCall",
+        "type": "object"
+      },
+      "CodexNoArgs": {
+        "additionalProperties": false,
+        "properties": {},
+        "title": "CodexNoArgs",
+        "type": "object"
+      },
+      "CodexSceneArgs": {
+        "additionalProperties": false,
+        "properties": {
+          "scene_id": {
+            "pattern": "^scn-[0-9a-f]{12}$",
+            "title": "Scene Id",
+            "type": "string"
+          },
+          "story_id": {
+            "pattern": "^sty-[0-9a-f]{12}$",
+            "title": "Story Id",
+            "type": "string"
+          }
+        },
+        "required": [
+          "story_id",
+          "scene_id"
+        ],
+        "title": "CodexSceneArgs",
+        "type": "object"
+      },
+      "CodexSettingsUpdate": {
+        "description": "Body of PUT /api/codex/settings: only the fields sent change; null clears (auto-detect, the default model).",
+        "properties": {
+          "model": {
+            "anyOf": [
+              {
+                "maxLength": 200,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Model"
+          },
+          "path": {
+            "anyOf": [
+              {
+                "maxLength": 1000,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Path"
+          }
+        },
+        "title": "CodexSettingsUpdate",
+        "type": "object"
+      },
+      "CodexStatus": {
+        "description": "Whether the co-writer can work: Codex found (where, which version), signed in, its models.",
+        "properties": {
+          "account": {
+            "anyOf": [
+              {
+                "enum": [
+                  "chatgpt",
+                  "api_key",
+                  "other"
+                ],
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "How Codex is signed in (never the credentials).",
+            "title": "Account"
+          },
+          "configured_path": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "The path set by the user (backend settings).",
+            "title": "Configured Path"
+          },
+          "default_model": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "The model of the user's Codex configuration.",
+            "title": "Default Model"
+          },
+          "message": {
+            "default": "",
+            "description": "What to do when the state is not ready (shown as is).",
+            "title": "Message",
+            "type": "string"
+          },
+          "model": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "The model chosen for the co-writer (null: the default).",
+            "title": "Model"
+          },
+          "models": {
+            "items": {
+              "$ref": "#/components/schemas/CodexModelOption"
+            },
+            "title": "Models",
+            "type": "array"
+          },
+          "path": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "The codex executable used (null: not found).",
+            "title": "Path"
+          },
+          "running": {
+            "default": false,
+            "description": "The Codex process is running.",
+            "title": "Running",
+            "type": "boolean"
+          },
+          "searched": {
+            "description": "Where Codex was looked for (when not found).",
+            "items": {
+              "type": "string"
+            },
+            "title": "Searched",
+            "type": "array"
+          },
+          "source": {
+            "anyOf": [
+              {
+                "enum": [
+                  "configured",
+                  "path",
+                  "windows_app",
+                  "npm"
+                ],
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Source"
+          },
+          "state": {
+            "enum": [
+              "not_found",
+              "signed_out",
+              "ready",
+              "error"
+            ],
+            "title": "State",
+            "type": "string"
+          },
+          "version": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Version"
+          }
+        },
+        "required": [
+          "state",
+          "message",
+          "path",
+          "source",
+          "version",
+          "configured_path",
+          "searched",
+          "account",
+          "default_model",
+          "model",
+          "models",
+          "running"
+        ],
+        "title": "CodexStatus",
+        "type": "object"
+      },
+      "CodexStatusEvent": {
+        "properties": {
+          "kind": {
+            "const": "status",
+            "default": "status",
+            "title": "Kind",
+            "type": "string"
+          },
+          "status": {
+            "$ref": "#/components/schemas/CodexStatus"
+          },
+          "type": {
+            "const": "codex",
+            "default": "codex",
+            "title": "Type",
+            "type": "string"
+          }
+        },
+        "required": [
+          "type",
+          "kind",
+          "status"
+        ],
+        "title": "CodexStatusEvent",
+        "type": "object"
+      },
+      "CodexStoryArgs": {
+        "additionalProperties": false,
+        "properties": {
+          "story_id": {
+            "pattern": "^sty-[0-9a-f]{12}$",
+            "title": "Story Id",
+            "type": "string"
+          }
+        },
+        "required": [
+          "story_id"
+        ],
+        "title": "CodexStoryArgs",
+        "type": "object"
+      },
+      "CodexToolCallEvent": {
+        "properties": {
+          "call": {
+            "discriminator": {
+              "mapping": {
+                "add_scene": "#/components/schemas/CodexAddSceneCall",
+                "create_story": "#/components/schemas/CodexCreateStoryCall",
+                "delete_scene": "#/components/schemas/CodexDeleteSceneCall",
+                "duplicate_scene": "#/components/schemas/CodexDuplicateSceneCall",
+                "generate_missing_scenes": "#/components/schemas/CodexGenerateMissingScenesCall",
+                "generate_scene": "#/components/schemas/CodexGenerateSceneCall",
+                "get_story": "#/components/schemas/CodexGetStoryCall",
+                "list_categories": "#/components/schemas/CodexListCategoriesCall",
+                "list_characters": "#/components/schemas/CodexListCharactersCall",
+                "list_stories": "#/components/schemas/CodexListStoriesCall",
+                "lock_sub_prompt": "#/components/schemas/CodexLockSubPromptCall",
+                "move_scene": "#/components/schemas/CodexMoveSceneCall",
+                "unlock_category": "#/components/schemas/CodexUnlockCategoryCall",
+                "update_scene": "#/components/schemas/CodexUpdateSceneCall",
+                "update_story": "#/components/schemas/CodexUpdateStoryCall"
+              },
+              "propertyName": "tool"
+            },
+            "oneOf": [
+              {
+                "$ref": "#/components/schemas/CodexListStoriesCall"
+              },
+              {
+                "$ref": "#/components/schemas/CodexGetStoryCall"
+              },
+              {
+                "$ref": "#/components/schemas/CodexListCharactersCall"
+              },
+              {
+                "$ref": "#/components/schemas/CodexListCategoriesCall"
+              },
+              {
+                "$ref": "#/components/schemas/CodexCreateStoryCall"
+              },
+              {
+                "$ref": "#/components/schemas/CodexUpdateStoryCall"
+              },
+              {
+                "$ref": "#/components/schemas/CodexAddSceneCall"
+              },
+              {
+                "$ref": "#/components/schemas/CodexUpdateSceneCall"
+              },
+              {
+                "$ref": "#/components/schemas/CodexLockSubPromptCall"
+              },
+              {
+                "$ref": "#/components/schemas/CodexUnlockCategoryCall"
+              },
+              {
+                "$ref": "#/components/schemas/CodexMoveSceneCall"
+              },
+              {
+                "$ref": "#/components/schemas/CodexDuplicateSceneCall"
+              },
+              {
+                "$ref": "#/components/schemas/CodexDeleteSceneCall"
+              },
+              {
+                "$ref": "#/components/schemas/CodexGenerateSceneCall"
+              },
+              {
+                "$ref": "#/components/schemas/CodexGenerateMissingScenesCall"
+              }
+            ],
+            "title": "Call"
+          },
+          "kind": {
+            "const": "tool_call",
+            "default": "tool_call",
+            "title": "Kind",
+            "type": "string"
+          },
+          "type": {
+            "const": "codex",
+            "default": "codex",
+            "title": "Type",
+            "type": "string"
+          }
+        },
+        "required": [
+          "type",
+          "kind",
+          "call"
+        ],
+        "title": "CodexToolCallEvent",
+        "type": "object"
+      },
+      "CodexToolCancelEvent": {
+        "description": "The tool call was abandoned (Stop, Codex stopped): the window running it stops it (e.g. its generation).",
+        "properties": {
+          "call_id": {
+            "title": "Call Id",
+            "type": "string"
+          },
+          "client_id": {
+            "title": "Client Id",
+            "type": "string"
+          },
+          "kind": {
+            "const": "tool_cancel",
+            "default": "tool_cancel",
+            "title": "Kind",
+            "type": "string"
+          },
+          "type": {
+            "const": "codex",
+            "default": "codex",
+            "title": "Type",
+            "type": "string"
+          }
+        },
+        "required": [
+          "type",
+          "kind",
+          "call_id",
+          "client_id"
+        ],
+        "title": "CodexToolCancelEvent",
+        "type": "object"
+      },
+      "CodexToolResult": {
+        "description": "Body of POST /api/codex/tool-calls/{call_id}/result: what the frontend did.",
+        "properties": {
+          "ok": {
+            "title": "Ok",
+            "type": "boolean"
+          },
+          "scene_id": {
+            "anyOf": [
+              {
+                "pattern": "^scn-[0-9a-f]{12}$",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Scene Id"
+          },
+          "story_id": {
+            "anyOf": [
+              {
+                "pattern": "^sty-[0-9a-f]{12}$",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "The story it acted on (the conversation links to it).",
+            "title": "Story Id"
+          },
+          "summary": {
+            "description": "What people read in the conversation ('Added Scene 3 · The storm').",
+            "maxLength": 500,
+            "title": "Summary",
+            "type": "string"
+          },
+          "text": {
+            "description": "The answer Codex reads (data, or the reason of a failure).",
+            "maxLength": 200000,
+            "title": "Text",
+            "type": "string"
+          }
+        },
+        "required": [
+          "ok",
+          "text",
+          "summary"
+        ],
+        "title": "CodexToolResult",
+        "type": "object"
+      },
+      "CodexTurnRequest": {
+        "description": "Body of POST /api/codex/turns: a message of the user, about the story (and scene) shown.",
+        "properties": {
+          "client_id": {
+            "pattern": "^[A-Za-z0-9-]{8,64}$",
+            "title": "Client Id",
+            "type": "string"
+          },
+          "scene_id": {
+            "anyOf": [
+              {
+                "pattern": "^scn-[0-9a-f]{12}$",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Scene Id"
+          },
+          "story_id": {
+            "anyOf": [
+              {
+                "pattern": "^sty-[0-9a-f]{12}$",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Story Id"
+          },
+          "text": {
+            "maxLength": 20000,
+            "minLength": 1,
+            "title": "Text",
+            "type": "string"
+          }
+        },
+        "required": [
+          "text",
+          "client_id"
+        ],
+        "title": "CodexTurnRequest",
+        "type": "object"
+      },
+      "CodexUnlockArgs": {
+        "additionalProperties": false,
+        "properties": {
+          "category": {
+            "maxLength": 200,
+            "minLength": 1,
+            "title": "Category",
+            "type": "string"
+          },
+          "scene_id": {
+            "pattern": "^scn-[0-9a-f]{12}$",
+            "title": "Scene Id",
+            "type": "string"
+          },
+          "story_id": {
+            "pattern": "^sty-[0-9a-f]{12}$",
+            "title": "Story Id",
+            "type": "string"
+          }
+        },
+        "required": [
+          "story_id",
+          "scene_id",
+          "category"
+        ],
+        "title": "CodexUnlockArgs",
+        "type": "object"
+      },
+      "CodexUnlockCategoryCall": {
+        "properties": {
+          "arguments": {
+            "$ref": "#/components/schemas/CodexUnlockArgs"
+          },
+          "call_id": {
+            "title": "Call Id",
+            "type": "string"
+          },
+          "client_id": {
+            "title": "Client Id",
+            "type": "string"
+          },
+          "conversation_id": {
+            "title": "Conversation Id",
+            "type": "string"
+          },
+          "tool": {
+            "const": "unlock_category",
+            "title": "Tool",
+            "type": "string"
+          }
+        },
+        "required": [
+          "call_id",
+          "client_id",
+          "conversation_id",
+          "tool",
+          "arguments"
+        ],
+        "title": "CodexUnlockCategoryCall",
+        "type": "object"
+      },
+      "CodexUpdateSceneArgs": {
+        "additionalProperties": false,
+        "description": "Only the fields given change (null: unchanged).",
+        "properties": {
+          "characters": {
+            "anyOf": [
+              {
+                "const": "story",
+                "type": "string"
+              },
+              {
+                "items": {
+                  "pattern": "^chr-[0-9a-f]{12}$",
+                  "type": "string"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "\"story\": the story's characters; []: none.",
+            "title": "Characters"
+          },
+          "extra_tags": {
+            "anyOf": [
+              {
+                "items": {
+                  "type": "string"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Extra Tags"
+          },
+          "negative_tags": {
+            "anyOf": [
+              {
+                "items": {
+                  "type": "string"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Negative Tags"
+          },
+          "scene_id": {
+            "pattern": "^scn-[0-9a-f]{12}$",
+            "title": "Scene Id",
+            "type": "string"
+          },
+          "seed": {
+            "anyOf": [
+              {
+                "minimum": 0,
+                "type": "integer"
+              },
+              {
+                "const": "random",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "A fixed seed, or \"random\".",
+            "title": "Seed"
+          },
+          "story_id": {
+            "pattern": "^sty-[0-9a-f]{12}$",
+            "title": "Story Id",
+            "type": "string"
+          },
+          "text": {
+            "anyOf": [
+              {
+                "maxLength": 50000,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Text"
+          },
+          "title": {
+            "anyOf": [
+              {
+                "maxLength": 200,
+                "minLength": 1,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Title"
+          }
+        },
+        "required": [
+          "story_id",
+          "scene_id",
+          "title",
+          "text",
+          "extra_tags",
+          "negative_tags",
+          "characters",
+          "seed"
+        ],
+        "title": "CodexUpdateSceneArgs",
+        "type": "object"
+      },
+      "CodexUpdateSceneCall": {
+        "properties": {
+          "arguments": {
+            "$ref": "#/components/schemas/CodexUpdateSceneArgs"
+          },
+          "call_id": {
+            "title": "Call Id",
+            "type": "string"
+          },
+          "client_id": {
+            "title": "Client Id",
+            "type": "string"
+          },
+          "conversation_id": {
+            "title": "Conversation Id",
+            "type": "string"
+          },
+          "tool": {
+            "const": "update_scene",
+            "title": "Tool",
+            "type": "string"
+          }
+        },
+        "required": [
+          "call_id",
+          "client_id",
+          "conversation_id",
+          "tool",
+          "arguments"
+        ],
+        "title": "CodexUpdateSceneCall",
+        "type": "object"
+      },
+      "CodexUpdateStoryArgs": {
+        "additionalProperties": false,
+        "properties": {
+          "character_ids": {
+            "anyOf": [
+              {
+                "items": {
+                  "pattern": "^chr-[0-9a-f]{12}$",
+                  "type": "string"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "null: unchanged.",
+            "title": "Character Ids"
+          },
+          "story_id": {
+            "pattern": "^sty-[0-9a-f]{12}$",
+            "title": "Story Id",
+            "type": "string"
+          },
+          "title": {
+            "anyOf": [
+              {
+                "maxLength": 200,
+                "minLength": 1,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "null: unchanged.",
+            "title": "Title"
+          }
+        },
+        "required": [
+          "story_id",
+          "title",
+          "character_ids"
+        ],
+        "title": "CodexUpdateStoryArgs",
+        "type": "object"
+      },
+      "CodexUpdateStoryCall": {
+        "properties": {
+          "arguments": {
+            "$ref": "#/components/schemas/CodexUpdateStoryArgs"
+          },
+          "call_id": {
+            "title": "Call Id",
+            "type": "string"
+          },
+          "client_id": {
+            "title": "Client Id",
+            "type": "string"
+          },
+          "conversation_id": {
+            "title": "Conversation Id",
+            "type": "string"
+          },
+          "tool": {
+            "const": "update_story",
+            "title": "Tool",
+            "type": "string"
+          }
+        },
+        "required": [
+          "call_id",
+          "client_id",
+          "conversation_id",
+          "tool",
+          "arguments"
+        ],
+        "title": "CodexUpdateStoryCall",
+        "type": "object"
+      },
       "DownloadTaskEvent": {
         "description": "Progress of a file download (services/downloads.py DownloadManager). current/total are bytes (total 0 =\nunknown size); task_id is returned by the API call that started the download.",
         "properties": {
@@ -5198,6 +6904,349 @@
         "summary": "Set Character Thumbnail",
         "tags": [
           "characters"
+        ]
+      }
+    },
+    "/api/codex/conversation": {
+      "get": {
+        "description": "The conversation of a story (without story_id: the draft conversation); its history is read from Codex once.",
+        "operationId": "get_conversation_api_codex_conversation_get",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "story_id",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "pattern": "^sty-[0-9a-f]{12}$",
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Story Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CodexConversation"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "404": {
+            "description": "Unknown story, conversation or tool call"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Get Conversation",
+        "tags": [
+          "codex"
+        ]
+      }
+    },
+    "/api/codex/conversation/reset": {
+      "post": {
+        "description": "New conversation: the story (or the draft) gets an empty conversation.",
+        "operationId": "reset_conversation_api_codex_conversation_reset_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CodexConversationReset"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CodexConversation"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "404": {
+            "description": "Unknown story, conversation or tool call"
+          },
+          "409": {
+            "description": "Codex cannot work now (not found, not signed in) or is still answering"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Reset Conversation",
+        "tags": [
+          "codex"
+        ]
+      }
+    },
+    "/api/codex/conversations/{conversation_id}/interrupt": {
+      "post": {
+        "description": "Stop: interrupts the running answer; its tool calls are abandoned (the window stops a running generation).",
+        "operationId": "interrupt_api_codex_conversations__conversation_id__interrupt_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "conversation_id",
+            "required": true,
+            "schema": {
+              "pattern": "^cnv-[0-9a-f]{12}$",
+              "title": "Conversation Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CodexConversation"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "404": {
+            "description": "Unknown story, conversation or tool call"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Interrupt",
+        "tags": [
+          "codex"
+        ]
+      }
+    },
+    "/api/codex/settings": {
+      "put": {
+        "description": "The Codex path (null: auto-detect; Codex is looked for again) and the model (null: the user's default).",
+        "operationId": "update_settings_api_codex_settings_put",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CodexSettingsUpdate"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CodexStatus"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "409": {
+            "description": "Codex cannot work now (not found, not signed in) or is still answering"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Update Settings",
+        "tags": [
+          "codex"
+        ]
+      }
+    },
+    "/api/codex/status": {
+      "get": {
+        "description": "Whether the co-writer can work. Looks for Codex and asks it about its login on the first call; `refresh`\n(Retry) looks again.",
+        "operationId": "get_status_api_codex_status_get",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "refresh",
+            "required": false,
+            "schema": {
+              "default": false,
+              "title": "Refresh",
+              "type": "boolean"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CodexStatus"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Get Status",
+        "tags": [
+          "codex"
+        ]
+      }
+    },
+    "/api/codex/tool-calls/{call_id}/result": {
+      "post": {
+        "description": "The result of a tool call the frontend ran; 404 when the call is unknown or already over (stopped, timed out).",
+        "operationId": "tool_call_result_api_codex_tool_calls__call_id__result_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "call_id",
+            "required": true,
+            "schema": {
+              "pattern": "^call-[0-9a-f]{32}$",
+              "title": "Call Id",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CodexToolResult"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/OkResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "404": {
+            "description": "Unknown story, conversation or tool call"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Tool Call Result",
+        "tags": [
+          "codex"
+        ]
+      }
+    },
+    "/api/codex/turns": {
+      "post": {
+        "description": "Sends the user's message (starting Codex when needed); answers the conversation with the message, the answer\nstreams over /ws/tasks. A failure to reach Codex shows as an error entry of the conversation.",
+        "operationId": "send_message_api_codex_turns_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CodexTurnRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CodexConversation"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "404": {
+            "description": "Unknown story, conversation or tool call"
+          },
+          "409": {
+            "description": "Codex cannot work now (not found, not signed in) or is still answering"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          }
+        },
+        "summary": "Send Message",
+        "tags": [
+          "codex"
         ]
       }
     },

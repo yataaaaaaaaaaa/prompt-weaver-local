@@ -15,7 +15,16 @@ from __future__ import annotations
 from datetime import datetime
 from typing import Annotated, Any, Literal, TypeVar, Union
 
-from pydantic import AfterValidator, BaseModel, ConfigDict, Field, SecretStr, StringConstraints, model_validator
+from pydantic import (
+    AfterValidator,
+    BaseModel,
+    ConfigDict,
+    Field,
+    SecretStr,
+    StringConstraints,
+    create_model,
+    model_validator,
+)
 
 # ---------------------------------------------------------------------------
 # Shared literals
@@ -1152,6 +1161,319 @@ class SceneVariantRequest(ApiModel):
     """Body of POST /api/stories/{story_id}/scenes/{scene_id}/variants and PUT .../chosen."""
 
     output_id: str = Field(pattern=OUTPUT_ID_PATTERN)
+
+
+# ---------------------------------------------------------------------------
+# Co-writer (services/codex/): the user's installed OpenAI Codex, embedded in the Story section as a co-writer. The
+# backend runs `codex app-server` (one process, the user's own login) and exposes the app's story tools to it as an MCP
+# server on 127.0.0.1; every tool call is executed by the frontend's story store (src/stores/coWriterTools.ts) and its
+# result goes back to Codex. Conversations (one per story) and their entries are built by the backend from Codex's
+# events and streamed over /ws/tasks as CodexEvent messages.
+# ---------------------------------------------------------------------------
+
+CodexState = Literal["not_found", "signed_out", "ready", "error"]
+# Where the codex executable was found (services/codex/discovery.py, in this order of precedence).
+CodexSource = Literal["configured", "path", "windows_app", "npm"]
+CodexAccount = Literal["chatgpt", "api_key", "other"]
+CONVERSATION_ID_PATTERN = r"^cnv-[0-9a-f]{12}$"
+# Random id of one frontend window (page load), sent by its /ws/tasks socket and with its messages: the tool calls of
+# a turn are executed by the window that sent the message.
+CLIENT_ID_PATTERN = r"^[A-Za-z0-9-]{8,64}$"
+StoryRef = Annotated[str, Field(pattern=STORY_ID_PATTERN)]
+SceneRef = Annotated[str, Field(pattern=SCENE_ID_PATTERN)]
+
+
+class CodexModelOption(ApiModel):
+    """A model the user's Codex offers (model/list)."""
+
+    id: str
+    name: str
+
+
+class CodexStatus(ApiModel):
+    """Whether the co-writer can work: Codex found (where, which version), signed in, its models."""
+
+    state: CodexState
+    message: str = Field(default="", description="What to do when the state is not ready (shown as is).")
+    path: str | None = Field(default=None, description="The codex executable used (null: not found).")
+    source: CodexSource | None = None
+    version: str | None = None
+    configured_path: str | None = Field(default=None, description="The path set by the user (backend settings).")
+    searched: list[str] = Field(default_factory=list, description="Where Codex was looked for (when not found).")
+    account: CodexAccount | None = Field(default=None, description="How Codex is signed in (never the credentials).")
+    default_model: str | None = Field(default=None, description="The model of the user's Codex configuration.")
+    model: str | None = Field(default=None, description="The model chosen for the co-writer (null: the default).")
+    models: list[CodexModelOption] = Field(default_factory=list)
+    running: bool = Field(default=False, description="The Codex process is running.")
+
+
+class CodexSettingsUpdate(ApiModel):
+    """Body of PUT /api/codex/settings: only the fields sent change; null clears (auto-detect, the default model)."""
+
+    path: str | None = Field(default=None, max_length=1_000)
+    model: str | None = Field(default=None, max_length=200)
+
+
+# --- Tools (their names and arguments; the descriptions Codex reads are in services/codex/tools.py) ---
+
+# THE tool names: the MCP server lists them, the frontend executes them (an exhaustive record).
+CodexToolName = Literal[
+    "list_stories",
+    "get_story",
+    "list_characters",
+    "list_categories",
+    "create_story",
+    "update_story",
+    "add_scene",
+    "update_scene",
+    "lock_sub_prompt",
+    "unlock_category",
+    "move_scene",
+    "duplicate_scene",
+    "delete_scene",
+    "generate_scene",
+    "generate_missing_scenes",
+]
+# "story": the story's characters (a scene that names none of its own); a list: the scene's own ([]: none).
+SceneCast = Literal["story"] | list[CharacterRef]
+
+
+class CodexToolArgs(ApiModel):
+    """Base of the tool arguments: unknown fields are refused, so Codex learns about a typo."""
+
+    model_config = ConfigDict(extra="forbid", json_schema_serialization_defaults_required=True)
+
+
+class CodexNoArgs(CodexToolArgs):
+    pass
+
+
+class CodexStoryArgs(CodexToolArgs):
+    story_id: StoryRef
+
+
+class CodexSceneArgs(CodexStoryArgs):
+    scene_id: SceneRef
+
+
+class CodexListCategoriesArgs(CodexToolArgs):
+    query: str | None = Field(default=None, max_length=200, description="Only the categories whose name contains it.")
+
+
+class CodexCreateStoryArgs(CodexToolArgs):
+    title: StoryTitle
+    character_ids: list[CharacterRef] = Field(default_factory=list, description="The story's characters (list_characters).")
+
+
+class CodexUpdateStoryArgs(CodexStoryArgs):
+    title: StoryTitle | None = Field(default=None, description="null: unchanged.")
+    character_ids: list[CharacterRef] | None = Field(default=None, description="null: unchanged.")
+
+
+class CodexAddSceneArgs(CodexStoryArgs):
+    title: SceneTitle | None = Field(default=None, description="null: 'Scene <n>'.")
+    text: SceneText = Field(default="", description="The narrative text of the scene.")
+    extra_tags: PromptTags = Field(default_factory=list, description="Danbooru-style tags of the scene's picture.")
+    negative_tags: PromptTags = Field(default_factory=list)
+    characters: SceneCast = Field(default="story", description="\"story\": the story's characters; a list: its own.")
+    position: int | None = Field(default=None, ge=1, description="1-based position; null: at the end.")
+
+
+class CodexUpdateSceneArgs(CodexSceneArgs):
+    """Only the fields given change (null: unchanged)."""
+
+    title: SceneTitle | None = None
+    text: SceneText | None = None
+    extra_tags: PromptTags | None = None
+    negative_tags: PromptTags | None = None
+    characters: SceneCast | None = Field(default=None, description="\"story\": the story's characters; []: none.")
+    seed: SceneSeed | Literal["random"] | None = Field(default=None, description="A fixed seed, or \"random\".")
+
+
+class CodexLockArgs(CodexSceneArgs):
+    category: str = Field(min_length=1, max_length=200, description="A prompt category (list_categories).")
+    sub_prompt: str = Field(min_length=1, max_length=5_000, description="One of that category's sub-prompts.")
+
+
+class CodexUnlockArgs(CodexSceneArgs):
+    category: str = Field(min_length=1, max_length=200)
+
+
+class CodexMoveSceneArgs(CodexSceneArgs):
+    position: int = Field(ge=1, description="The new 1-based position.")
+
+
+class CodexDeleteSceneArgs(CodexSceneArgs):
+    user_confirmed: bool = Field(description="True only when the user confirmed this deletion in the conversation.")
+
+
+# THE arguments of each tool (validated by the backend before the frontend executes the call).
+CODEX_TOOL_ARGUMENTS: dict[str, type[CodexToolArgs]] = {
+    "list_stories": CodexNoArgs,
+    "get_story": CodexStoryArgs,
+    "list_characters": CodexNoArgs,
+    "list_categories": CodexListCategoriesArgs,
+    "create_story": CodexCreateStoryArgs,
+    "update_story": CodexUpdateStoryArgs,
+    "add_scene": CodexAddSceneArgs,
+    "update_scene": CodexUpdateSceneArgs,
+    "lock_sub_prompt": CodexLockArgs,
+    "unlock_category": CodexUnlockArgs,
+    "move_scene": CodexMoveSceneArgs,
+    "duplicate_scene": CodexSceneArgs,
+    "delete_scene": CodexDeleteSceneArgs,
+    "generate_scene": CodexSceneArgs,
+    "generate_missing_scenes": CodexStoryArgs,
+}
+
+
+class CodexToolCallBase(ApiModel):
+    """A tool call for the frontend window `client_id` to execute (then POST /api/codex/tool-calls/{call_id}/result)."""
+
+    call_id: str
+    client_id: str
+    conversation_id: str
+
+
+def _tool_call_model(tool: str, arguments: type[CodexToolArgs]) -> type[CodexToolCallBase]:
+    camel = "".join(part.capitalize() for part in tool.split("_"))
+    model: type[CodexToolCallBase] = create_model(  # type: ignore[call-overload]
+        f"Codex{camel}Call",
+        __base__=CodexToolCallBase,
+        tool=(Literal[tool], ...),  # type: ignore[valid-type]
+        arguments=(arguments, ...),
+    )
+    return model
+
+
+# One call model per tool ("CodexAddSceneCall": tool + its arguments), discriminated by `tool`.
+CODEX_TOOL_CALL_MODELS: dict[str, type[CodexToolCallBase]] = {
+    tool: _tool_call_model(tool, arguments) for tool, arguments in CODEX_TOOL_ARGUMENTS.items()
+}
+CodexToolCall = Annotated[Union[tuple(CODEX_TOOL_CALL_MODELS.values())], Field(discriminator="tool")]  # type: ignore[valid-type]
+
+
+class CodexToolResult(ApiModel):
+    """Body of POST /api/codex/tool-calls/{call_id}/result: what the frontend did."""
+
+    ok: bool
+    text: str = Field(max_length=200_000, description="The answer Codex reads (data, or the reason of a failure).")
+    summary: str = Field(max_length=500, description="What people read in the conversation ('Added Scene 3 · The storm').")
+    story_id: StoryRef | None = Field(default=None, description="The story it acted on (the conversation links to it).")
+    scene_id: SceneRef | None = None
+
+
+# --- Conversations ---
+
+CodexEntryKind = Literal["user", "assistant", "tool", "error", "notice"]
+CodexEntryStatus = Literal["running", "completed", "failed"]
+
+
+class CodexEntry(ApiModel):
+    """One entry of a conversation: a message, a tool activity, an error or a notice ('Stopped.')."""
+
+    id: str
+    kind: CodexEntryKind
+    text: str = Field(default="", description="The message; a tool's summary once done; the error or the notice.")
+    status: CodexEntryStatus = "completed"
+    tool: str | None = Field(default=None, description="The tool of a tool entry (a CodexToolName for the app's tools).")
+    story_id: str | None = Field(default=None, description="What a tool entry acted on (its arguments or its result).")
+    scene_id: str | None = None
+
+
+class CodexConversation(ApiModel):
+    """The co-writer conversation of one or more stories (a story created in a conversation joins it), or the draft
+    conversation (used while no story is selected)."""
+
+    id: str = Field(pattern=CONVERSATION_ID_PATTERN)
+    story_ids: list[str] = Field(default_factory=list)
+    draft: bool = Field(default=False, description="The conversation used while no story is selected.")
+    entries: list[CodexEntry] = Field(default_factory=list)
+    running: bool = Field(default=False, description="Codex is answering (a turn is running).")
+    revision: int = Field(
+        default=0,
+        description="Counts the changes of the conversation: an answer or event with a lower revision than the one "
+        "shown is older (the HTTP answers and the WebSocket events race).",
+    )
+
+
+class CodexTurnRequest(ApiModel):
+    """Body of POST /api/codex/turns: a message of the user, about the story (and scene) shown."""
+
+    story_id: StoryRef | None = None
+    scene_id: SceneRef | None = None
+    text: Annotated[str, StringConstraints(strip_whitespace=True, min_length=1, max_length=20_000)]
+    client_id: str = Field(pattern=CLIENT_ID_PATTERN)
+
+
+class CodexConversationReset(ApiModel):
+    """Body of POST /api/codex/conversation/reset (New conversation): the story (null: the draft) gets a new one."""
+
+    story_id: StoryRef | None = None
+
+
+# --- Events (WebSocket /ws/tasks, next to the task events; never recorded in GET /api/tasks) ---
+
+
+class CodexEventBase(ApiModel):
+    type: Literal["codex"] = "codex"
+
+
+class CodexStatusEvent(CodexEventBase):
+    kind: Literal["status"] = "status"
+    status: CodexStatus
+
+
+class CodexConversationEvent(CodexEventBase):
+    """A conversation changed as a whole (created, its stories, a turn started or ended, its history loaded)."""
+
+    kind: Literal["conversation"] = "conversation"
+    conversation: CodexConversation
+
+
+class CodexEntryEvent(CodexEventBase):
+    """An entry was added or changed (it replaces the entry with its id)."""
+
+    kind: Literal["entry"] = "entry"
+    conversation_id: str
+    entry: CodexEntry
+    revision: int = Field(description="The conversation's revision with this entry.")
+
+
+class CodexDeltaEvent(CodexEventBase):
+    """Streamed text appended to an assistant entry."""
+
+    kind: Literal["delta"] = "delta"
+    conversation_id: str
+    entry_id: str
+    delta: str
+    revision: int = Field(description="The conversation's revision with this text.")
+
+
+class CodexToolCallEvent(CodexEventBase):
+    kind: Literal["tool_call"] = "tool_call"
+    call: CodexToolCall
+
+
+class CodexToolCancelEvent(CodexEventBase):
+    """The tool call was abandoned (Stop, Codex stopped): the window running it stops it (e.g. its generation)."""
+
+    kind: Literal["tool_cancel"] = "tool_cancel"
+    call_id: str
+    client_id: str
+
+
+CodexEventModel = (
+    CodexStatusEvent | CodexConversationEvent | CodexEntryEvent | CodexDeltaEvent | CodexToolCallEvent | CodexToolCancelEvent
+)
+CodexEvent = Annotated[
+    Union[CodexStatusEvent, CodexConversationEvent, CodexEntryEvent, CodexDeltaEvent, CodexToolCallEvent, CodexToolCancelEvent],
+    Field(discriminator="kind"),
+]
+
+# Types only sent over the WebSocket (no route references them): factory.py adds their schemas (and the schemas they
+# use) to the OpenAPI components under these names, so `npm run gen:api` generates their TypeScript types.
+EXPORTED_MESSAGE_TYPES: dict[str, Any] = {"CodexEvent": CodexEvent}
 
 
 # ---------------------------------------------------------------------------

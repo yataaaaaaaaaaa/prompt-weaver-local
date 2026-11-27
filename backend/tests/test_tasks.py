@@ -6,7 +6,8 @@ import asyncio
 import threading
 from typing import Any
 
-from fastapi import FastAPI
+import pytest
+from fastapi import FastAPI, WebSocketDisconnect
 from fastapi.testclient import TestClient
 
 from app.schemas import DownloadTaskEvent, GenerationTaskEvent, TaskSnapshot
@@ -243,3 +244,59 @@ def test_websocket_ignores_client_messages_and_disconnects_cleanly(client: TestC
     # The closed socket was unregistered: publishing afterwards only records.
     hub.publish(GenerationTaskEvent(stage="complete"))
     assert client.get("/api/tasks").json()["events"][0]["stage"] == "complete"
+
+
+# ---------------------------------------------------------------------------
+# Live messages and windows (the co-writer)
+# ---------------------------------------------------------------------------
+
+
+def test_broadcast_sends_without_recording() -> None:
+    from app.schemas import CodexDeltaEvent
+
+    async def scenario() -> tuple[FakeSocket, TaskHub]:
+        hub = TaskHub()
+        socket = FakeSocket()
+        await hub.connect(socket)  # type: ignore[arg-type]
+        hub.broadcast(CodexDeltaEvent(conversation_id="cnv-000000000001", entry_id="a", delta="Hi", revision=3))
+        await settle()
+        return socket, hub
+
+    socket, hub = asyncio.run(scenario())
+
+    assert socket.sent[1] == {"type": "codex", "kind": "delta", "conversation_id": "cnv-000000000001", "entry_id": "a", "delta": "Hi", "revision": 3}
+    assert hub.snapshot().events == [GenerationTaskEvent(stage="idle", message="Idle")]
+
+
+def test_windows_are_known_by_their_sockets_and_their_departure_is_announced() -> None:
+    gone: list[str] = []
+
+    async def scenario() -> TaskHub:
+        hub = TaskHub()
+        hub.add_client_listener(gone.append)
+        first, second, anonymous = FakeSocket(), FakeSocket(), FakeSocket()
+        await hub.connect(first, "window-1")  # type: ignore[arg-type]
+        await hub.connect(second, "window-1")  # type: ignore[arg-type]
+        await hub.connect(anonymous)  # type: ignore[arg-type]
+        assert hub.is_client_connected("window-1")
+        assert not hub.is_client_connected("window-2")
+        await hub.disconnect(first)  # type: ignore[arg-type]
+        assert gone == [] and hub.is_client_connected("window-1")
+        await hub.disconnect(second)  # type: ignore[arg-type]
+        await hub.disconnect(anonymous)  # type: ignore[arg-type]
+        return hub
+
+    hub = asyncio.run(scenario())
+
+    assert gone == ["window-1"]
+    assert not hub.is_client_connected("window-1")
+
+
+def test_the_socket_names_its_window(app: FastAPI) -> None:
+    with TestClient(app) as client:
+        with client.websocket_connect("/ws/tasks?client_id=window-abc-123") as socket:
+            socket.receive_json()
+            assert app.state.services.tasks.is_client_connected("window-abc-123")
+        with pytest.raises(WebSocketDisconnect):
+            with client.websocket_connect("/ws/tasks?client_id=no spaces!") as refused:
+                refused.receive_json()
