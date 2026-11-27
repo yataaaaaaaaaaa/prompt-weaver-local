@@ -2,7 +2,9 @@
 // (intent colors and icons, announced to screen readers) at the bottom-end corner (the Fluent 2 toast position), above
 // the app; Fluent portals (menus, dialogs, tooltips) stay above it. While Create is shown, the corner is the one left
 // of the generation panel (layoutStore selectGenerationPanelInset): an error toast stays until dismissed and must
-// never cover the panel's sticky Generate. The navigation rail and the Create command bar stay clear too. The newest
+// never cover the panel's sticky Generate. While Story is shown with its dock expanded, the corner is the one left of
+// the dock (DOCK_WINDOW_INSET), so a toast never covers the co-writer's message box and Send. The navigation rail and
+// the Create command bar stay clear too. The newest
 // toast is the lowest one. A notification with an action (e.g. 'Go to Create') shows it as a button; running it
 // dismisses the toast. A 'Go to <section>' action is not offered while that section is shown.
 import {
@@ -18,6 +20,8 @@ import {
 import { DismissRegular } from '@fluentui/react-icons';
 import { selectGenerationPanelInset, useLayoutStore } from '../stores/layoutStore';
 import { useApplicableAction, useNavigationStore } from '../stores/navigationStore';
+import { useStoryStore } from '../stores/storyStore';
+import { DOCK_WINDOW_INSET } from './SectionLayout';
 import { useNotificationsStore, type AppNotification } from '../stores/notificationsStore';
 
 /** Toasts are narrower than the window so they cover as little as possible (multi-line messages wrap). */
@@ -73,12 +77,16 @@ function NotificationBar({ notification }: { notification: AppNotification }): J
 	);
 }
 
-/** The toasts' distance from the end edge of the window (px, before the spacing): the generation panel's while Create is
- *  shown, else none. */
-function useEndInset(): number {
-	const createShown = useNavigationStore((state) => state.section === 'create');
+/** The toasts' distance from the end edge of the window (a CSS length, before the spacing): the generation panel's
+ *  while Create is shown, the dock's while Story is shown with its dock expanded, else none. */
+function useEndInset(): string {
+	const section = useNavigationStore((state) => state.section);
 	const panelInset = useLayoutStore(selectGenerationPanelInset);
-	return createShown ? panelInset : 0;
+	const dockExpanded = useStoryStore((state) => !state.dockCollapsed);
+	if (section === 'create') {
+		return `${panelInset}px`;
+	}
+	return section === 'story' && dockExpanded ? DOCK_WINDOW_INSET : '0px';
 }
 
 export function NotificationsHost(): JSX.Element | null {
@@ -93,7 +101,7 @@ export function NotificationsHost(): JSX.Element | null {
 			role="region"
 			aria-label="Notifications"
 			className={styles.host}
-			style={{ right: `calc(${endInset}px + ${tokens.spacingHorizontalXXL})`, maxWidth: `calc(100vw - ${endInset}px - 2 * ${tokens.spacingHorizontalXXL})` }}
+			style={{ right: `calc(${endInset} + ${tokens.spacingHorizontalXXL})`, maxWidth: `calc(100vw - ${endInset} - 2 * ${tokens.spacingHorizontalXXL})` }}
 		>
 			<MessageBarGroup animate="both" className={styles.group}>
 				{notifications.map((notification) => (

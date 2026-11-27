@@ -26,8 +26,14 @@ export const DETAIL_PANEL_WIDTH = 'clamp(360px, 34%, 560px)';
 export const DOCKED_DETAIL_PANEL_WIDTH = 'clamp(320px, 28%, 480px)';
 /** Width of the navigation pane before the results. */
 export const NAVIGATION_PANE_WIDTH = 'clamp(200px, 18%, 280px)';
+const DOCK_MIN_WIDTH = '300px';
+const DOCK_SHARE_PERCENT = 26;
+const DOCK_MAX_WIDTH = '420px';
 /** Width of the dock after the detail panel. */
-export const DOCK_PANEL_WIDTH = 'clamp(300px, 26%, 420px)';
+export const DOCK_PANEL_WIDTH = `clamp(${DOCK_MIN_WIDTH}, ${DOCK_SHARE_PERCENT}%, ${DOCK_MAX_WIDTH})`;
+/** At least the width of an expanded dock, as a length of the window (its share of the whole window, a little more
+ *  than of the section beside the rail): what keeps something at the window's end edge clear of the dock (toasts). */
+export const DOCK_WINDOW_INSET = `clamp(${DOCK_MIN_WIDTH}, ${DOCK_SHARE_PERCENT}vw, ${DOCK_MAX_WIDTH})`;
 /** Width of a collapsed dock (its strip). */
 export const COLLAPSED_DOCK_WIDTH = '48px';
 

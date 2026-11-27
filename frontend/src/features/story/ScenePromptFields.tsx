@@ -1,10 +1,10 @@
 // The prompt part of the scene details: what this scene's pictures add to the prompt board, the characters and the
 // model (the precedence is src/domain/stories.ts): its tags (the pinned 'Scene' category), its locked sub-prompts (one
 // per category, each replacing that category's pick; a lock of a category the characters pin is marked as replaced),
-// its negative tags, its characters (the story's by default, or its own: none at all is allowed) and its fixed seed
-// (empty: a new seed for every picture; the shuffle button in the field clears it). Every field saves when the edit is
-// done. Thin view over the story,
-// categories and characters stores.
+// its LoRAs with their weights (after the characters' LoRAs; a scene's weight wins), its negative tags, its characters
+// (the story's by default, or its own: none at all is allowed) and its fixed seed (empty: a new seed for every
+// picture; the shuffle button in the field clears it). Every field saves when the edit is done. Thin view over the
+// story, categories and characters stores.
 import {
 	Button,
 	Caption1,
@@ -28,6 +28,7 @@ import { useCategoriesStore } from '../../stores/categoriesStore';
 import { selectActiveCharacter, useCharactersStore } from '../../stores/charactersStore';
 import { useStoryStore } from '../../stores/storyStore';
 import { useActionClasses, useStateAccentClasses } from '../../ui/stateStyles';
+import { WeightedLorasField } from '../library/WeightedLorasField';
 import { CastPicker } from './CastPicker';
 import { STORY_LABELS } from './storyLabels';
 import { useCommitField } from './useCommitField';
@@ -175,6 +176,22 @@ function LockedSubPrompts({ story, scene }: FieldsProps): JSX.Element {
 	);
 }
 
+function SceneLoras({ story, scene }: FieldsProps): JSX.Element {
+	const setSceneLora = useStoryStore((state) => state.setSceneLora);
+	const removeSceneLora = useStoryStore((state) => state.removeSceneLora);
+	return (
+		<WeightedLorasField
+			label={STORY_LABELS.sceneLoras}
+			listLabel={STORY_LABELS.sceneLoras}
+			hint="Only in this scene, after the characters' LoRAs; the weight here wins (0: off in this scene)."
+			items={scene.loras}
+			onAdd={(loraId) => void setSceneLora(story.id, scene.id, loraId)}
+			onRemove={(loraId) => void removeSceneLora(story.id, scene.id, loraId)}
+			onWeight={(loraId, weight) => void setSceneLora(story.id, scene.id, loraId, weight)}
+		/>
+	);
+}
+
 function SceneCharacters({ story, scene }: FieldsProps): JSX.Element {
 	const styles = useStyles();
 	const characters = useCharactersStore((state) => state.characters);
@@ -265,6 +282,7 @@ export function ScenePromptFields({ story, scene }: FieldsProps): JSX.Element {
 				onCommit={(tags) => void updateScene(story.id, scene.id, { extra_tags: tags })}
 			/>
 			<LockedSubPrompts story={story} scene={scene} />
+			<SceneLoras story={story} scene={scene} />
 			<TagsField
 				label={STORY_LABELS.negativeTags}
 				hint="Added to the negative prompt of this scene."

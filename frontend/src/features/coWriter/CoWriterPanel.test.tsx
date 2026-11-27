@@ -2,8 +2,11 @@ import { act, screen, waitFor, within } from '@testing-library/react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { api } from '../../api/client';
 import type { CodexConversation } from '../../api/types';
+import { useCharactersStore } from '../../stores/charactersStore';
 import { useCodexStore } from '../../stores/codexStore';
+import { useNavigationStore } from '../../stores/navigationStore';
 import { useStoryStore } from '../../stores/storyStore';
+import { BOB, character } from '../../test/characterData';
 import { codexStatus, conversation, CONVERSATION_ID, entry } from '../../test/codexData';
 import { renderWithProviders } from '../../test/render';
 import { hasActionIntent } from '../../test/stateClasses';
@@ -95,15 +98,18 @@ describe('the conversation', () => {
 		entries: [
 			entry({ id: 'u', kind: 'user', text: 'Add a scene' }),
 			entry({ id: 'a', text: 'Adding it.' }),
-			entry({ id: 't1', kind: 'tool', tool: 'add_scene', text: 'Added Scene 2 · The storm', story_id: STORY_ID, scene_id: SCENE_IDS[1] }),
-			entry({ id: 't2', kind: 'tool', tool: 'generate_scene', status: 'running', story_id: STORY_ID, scene_id: SCENE_IDS[2] }),
-			entry({ id: 't3', kind: 'tool', tool: 'delete_scene', status: 'failed', text: 'Deletion not confirmed', story_id: STORY_ID }),
+			entry({ id: 't1', kind: 'tool', tool: 'add_scenes', text: 'Added Scene 2 · The storm', story_id: STORY_ID, scene_id: SCENE_IDS[1] }),
+			entry({ id: 't2', kind: 'tool', tool: 'generate_scenes', status: 'running', story_id: STORY_ID, scene_id: SCENE_IDS[2] }),
+			entry({ id: 't3', kind: 'tool', tool: 'delete_scenes', status: 'failed', text: 'Deletion not confirmed', story_id: STORY_ID }),
+			entry({ id: 't4', kind: 'tool', tool: 'update_character', text: 'Edited Bob (outfit tags)', character_id: BOB.id }),
+			entry({ id: 't5', kind: 'tool', tool: 'update_character', status: 'running', character_id: BOB.id }),
 			entry({ id: 'e', kind: 'error', text: 'Rate limited' }),
 			entry({ id: 'n', kind: 'notice', text: 'Stopped.' }),
 		],
 	});
 
-	it('shows messages, tool activity with links to the scenes, errors and notices', async () => {
+	it('shows messages, tool activity with links to the scenes and characters, errors and notices', async () => {
+		useCharactersStore.setState({ characters: [character(), BOB] });
 		const { user } = renderPanel(chat);
 
 		await within(await findLog()).findByText('Add a scene');
@@ -119,6 +125,44 @@ describe('the conversation', () => {
 		expect(useStoryStore.getState()).toMatchObject({ selectedStoryId: STORY_ID, selectedSceneId: SCENE_IDS[1] });
 		await user.click(within(log()).getByRole('button', { name: 'Show The lighthouse' }));
 		expect(useStoryStore.getState().selectedSceneId).toBeNull();
+
+		// A character's activity: its running label names it, Show opens it in the Characters section.
+		expect(within(log()).getByText('Editing Bob…')).toBeInTheDocument();
+		expect(within(log()).getByText('Edited Bob (outfit tags)')).toBeInTheDocument();
+		await user.click(within(log()).getAllByRole('button', { name: 'Show Bob' })[0]);
+		expect(useCharactersStore.getState().selectedId).toBe(BOB.id);
+		expect(useNavigationStore.getState().section).toBe('characters');
+	});
+
+	it("renders Codex's answers as Markdown, never as HTML", async () => {
+		const answer = [
+			'## Plan',
+			'Two **scenes**, one *quiet*:',
+			'',
+			'1. `The harbor` at dawn',
+			'2. The storm',
+			'',
+			'- see [the docs](https://example.com/docs)',
+			'- [a trap](javascript:alert(1)) <img src=x onerror=alert(1)>',
+			'',
+			'```',
+			'rain, night',
+			'```',
+		].join('\n');
+		const { container } = renderPanel(conversation({ story_ids: [STORY_ID], entries: [entry({ id: 'a', text: answer })] }));
+		const reply = (await within(await findLog()).findByText('Plan')).closest('[data-entry-kind="assistant"]') as HTMLElement;
+
+		expect(within(reply).getByRole('heading', { level: 3, name: 'Plan' })).toBeInTheDocument();
+		expect(within(reply).getByText('scenes').tagName).toBe('STRONG');
+		expect(within(reply).getByText('quiet').tagName).toBe('EM');
+		expect(within(reply).getByText('The harbor').tagName).toBe('CODE');
+		expect(within(reply).getAllByRole('list').map((list) => list.tagName)).toEqual(['OL', 'UL']);
+		expect(within(reply).getByRole('link', { name: 'the docs' })).toHaveAttribute('href', 'https://example.com/docs');
+		expect(within(reply).getByRole('link', { name: 'the docs' })).toHaveAttribute('target', '_blank');
+		expect(within(reply).queryByRole('link', { name: 'a trap' })).not.toBeInTheDocument();
+		expect(within(reply).getByText(/<img src=x onerror=alert\(1\)>/)).toBeInTheDocument();
+		expect(container.querySelector('img')).toBeNull();
+		expect(within(reply).getByText('rain, night').closest('pre')).not.toBeNull();
 	});
 
 	it('says what Codex can do in an empty conversation', async () => {
@@ -158,7 +202,7 @@ describe('the conversation', () => {
 			useCodexStore.getState().applyEvent({ type: 'codex', kind: 'delta', conversation_id: CONVERSATION_ID, entry_id: 'a', delta: ' upon a time', revision: 3 });
 		});
 
-		expect(within(log()).getByText('Once upon a time')).toHaveAttribute('aria-busy', 'true');
+		expect(within(log()).getByText('Once upon a time').closest('[data-entry-kind="assistant"]')).toHaveAttribute('aria-busy', 'true');
 	});
 
 	it('New conversation, the model menu and Collapse', async () => {

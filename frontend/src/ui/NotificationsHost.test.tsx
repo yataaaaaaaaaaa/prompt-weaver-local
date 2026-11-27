@@ -4,6 +4,8 @@ import { COLLAPSED_REGION_WIDTH } from '../domain/layout';
 import { useLayoutStore } from '../stores/layoutStore';
 import { goToSectionAction, useNavigationStore } from '../stores/navigationStore';
 import { useNotificationsStore } from '../stores/notificationsStore';
+import { useStoryStore } from '../stores/storyStore';
+import { DOCK_WINDOW_INSET } from './SectionLayout';
 import { renderWithProviders } from '../test/render';
 import { NotificationsHost } from './NotificationsHost';
 
@@ -28,6 +30,19 @@ describe('NotificationsHost', () => {
 		expect(region.style.right).toContain(`${COLLAPSED_REGION_WIDTH}px`);
 
 		act(() => useNavigationStore.getState().showSection('models'));
+		expect(region.style.right).toContain('0px');
+	});
+
+	it("keeps clear of the Story section's dock while it is expanded", () => {
+		act(() => {
+			useNotificationsStore.getState().notify('error', 'Could not add the scene.');
+			useNavigationStore.getState().showSection('story');
+		});
+		renderWithProviders(<NotificationsHost />);
+		const region = screen.getByRole('region', { name: 'Notifications' });
+
+		expect(region.style.right).toContain(DOCK_WINDOW_INSET);
+		act(() => useStoryStore.getState().setDockCollapsed(true));
 		expect(region.style.right).toContain('0px');
 	});
 

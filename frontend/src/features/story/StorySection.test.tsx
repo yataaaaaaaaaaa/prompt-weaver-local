@@ -153,6 +153,22 @@ describe('StorySection commands', () => {
 		expect(actions.cancelGeneration).toHaveBeenCalledTimes(1);
 	});
 
+	it('edits the logline, and the synopsis and style notes in their disclosure', async () => {
+		const { user } = renderSection({ stories: [story({ logline: 'A keeper guides a boat home.', style_notes: 'watercolor' })] });
+		const header = within(scenes());
+
+		expect(header.getByRole('textbox', { name: STORY_LABELS.logline })).toHaveValue('A keeper guides a boat home.');
+		const disclosure = header.getByRole('button', { name: `${STORY_LABELS.storyFlow} (1 of 2)` });
+		expect(disclosure).toHaveAttribute('aria-expanded', 'false');
+		await user.click(disclosure);
+		expect(header.getByRole('textbox', { name: STORY_LABELS.styleNotes })).toHaveValue('watercolor');
+		await user.type(header.getByRole('textbox', { name: STORY_LABELS.synopsis }), 'The storm comes.{Control>}{Enter}{/Control}');
+		expect(actions.updateStory).toHaveBeenLastCalledWith(STORY_ID, { synopsis: 'The storm comes.' });
+		await user.clear(header.getByRole('textbox', { name: STORY_LABELS.logline }));
+		await user.tab();
+		expect(actions.updateStory).toHaveBeenLastCalledWith(STORY_ID, { logline: '' });
+	});
+
 	it('renames the story when the title edit is done, and refuses a blank title', async () => {
 		const { user } = renderSection();
 		const title = within(scenes()).getByRole('textbox', { name: STORY_LABELS.storyTitle });
@@ -286,6 +302,50 @@ describe('scene details', () => {
 		expect(actions.updateScene).toHaveBeenLastCalledWith(STORY_ID, SCENE_IDS[1], { seed: 1234 });
 		await user.click(within(details()).getByRole('button', { name: STORY_LABELS.randomSeed }));
 		expect(actions.updateScene).toHaveBeenLastCalledWith(STORY_ID, SCENE_IDS[1], { seed: null });
+	});
+
+	it('saves the flow notes when the edit is done (trimmed)', async () => {
+		const { user } = renderScene(SCENE_IDS[0], [story({ scenes: [scene({ beat: 'She arrives', mood: 'lonely' })] })]);
+		const panel = details();
+
+		expect(within(panel).getByRole('heading', { level: 3, name: STORY_LABELS.flow })).toBeInTheDocument();
+		expect(within(panel).getByRole('textbox', { name: STORY_LABELS.beat })).toHaveValue('She arrives');
+		expect(within(panel).getByRole('textbox', { name: STORY_LABELS.mood })).toHaveValue('lonely');
+		await user.type(within(panel).getByRole('textbox', { name: STORY_LABELS.shot }), ' wide shot ');
+		await user.tab();
+		expect(actions.updateScene).toHaveBeenLastCalledWith(STORY_ID, SCENE_IDS[0], { shot: 'wide shot' });
+		await user.type(within(panel).getByRole('textbox', { name: STORY_LABELS.setting }), 'island at dusk{Enter}');
+		expect(actions.updateScene).toHaveBeenLastCalledWith(STORY_ID, SCENE_IDS[0], { setting: 'island at dusk' });
+	});
+
+	it("lists the scene's LoRAs with their weights: add, change a weight, remove", async () => {
+		useLibraryStore.setState({ loras: [{ id: 'ink', name: 'Ink lines', path: 'D:/l/ink.safetensors', source: null }, { id: 'oil', name: 'Oil paint', path: 'D:/l/oil.safetensors', source: null }] });
+		const { user } = renderScene(SCENE_IDS[0], [story({ scenes: [scene({ loras: [{ id: 'ink', weight: 0.5 }] })] })]);
+		const loras = within(details()).getByRole('group', { name: STORY_LABELS.sceneLoras });
+
+		expect(within(within(loras).getByRole('list', { name: STORY_LABELS.sceneLoras })).getAllByRole('listitem').map((item) => item.textContent)).toEqual(['Ink lines']);
+		expect(within(loras).getByRole('spinbutton', { name: 'Weight of Ink lines' })).toHaveValue('0.5');
+		await user.click(within(loras).getByRole('combobox', { name: 'Add a LoRA' }));
+		await user.click(await screen.findByRole('option', { name: 'Oil paint' }));
+		expect(actions.setSceneLora).toHaveBeenCalledWith(STORY_ID, SCENE_IDS[0], 'oil');
+		fireEvent.keyDown(within(loras).getByRole('spinbutton', { name: 'Weight of Ink lines' }), { key: 'ArrowUp' });
+		expect(actions.setSceneLora).toHaveBeenLastCalledWith(STORY_ID, SCENE_IDS[0], 'ink', 0.55);
+		await user.click(within(loras).getByRole('button', { name: 'Remove Ink lines' }));
+		expect(actions.removeSceneLora).toHaveBeenCalledWith(STORY_ID, SCENE_IDS[0], 'ink');
+	});
+
+	it('removes a variant from the scene (the output is kept), even its only one', async () => {
+		const { user } = renderScene();
+		const panel = details();
+
+		await user.click(within(panel).getByRole('button', { name: 'Remove variant 0000000002' }));
+		expect(actions.removeVariant).toHaveBeenCalledWith(STORY_ID, SCENE_IDS[1], '0000000002');
+		expect(within(panel).getByRole('group', { name: `${STORY_LABELS.variants} (2)` })).toHaveFocus();
+		act(() => useStoryStore.setState({ selectedSceneId: SCENE_IDS[0] }));
+		// Its only variant: the focus moves to Generate (the variants go away).
+		await user.click(within(details()).getByRole('button', { name: 'Remove variant 0000000001' }));
+		expect(actions.removeVariant).toHaveBeenLastCalledWith(STORY_ID, SCENE_IDS[0], '0000000001');
+		expect(within(details()).getByRole('button', { name: STORY_LABELS.regenerate })).toHaveFocus();
 	});
 
 	it('closes with Escape or Close, back to the card', async () => {

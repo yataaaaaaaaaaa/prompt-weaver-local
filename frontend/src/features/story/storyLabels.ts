@@ -21,11 +21,23 @@ export const STORY_LABELS = {
 	exportStory: 'Export',
 	storyTitle: 'Story title',
 	storyCharacters: 'Story characters',
+	logline: 'Logline',
+	/** The disclosure of the story's synopsis and style notes. */
+	storyFlow: 'Synopsis and style',
+	synopsis: 'Synopsis',
+	styleNotes: 'Style and tone',
 	deleteStory: 'Delete story',
 	/** The list of the scene cards. */
 	sceneList: 'Scene cards',
 	sceneTitle: 'Scene title',
 	sceneText: 'Scene text',
+	/** The scene's flow notes (never part of the prompt). */
+	flow: 'Flow',
+	beat: 'Beat',
+	shot: 'Shot',
+	setting: 'Setting',
+	mood: 'Mood',
+	sceneLoras: 'Scene LoRAs',
 	extraTags: 'Scene tags',
 	negativeTags: 'Negative tags',
 	lockedSubPrompts: 'Locked sub-prompts',
@@ -67,6 +79,11 @@ export function sceneIllustrationName(title: string): string {
 /** The name of a variant option: 'Variant <output id>'. */
 export function sceneVariantName(outputId: string): string {
 	return `Variant ${outputId}`;
+}
+
+/** The name of a variant's Remove button: 'Remove variant <output id>'. */
+export function removeVariantName(outputId: string): string {
+	return `Remove variant ${outputId}`;
 }
 
 /** The reader's page position: 'Page 2 of 5' (0-based page in, 1-based out). */
