@@ -1,8 +1,8 @@
 // Client of the e2e backend's control API (backend/tests/e2e/server.py) and of its real API for test setup, plus the
 // persisted stores as the tests read, wait for and seed them.
 //
-// The reset options are defined once, in backend/tests/e2e/options.py (E2EResetRequest: generator, network, files,
-// remove). The backend rejects unknown fields (422), so a typo fails the test with the backend's message; field
+// The reset options are defined once, in backend/tests/e2e/options.py (E2EResetRequest: generator, network, codex,
+// files, remove). The backend rejects unknown fields (422), so a typo fails the test with the backend's message; field
 // names here are passed through untouched.
 import { readFileSync } from 'node:fs';
 import path from 'node:path';
@@ -17,6 +17,9 @@ export type E2EResetOptions = {
 	/** NetworkOptions: chunk_delay_ms, download_chunks, stall_at_percent, corrupt_downloads, civitai_error_status,
 	 *  civitai_delay_ms. */
 	network?: Record<string, unknown>;
+	/** CodexOptions, the user's Codex as the co-writer finds it (the fake app-server of backend/tests/fake_codex.py):
+	 *  installed, account (null: signed out), delta_delay_ms, rules ({match, steps}), default_steps, fail_start. */
+	codex?: Record<string, unknown>;
 	/** Data dir files written after the fixture data (relative path -> JSON). See storeFile() and fixtureStoreFile(). */
 	files?: Record<string, unknown>;
 	/** Data dir files or folders deleted once everything is seeded (relative paths): 'output' for an empty output
@@ -32,6 +35,10 @@ export type E2EState = {
 	resets: number;
 	unexpected_requests: string[];
 	generations: number;
+	/** The fake Codex (a path the user can enter in the co-writer panel). */
+	codex_path: string;
+	/** Codex processes started since the reset (the status probe included). */
+	codex_starts: number;
 };
 
 /** The fixture categories (backend/tests/e2e/fixtures/data/stores/categorie-store), by priority. */
@@ -91,6 +98,13 @@ export class E2EBackend {
 	async state(): Promise<E2EState> {
 		const response = await this.request.get('/__e2e__/state');
 		expect(response.ok()).toBe(true);
+		return (await response.json()) as E2EState;
+	}
+
+	/** Changes the fake Codex's scenario during a test (CodexOptions fields, e.g. { account: 'chatgpt' }: signed in). */
+	async codex(changes: Record<string, unknown>): Promise<E2EState> {
+		const response = await this.request.post('/__e2e__/codex', { data: changes });
+		expect(response.ok(), `e2e codex change failed: ${response.status()} ${await response.text()}`).toBe(true);
 		return (await response.json()) as E2EState;
 	}
 

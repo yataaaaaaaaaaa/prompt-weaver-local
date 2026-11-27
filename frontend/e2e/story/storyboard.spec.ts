@@ -6,6 +6,7 @@ import type { Locator } from '@playwright/test';
 import type { Story } from '../../src/api/types';
 import { STORY_LABELS } from '../../src/features/story/storyLabels';
 import { dismissNotifications, expectPicturesLoaded } from '../support/app';
+import { storeFile } from '../support/backend';
 import { expectBaseline } from '../support/baselines';
 import { resolveColor } from '../support/colors';
 import { SMALL_VIEWPORT } from '../support/env';
@@ -66,8 +67,9 @@ test('the storyboard shows the stories, the scene cards and the scene details, d
 	await expect(story.card(2, LIGHTHOUSE.scenes[1]).getByRole('button', { name: LIGHTHOUSE.scenes[1], exact: true })).toBeFocused();
 });
 
-test.describe('in the smallest window', () => {
-	test.use({ viewport: SMALL_VIEWPORT });
+test.describe('in the smallest window, the co-writer collapsed', () => {
+	// The co-writer dock collapsed (saved in story-store) gives the scenes its room; expanded, see coWriter.spec.ts.
+	test.use({ viewport: SMALL_VIEWPORT, e2eOptions: { files: storeFile('story-store', { dockCollapsed: true }, 0) } });
 
 	test('the storyboard and the scene details fit 1280 x 720', async ({ app, page }, testInfo) => {
 		const story = new StoryDriver(app);

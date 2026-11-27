@@ -10,6 +10,7 @@ import {
 	type CreateRegionId,
 	type SectionId,
 } from '../../src/app/sections';
+import { CO_WRITER_STATE_ATTRIBUTE } from '../../src/features/coWriter/coWriterLabels';
 import { GENERATION_ACTION_NAMES, GENERATION_LABELS } from '../../src/features/generation/generationLabels';
 import { VIEWER_LABELS } from '../../src/features/outputs/viewerLabels';
 
@@ -27,9 +28,11 @@ export class AppDriver {
 		await this.settle();
 	}
 
-	/** Waits for the web fonts and for every picture in view to be loaded (stable screenshots). Pictures out of view
-	 *  are not waited for: a lazy thumbnail below the fold of a scrolled panel never loads. */
+	/** Waits for the web fonts and for every picture in view to be loaded (stable screenshots), and for a shown
+	 *  co-writer panel to know whether Codex can be used. Pictures out of view are not waited for: a lazy thumbnail below
+	 *  the fold of a scrolled panel never loads. */
 	async settle(): Promise<void> {
+		await expect(this.page.locator(`[${CO_WRITER_STATE_ATTRIBUTE}="checking"]:visible`)).toHaveCount(0, { timeout: 20_000 });
 		await waitForPicturesInView(this.page);
 	}
 
