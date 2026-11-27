@@ -233,6 +233,11 @@ export const useCodexStore = create<CodexStore>()((set, get) => {
 			set((state) => ({ runningCalls: { ...state.runningCalls, [call.call_id]: call.tool } }));
 			try {
 				const result = await runCoWriterTool(call);
+				if (call.tool === 'create_story' && result.ok && result.story_id) {
+					// The new story joins this conversation (the backend says so once it has the result): shown with it at once.
+					const storyId = result.story_id;
+					set((state) => (state.byStory[storyId] === call.conversation_id ? state : { byStory: { ...state.byStory, [storyId]: call.conversation_id } }));
+				}
 				if (!abandonedCalls.has(call.call_id)) {
 					await api.sendCodexToolResult(call.call_id, result).catch(() => undefined); // 404: the call is over (timed out)
 				}

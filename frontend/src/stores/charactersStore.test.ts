@@ -926,3 +926,52 @@ describe('charactersStore hooks', () => {
 		expect(result.current).toEqual({});
 	});
 });
+
+describe('charactersStore values API (the co-writer)', () => {
+	it('createCharacter creates a character with its reference images and selects it (the caller reports it)', async () => {
+		seedCharacters();
+		const created = character({ id: 'chr-00000000000c', name: 'Mira' });
+		const create = vi.spyOn(api, 'createCharacter').mockResolvedValue(created);
+
+		const saved = await store().createCharacter({ ...emptyCharacterValues('Mira'), seed: 5 }, [{ kind: 'output', output_id: OUTPUT_ID }]);
+
+		expect(saved).toEqual(created);
+		expect(create).toHaveBeenCalledWith({ ...emptyCharacterValues('Mira'), seed: 5, reference_sources: [{ kind: 'output', output_id: OUTPUT_ID }] });
+		expect(store().characters.map((item) => item.name)).toEqual(['Alice', 'Bob', 'Mira']);
+		expect(store().selectedId).toBe(created.id);
+		expect(notifications()).toEqual([]);
+	});
+
+	it('createCharacter reports a failure and answers null', async () => {
+		seedCharacters();
+		vi.spyOn(api, 'createCharacter').mockRejectedValue(new Error('Bad image'));
+
+		expect(await store().createCharacter(emptyCharacterValues('Mira'))).toBeNull();
+		expect(notifications()).toEqual([{ intent: 'error', title: 'Could not create the character', message: 'Bad image' }]);
+	});
+
+	it('updateCharacter changes fields and keeps the others; addReferenceImage imports one more image', async () => {
+		seedCharacters();
+		const update = vi.spyOn(api, 'updateCharacter').mockImplementation(async (_id, draft) => character({ ...draft }));
+		const add = vi.spyOn(api, 'addCharacterReferenceImage').mockResolvedValue(character({ reference_images: [characterImage(), characterImage({ id: 'img-0000000000b2' })] }));
+
+		const saved = await store().updateCharacter(ALICE_ID, { outfit_tags: ['raincoat'], seed_locked: true });
+		expect(update).toHaveBeenCalledWith(ALICE_ID, { ...characterValuesOf(ALICE), outfit_tags: ['raincoat'], seed_locked: true });
+		expect(saved?.outfit_tags).toEqual(['raincoat']);
+		expect(store().characters[0].outfit_tags).toEqual(['raincoat']);
+
+		const withImage = await store().addReferenceImage(ALICE_ID, { kind: 'output', output_id: OUTPUT_ID });
+		expect(add).toHaveBeenCalledWith(ALICE_ID, { kind: 'output', output_id: OUTPUT_ID });
+		expect(withImage?.reference_images).toHaveLength(2);
+		expect(await store().updateCharacter('chr-999999999999', { name: 'x' })).toBeNull();
+	});
+
+	it('a busy character answers null', async () => {
+		seedCharacters();
+		useCharactersStore.setState({ busyIds: { [ALICE_ID]: true } });
+		const update = vi.spyOn(api, 'updateCharacter');
+
+		expect(await store().updateCharacter(ALICE_ID, { name: 'x' })).toBeNull();
+		expect(update).not.toHaveBeenCalled();
+	});
+});

@@ -3,6 +3,8 @@ import { describe, expect, it } from 'vitest';
 import { LORA_WEIGHT_DEFAULTS } from '../api/defaults.gen';
 import type { GenerationSelection, LoraWeight, LoRASpec } from '../api/types';
 import {
+	loraSourceOf,
+	withLora,
 	addLorasToSelection,
 	clampLoraWeight,
 	filterKnownLoras,
@@ -172,5 +174,39 @@ describe('selection edits', () => {
 		expect(withLoraWeight(selection, 'a', 50)).toEqual([at('a', LORA_WEIGHT_DEFAULTS.max), at('b', 0.5)]);
 		expect(withLoraWeight(selection, 'b', 0.5)).toBe(selection);
 		expect(withLoraWeight(selection, 'c', 0.5)).toBe(selection);
+	});
+});
+
+describe('resolveLoraSelection with scene LoRAs', () => {
+	const library: { loras: LoRASpec[] } = {
+		loras: ['cast', 'scene', 'picked', 'linked'].map((id) => ({ id, name: `${id}.safetensors`, path: `D:/l/${id}.safetensors`, source: null })),
+	};
+
+	it("puts the scene's LoRAs after the cast's and before the selection; the scene's weight wins", () => {
+		const resolved = resolveLoraSelection(
+			library,
+			[{ id: 'picked', weight: 0.7 }, { id: 'scene', weight: 0.9 }],
+			[{ induced_lora_ids: ['linked', 'cast'] }],
+			[{ id: 'cast', weight: 0.5 }, { id: 'scene', weight: 0.2 }],
+			[{ id: 'scene', weight: 0 }, { id: 'gone', weight: 1 }],
+		);
+
+		expect(resolved.activeIds).toEqual(['cast', 'scene', 'picked', 'linked']);
+		expect(resolved.activeLoras.map((lora) => [lora.id, lora.weight])).toEqual([
+			['cast', 0.5],
+			['scene', 0],
+			['picked', 0.7],
+			['linked', LORA_WEIGHT_DEFAULTS.weight],
+		]);
+		expect(resolved.sceneIds).toEqual(['scene']);
+		expect(resolved.missingIds).toEqual(['gone']);
+		expect(['cast', 'scene', 'picked', 'linked'].map((id) => loraSourceOf(resolved, id))).toEqual(['character', 'scene', 'selection', 'prompt']);
+	});
+
+	it('withLora adds a LoRA or changes its weight (clamped)', () => {
+		const loras: LoraWeight[] = [{ id: 'cast', weight: 1 }];
+		expect(withLora(loras, 'scene', 0.4)).toEqual([{ id: 'cast', weight: 1 }, { id: 'scene', weight: 0.4 }]);
+		expect(withLora(loras, 'cast', 99)).toEqual([{ id: 'cast', weight: LORA_WEIGHT_DEFAULTS.max }]);
+		expect(withLora(loras, 'cast', 1)).toBe(loras);
 	});
 });

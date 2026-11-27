@@ -16,17 +16,22 @@
 //    category is left out); a lock of a category the cast pins is ignored (the cast wins); the first lock of a
 //    category wins. Forbidden rules apply like for any pinned category (src/domain/promptEngine.ts).
 // 3. Negative tags: the cast's, then the scene's, each appended once (appendNegativeTags).
-// 4. LoRAs: the cast's, then the selected LoRAs, then the prompt-linked ones (resolveLoraSelection).
+// 4. LoRAs (resolveLoraSelection): the cast's, then the scene's own (scene.loras), then the selected LoRAs, then the
+//    prompt-linked ones. A scene LoRA uses the scene's weight, also when the cast or the selection has it (weight 0
+//    turns a LoRA off for that scene); a cast LoRA uses the character's weight over the selected one; a LoRA that is
+//    only prompt-linked gets the default weight. Scene LoRAs missing from the library are skipped with a warning.
 // 5. Seeds: the image seed is the scene's fixed seed, else the cast's locked seed, else a new random seed (so every
 //    regeneration is a new variant). The prompt seed follows the Create prompt seed field (planSeed of its behavior; with
 //    the per-category cycle a random seed is drawn instead and the counters are neither read nor advanced). A scene
 //    generation never changes the seed fields and pushes no undo entry.
 // 6. The request names the scene (GenerateRequest.story): the backend records OutputRecord.story and makes the output
 //    the scene's chosen variant. The output is a normal output (listed in Create's filmstrip).
-import type { Character, OutputRecord, Scene, SceneCreateRequest, SceneLock, ScenePatch, Story } from '../api/types';
+// The flow notes (the story's logline, synopsis and style notes; a scene's beat, shot, setting and mood) plan the story
+// and are never added to a prompt: the tags, locks, LoRAs, cast and seed are what a picture is made from.
+import type { Character, LoraWeight, OutputRecord, Scene, SceneCreateRequest, SceneLock, ScenePatch, Story, StoryCreateRequest } from '../api/types';
 import { boardMoveTarget, moveKeyNextTo, type BoardMove, type Placement } from './board';
 import { categoryKeyOf, makeCategory, makeSubPrompt, sortCategories, subPromptKeyOf, type Category } from './categories';
-import { castCategories, type CharacterGenerationInput } from './characters';
+import { castCategories, lockedCastSeed, type CharacterGenerationInput } from './characters';
 import { clamp } from './guards';
 import { joinPromptTags, uniqueDisplayName, uniqueKey } from './text';
 
@@ -44,7 +49,25 @@ export type SceneGenerationInput = {
 	negativeTags: readonly string[];
 	/** Fixed image seed (null: the cast's locked seed, else random). */
 	seed: number | null;
+	/** The scene's own LoRAs with their weights (rule 4). */
+	loras: readonly LoraWeight[];
 };
+
+/** The flow notes of a new scene (empty) and the text: what a SceneCreateRequest needs besides its overrides. */
+export const EMPTY_SCENE_NOTES = { text: '', beat: '', shot: '', setting: '', mood: '' } as const;
+
+/** A scene to add: `fields` over empty notes and text. */
+export function newSceneRequest(fields: Partial<SceneCreateRequest> = {}): SceneCreateRequest {
+	return { ...EMPTY_SCENE_NOTES, ...fields };
+}
+
+/** The flow of a new story (empty). */
+export const EMPTY_STORY_FLOW = { logline: '', synopsis: '', style_notes: '' } as const;
+
+/** A story to create: `fields` over an empty flow and no characters. */
+export function newStoryRequest(fields: Partial<StoryCreateRequest> & Pick<StoryCreateRequest, 'title'>): StoryCreateRequest {
+	return { character_ids: [], ...EMPTY_STORY_FLOW, ...fields };
+}
 
 // ---------------------------------------------------------------------------
 // Prompt building (pinned categories)
@@ -83,6 +106,12 @@ export function scenePinnedCategories(
 		sceneCategories.push({ ...makeCategory(name), subPrompts: [{ ...makeSubPrompt(tagsText), state: 'lock' }] });
 	}
 	return { pinned: [...cast, ...locked, ...sceneCategories], userCategories: remaining };
+}
+
+/** The image seed a scene imposes (rule 5): its fixed seed, else its cast's locked seed (lockedCastSeed), else null (a
+ *  new random seed for every picture). */
+export function sceneLockedSeed(scene: Pick<SceneGenerationInput, 'seed' | 'cast'>): number | null {
+	return scene.seed ?? lockedCastSeed(scene.cast);
 }
 
 // ---------------------------------------------------------------------------
@@ -146,6 +175,7 @@ export function sceneGenerationInput(
 			extraTags: scene.extra_tags,
 			negativeTags: scene.negative_tags,
 			seed: scene.seed,
+			loras: scene.loras,
 		},
 		missingCharacterIds: missingIds,
 	};
@@ -260,7 +290,7 @@ export function sceneFromOutput(
 			locks = withSceneLock(locks, selection.category_name, selection.prompt_text, { replace: false });
 		}
 	}
-	return { output_id: record.output_id, text: '', character_ids, locks, seed: record.image_seed ?? record.seed };
+	return newSceneRequest({ output_id: record.output_id, character_ids, locks, seed: record.image_seed ?? record.seed });
 }
 
 // ---------------------------------------------------------------------------

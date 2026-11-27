@@ -9,6 +9,7 @@ import { createMemoryStoreBackend, setStoreBackend } from '../persistence/storeB
 import { desktop } from '../services/desktop';
 import { download } from '../services/download';
 import { ALICE_ID, BOB, BOB_ID, character, outputCharacter } from '../test/characterData';
+import { fakeStoryBackend } from '../test/storyBackend';
 import { illustratedScene, scene, SCENE_IDS, sceneOutput, story, storyCollection, STORY_ID, OTHER_STORY_ID } from '../test/storyData';
 import { useCategoriesStore } from './categoriesStore';
 import { useCharactersStore } from './charactersStore';
@@ -76,7 +77,7 @@ describe('load and stories', () => {
 
 		expect(await stories().createStory()).toEqual(created);
 
-		expect(createStory).toHaveBeenCalledWith({ title: 'New story 2', character_ids: [] });
+		expect(createStory).toHaveBeenCalledWith({ title: 'New story 2', character_ids: [], logline: '', synopsis: '', style_notes: '' });
 		expect(stories()).toMatchObject({ selectedStoryId: OTHER_STORY_ID, selectedSceneId: null, reader: null });
 		expect(stories().stories.map((item) => item.id)).toEqual([STORY_ID, OTHER_STORY_ID]);
 	});
@@ -128,7 +129,7 @@ describe('scenes', () => {
 
 		expect(await stories().addScene(STORY_ID)).toEqual(added);
 
-		expect(addScene).toHaveBeenCalledWith(STORY_ID, { text: '' });
+		expect(addScene).toHaveBeenCalledWith(STORY_ID, { text: '', beat: '', shot: '', setting: '', mood: '' });
 		expect(stories().selectedSceneId).toBe(added.id);
 	});
 
@@ -363,6 +364,7 @@ describe('addSceneFromOutput (Create)', () => {
 		expect(addScene).toHaveBeenCalledWith(STORY_ID, {
 			output_id: '0000000007',
 			text: '',
+			beat: '', shot: '', setting: '', mood: '',
 			character_ids: null,
 			locks: [{ category_name: 'Subject', prompt_text: '1girl' }],
 			seed: 4321,
@@ -380,7 +382,7 @@ describe('addSceneFromOutput (Create)', () => {
 
 		await stories().addSceneFromOutput(null);
 
-		expect(createStory).toHaveBeenCalledWith({ title: 'New story', character_ids: [ALICE_ID] });
+		expect(createStory).toHaveBeenCalledWith({ title: 'New story', character_ids: [ALICE_ID], logline: '', synopsis: '', style_notes: '' });
 		expect(stories().selectedStoryId).toBe(OTHER_STORY_ID);
 	});
 
@@ -520,5 +522,80 @@ describe('the dock', () => {
 		await useStoryStore.persist.rehydrate();
 
 		expect(stories().dockCollapsed).toBe(false);
+	});
+});
+
+describe('batches, scene LoRAs and previews', () => {
+	it('addScenes adds scenes one after the other from an index, then selects the first one', async () => {
+		seeded();
+		fakeStoryBackend([story()]);
+
+		const added = await stories().addScenes(STORY_ID, [{ text: 'a', beat: 'one', shot: '', setting: '', mood: '', title: 'Harbor' }, { text: '', beat: '', shot: '', setting: '', mood: 'busy', title: 'Market' }], 1);
+
+		expect(added.map((item) => item.title)).toEqual(['Harbor', 'Market']);
+		expect(tale().scenes.map((item) => item.title)).toEqual(['Arrival', 'Harbor', 'Market', 'The storm', 'Morning calm']);
+		expect(api.addScene).toHaveBeenNthCalledWith(2, STORY_ID, expect.objectContaining({ title: 'Market', index: 2 }));
+		expect(stories()).toMatchObject({ selectedStoryId: STORY_ID, selectedSceneId: added[0].id });
+	});
+
+	it('addScenes stops at the first failure (reported) and answers the scenes added', async () => {
+		seeded();
+		fakeStoryBackend([story()]);
+		vi.mocked(api.addScene).mockRejectedValueOnce(new ApiError('Disk full', 500, null));
+
+		expect(await stories().addScenes(STORY_ID, [{ text: '', beat: '', shot: '', setting: '', mood: '' }, { text: '', beat: '', shot: '', setting: '', mood: '' }])).toEqual([]);
+		expect(api.addScene).toHaveBeenCalledTimes(1);
+		expect(notifications()).toEqual([{ intent: 'error', title: STORY_FAILURES.addScene, message: 'Disk full', action: null }]);
+	});
+
+	it('updateScenes saves several scenes in order and answers the story; null when one failed', async () => {
+		seeded();
+		fakeStoryBackend([story()]);
+
+		const saved = await stories().updateScenes(STORY_ID, [
+			{ sceneId: SCENE_IDS[0], patch: { beat: 'She arrives' } },
+			{ sceneId: SCENE_IDS[2], patch: { mood: 'quiet', loras: [{ id: 'ink', weight: 0.5 }] } },
+		]);
+
+		expect(saved?.scenes.map((item) => [item.beat, item.mood, item.loras])).toEqual([
+			['She arrives', '', []],
+			['', '', []],
+			['', 'quiet', [{ id: 'ink', weight: 0.5 }]],
+		]);
+		vi.mocked(api.updateScene).mockRejectedValueOnce(new ApiError('Nope', 422, null));
+		expect(await stories().updateScenes(STORY_ID, [{ sceneId: SCENE_IDS[0], patch: { beat: 'x' } }])).toBeNull();
+	});
+
+	it('setSceneLora adds a LoRA at the default weight or changes its weight; removeSceneLora removes it', async () => {
+		seeded();
+		fakeStoryBackend([story()]);
+
+		await stories().setSceneLora(STORY_ID, SCENE_IDS[0], 'ink');
+		expect(tale().scenes[0].loras).toEqual([{ id: 'ink', weight: 1 }]);
+		await stories().setSceneLora(STORY_ID, SCENE_IDS[0], 'ink', 0.35);
+		expect(tale().scenes[0].loras).toEqual([{ id: 'ink', weight: 0.35 }]);
+		vi.mocked(api.updateScene).mockClear();
+		await stories().setSceneLora(STORY_ID, SCENE_IDS[0], 'ink', 0.35);
+		expect(api.updateScene).not.toHaveBeenCalled();
+		await stories().removeSceneLora(STORY_ID, SCENE_IDS[0], 'ink');
+		expect(tale().scenes[0].loras).toEqual([]);
+		expect(await stories().setSceneLora(STORY_ID, 'scn-999999999999', 'ink')).toBeNull();
+	});
+
+	it("previewScene builds the scene's request with the one builder, sending nothing", () => {
+		seeded([story({ scenes: [scene({ extra_tags: ['storm'], loras: [{ id: 'gone', weight: 1 }], character_ids: [ALICE_ID, 'chr-999999999999'] })] })]);
+		useLibraryStore.setState({ models: [MODEL], selectedModelId: MODEL.id });
+		const generate = vi.spyOn(api, 'generate');
+
+		const preview = stories().previewScene(STORY_ID, SCENE_IDS[0]);
+
+		expect(preview?.built.request).toMatchObject({ story: { story_id: STORY_ID, scene_id: SCENE_IDS[0] }, character_id: ALICE_ID });
+		expect(preview?.built.request.prompt).toContain('storm');
+		expect(preview?.built.missingLoraIds).toEqual(['gone']);
+		expect(preview?.missingCharacterIds).toEqual(['chr-999999999999']);
+		expect(generate).not.toHaveBeenCalled();
+		expect(stories().previewScene(STORY_ID, 'scn-999999999999')).toBeNull();
+		useLibraryStore.setState({ selectedModelId: '' });
+		expect(() => stories().previewScene(STORY_ID, SCENE_IDS[0])).toThrow('Select a model before generating.');
 	});
 });

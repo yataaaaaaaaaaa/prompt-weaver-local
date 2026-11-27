@@ -240,6 +240,7 @@ describe('buildGenerationRequest with a story scene', () => {
 		extraTags: ['storm', 'night'],
 		negativeTags: ['sunny', 'UGLY'],
 		seed: null,
+		loras: [],
 	};
 
 	it("pins the scene's cast, locks and tags, names the scene, and keeps the selected LoRAs", () => {
@@ -269,6 +270,17 @@ describe('buildGenerationRequest with a story scene', () => {
 		expect(request.prompt_seed).toBe(100);
 		expect(request.seed).toBe(1073741824);
 		expect(nextCategorySeedState).toBe(SETTINGS.promptCategorySeedState);
+	});
+
+	it("adds the scene's LoRAs after the cast's, with the scene's weight", () => {
+		const { request, loras, missingLoraIds } = buildGenerationRequest(inputs({ scene: { ...SCENE, loras: [{ id: 'portrait', weight: 0.1 }, { id: 'gone-too', weight: 1 }] } }));
+
+		expect(request.loras).toEqual([
+			{ ...LORAS[0], weight: 0.3 },
+			{ ...LORAS[1], weight: 0.1 },
+		]);
+		expect(loras.sceneIds).toEqual(['portrait']);
+		expect(missingLoraIds).toContain('gone-too');
 	});
 
 	it("uses the scene's fixed seed, else the cast's locked seed", () => {

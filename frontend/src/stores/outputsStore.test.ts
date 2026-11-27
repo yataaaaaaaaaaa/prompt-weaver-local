@@ -433,3 +433,18 @@ describe('outputsStore hooks', () => {
 		expect(result.current).toBe(details);
 	});
 });
+
+describe('readRecord', () => {
+	it("reads any output's metadata without showing it; the current record is reused; null when it cannot be read", async () => {
+		const shown = { output_id: '0000000001' } as OutputRecord;
+		useOutputsStore.setState({ currentId: '0000000001', record: shown });
+		const getOutput = vi.spyOn(api, 'getOutput').mockImplementation(async (outputId) => ({ output_id: outputId }) as OutputRecord);
+
+		expect(await useOutputsStore.getState().readRecord('0000000001')).toBe(shown);
+		expect(getOutput).not.toHaveBeenCalled();
+		expect(await useOutputsStore.getState().readRecord('0000000002')).toEqual({ output_id: '0000000002' });
+		expect(useOutputsStore.getState().currentId).toBe('0000000001');
+		getOutput.mockRejectedValueOnce(new Error('404'));
+		expect(await useOutputsStore.getState().readRecord('0000000003')).toBeNull();
+	});
+});

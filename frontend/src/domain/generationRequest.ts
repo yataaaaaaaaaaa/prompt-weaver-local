@@ -8,9 +8,9 @@ import type { ForbiddenRule, GenerateRequest, GenerationDefaults, GenerationSele
 import type { Category } from './categories';
 import { appendNegativeTags, castCategories, castNegativePrompt, lockedCastSeed, type CharacterGenerationInput } from './characters';
 import type { LibraryData } from './library';
-import { filterSelectionLoraIds, makeLoraMap, resolveLoraSelection } from './loraSelection';
+import { filterSelectionLoraIds, makeLoraMap, resolveLoraSelection, type ResolvedLoraSelection } from './loraSelection';
 import { selectPrompts, selectPromptsWithCategoryCycle } from './promptEngine';
-import { scenePinnedCategories, type SceneGenerationInput } from './stories';
+import { sceneLockedSeed, scenePinnedCategories, type SceneGenerationInput } from './stories';
 import {
 	IMAGE_SEED_BEHAVIORS,
 	isSeedBehavior,
@@ -80,9 +80,11 @@ export type BuiltGenerationRequest = {
 	request: GenerateRequest;
 	/** Per-category counters after this selection ('per_category_cycle'; the unchanged state otherwise). */
 	nextCategorySeedState: CategorySeedState;
-	/** LoRA ids requested by the character, the selection or the selected sub-prompts but absent from the library
-	 *  (ignored). */
+	/** LoRA ids requested by the character, the scene, the selection or the selected sub-prompts but absent from the
+	 *  library (ignored). */
 	missingLoraIds: string[];
+	/** Where each LoRA of the request comes from (the co-writer's preview and consistency report read it). */
+	loras: ResolvedLoraSelection;
 	/** The character's seed lock (or the scene's fixed seed) replaced the image seed (nextSeedSnapshot then leaves the
 	 *  image seed field as is). */
 	imageSeedLocked: boolean;
@@ -110,7 +112,7 @@ export function buildGenerationRequest({ categories, rules, settings, library, c
 	const { pinned, userCategories } = scene
 		? scenePinnedCategories(scene, categories)
 		: { pinned: castCategories(cast, categories), userCategories: categories };
-	const lockedSeed = scene?.seed ?? lockedCastSeed(cast);
+	const lockedSeed = scene ? sceneLockedSeed(scene) : lockedCastSeed(cast);
 	// A scene without a fixed or locked seed gets a new random image seed (every regeneration is a new variant).
 	const imageSeed = lockedSeed ?? planSeed(scene ? 'randomize' : settings.imageSeedBehavior, settings.seedInput).requestSeed;
 	let selections: GenerationSelection[];
@@ -134,13 +136,14 @@ export function buildGenerationRequest({ categories, rules, settings, library, c
 		library.selectedLoras,
 		selections,
 		cast.flatMap((member) => member.loras),
+		scene?.loras ?? [],
 	);
 	const requestSelections = filterSelectionLoraIds(selections, knownLoraIds);
 	const castNegative = castNegativePrompt(settings.negativePrompt, cast);
 	const request: GenerateRequest = {
 		model,
-		// Character LoRAs with their weight, then selected LoRAs with their selected weight, then prompt-linked ones at
-		// the default weight.
+		// Character LoRAs with their weight, then the scene's LoRAs (their weight wins), then selected LoRAs with their
+		// selected weight, then prompt-linked ones at the default weight.
 		loras: loraResolution.activeLoras,
 		prompt: requestSelections
 			.map((item) => item.prompt_text)
@@ -157,7 +160,7 @@ export function buildGenerationRequest({ categories, rules, settings, library, c
 		character_id: cast[0]?.id ?? null,
 		story: scene ? { story_id: scene.storyId, scene_id: scene.sceneId } : null,
 	};
-	return { request, nextCategorySeedState, missingLoraIds: loraResolution.missingIds, imageSeedLocked: lockedSeed !== null };
+	return { request, nextCategorySeedState, missingLoraIds: loraResolution.missingIds, imageSeedLocked: lockedSeed !== null, loras: loraResolution };
 }
 
 export type NextSeedOptions = {

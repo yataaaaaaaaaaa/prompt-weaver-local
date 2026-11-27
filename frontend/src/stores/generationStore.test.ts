@@ -362,6 +362,7 @@ describe('generateScene', () => {
 		extraTags: ['storm'],
 		negativeTags: [],
 		seed: 77,
+		loras: [],
 	};
 
 	it("sends the scene's request through the same path, lists the output and leaves the seeds, the viewer and undo alone", async () => {
@@ -400,6 +401,21 @@ describe('generateScene', () => {
 		await expect(store().generateScene(SCENE)).rejects.toThrow('out of memory');
 		expect(notifications()).toEqual([]);
 		expect(store().generating).toBe(false);
+	});
+
+	it('previewScene builds the same request generateScene would send, and sends nothing', async () => {
+		setup();
+		const generate = vi.spyOn(api, 'generate');
+
+		const preview = store().previewScene({ ...SCENE, loras: [{ id: 'gone', weight: 1 }] });
+
+		expect(preview.request).toMatchObject({ prompt: '1boy, black hair, storm, 1girl, smile', seed: 77, prompt_seed: 5, character_id: BOB.id });
+		expect(preview.imageSeedLocked).toBe(true);
+		expect(preview.missingLoraIds).toEqual(['gone']);
+		expect(generate).not.toHaveBeenCalled();
+		expect(store().generating).toBe(false);
+		expect(notifications()).toEqual([]);
+		expect(useGenerationSettingsStore.getState()).toMatchObject({ seedInput: '10', promptSeedInput: '5' });
 	});
 
 	it('is cancelled by cancel (an AbortError)', async () => {

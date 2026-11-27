@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import {
+	editTags,
 	areNameEquivalent,
 	comparePriority,
 	formatWeight,
@@ -154,5 +155,13 @@ describe('uniqueDisplayName', () => {
 		expect(uniqueDisplayName('New story', [])).toBe('New story');
 		expect(uniqueDisplayName('New story', ['new story'])).toBe('New story 2');
 		expect(uniqueDisplayName('New story', ['New story', 'New-Story 2'])).toBe('New story 3');
+	});
+});
+
+describe('editTags', () => {
+	it('removes and adds tags by tag identity, each once, blank ones dropped', () => {
+		expect(editTags(['storm', 'Night', 'waves'], { add: ['lightning', 'STORM', ' '], remove: ['night'] })).toEqual(['storm', 'waves', 'lightning']);
+		expect(editTags(['a'], {})).toEqual(['a']);
+		expect(editTags([], { add: ['long hair', 'Long-Hair'] })).toEqual(['long hair']);
 	});
 });

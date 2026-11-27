@@ -10,7 +10,7 @@ export function seedStoryActions() {
 	const select = () => useStoryStore.getState();
 	const actions = {
 		load: vi.fn(async () => undefined),
-		createStory: vi.fn(async (_fields?: { title?: string; characterIds?: string[] }): Promise<Story | null> => null),
+		createStory: vi.fn(async (_fields?: object): Promise<Story | null> => null),
 		updateStory: vi.fn(async (_storyId: string, _patch: object): Promise<Story | null> => null),
 		deleteStory: vi.fn(async (_storyId: string) => true),
 		selectStory: vi.fn((storyId: string | null) => useStoryStore.setState({ selectedStoryId: storyId, selectedSceneId: null, reader: null })),
@@ -20,7 +20,11 @@ export function seedStoryActions() {
 			useStoryStore.setState((state) => ({ stories: state.stories.map((story) => (story.id === storyId ? withScenePatch(story, sceneId, patch) : story)) }));
 			return null;
 		}),
+		addScenes: vi.fn(async (_storyId: string, _requests: readonly object[], _index?: number | null): Promise<Scene[]> => []),
+		updateScenes: vi.fn(async (_storyId: string, _patches: readonly object[]): Promise<Story | null> => null),
 		lockSubPrompt: vi.fn(async (_storyId: string, _sceneId: string, _category: string, _text: string): Promise<Story | null> => null),
+		setSceneLora: vi.fn(async (_storyId: string, _sceneId: string, _loraId: string, _weight?: number): Promise<Story | null> => null),
+		removeSceneLora: vi.fn(async (_storyId: string, _sceneId: string, _loraId: string): Promise<Story | null> => null),
 		unlockCategory: vi.fn(async (_storyId: string, _sceneId: string, _category: string): Promise<Story | null> => null),
 		duplicateScene: vi.fn(async (_storyId: string, _sceneId: string): Promise<Scene | null> => null),
 		deleteScene: vi.fn(async (_storyId: string, _sceneId: string) => true),

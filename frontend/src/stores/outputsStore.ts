@@ -54,6 +54,9 @@ export type OutputsActions = {
 	previous: () => Promise<void>;
 	next: () => Promise<void>;
 	last: () => Promise<void>;
+	/** The metadata of any output (the current one's record when it is shown, else api.getOutput), without showing it;
+	 *  null when it cannot be read (no notification: the caller says why). */
+	readRecord: (outputId: string) => Promise<OutputRecord | null>;
 	/** A finished generation: appends its id, makes it current with the returned record (no refetch). */
 	showGenerated: (record: OutputRecord) => void;
 	/** A finished generation shown elsewhere (a story scene's illustration): lists its id (filmstrip, Last) without
@@ -172,6 +175,17 @@ export const useOutputsStore = create<OutputsStore>()(
 			};
 
 			return {
+				readRecord: async (outputId) => {
+					const { record } = get();
+					if (record?.output_id === outputId) {
+						return record;
+					}
+					try {
+						return await api.getOutput(outputId);
+					} catch {
+						return null;
+					}
+				},
 				ids: [],
 				currentId: null,
 				record: null,

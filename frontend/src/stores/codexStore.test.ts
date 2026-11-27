@@ -172,16 +172,29 @@ describe('events', () => {
 		await vi.waitFor(() => expect(codex().runningCalls).toEqual({}));
 	});
 
+	it('a story the co-writer creates shows with the conversation that created it at once', async () => {
+		useStoryStore.setState({ stories: [story()], selectedStoryId: STORY_ID });
+		apply({ type: 'codex', kind: 'conversation', conversation: conversation({ story_ids: [STORY_ID], running: true }) });
+		vi.spyOn(api, 'sendCodexToolResult').mockResolvedValue();
+		vi.spyOn(api, 'createStory').mockResolvedValue(story({ id: 'sty-00000000000b', title: 'Rain', scenes: [] }));
+
+		await codex().runCall(toolCall('create_story', { title: 'Rain', character_ids: [], logline: '', synopsis: '', style_notes: '', scenes: [] }, { callId: 'call-create' }));
+
+		expect(useStoryStore.getState().selectedStoryId).toBe('sty-00000000000b');
+		expect(selectConversation('sty-00000000000b')(codex())?.id).toBe(CONVERSATION_ID);
+		expect(selectConversation(STORY_ID)(codex())?.id).toBe(CONVERSATION_ID);
+	});
+
 	it('an abandoned call (Stop) runs to its end but sends no result', async () => {
 		useStoryStore.setState({ stories: [story()], selectedStoryId: STORY_ID });
 		const finish = deferred<void>();
 		const cancel = vi.fn(async () => finish.resolve());
-		useStoryStore.setState({ cancelGeneration: cancel, generateScene: vi.fn(async () => { await finish.promise; return null; }) });
+		useStoryStore.setState({ cancelGeneration: cancel, generateScenes: vi.fn(async () => { await finish.promise; return []; }) });
 		const post = vi.spyOn(api, 'sendCodexToolResult').mockResolvedValue();
 		useLibraryStore.setState({ models: [MODEL], selectedModelId: MODEL.id });
 
-		const running = codex().runCall(toolCall('generate_scene', { story_id: STORY_ID, scene_id: SCENE_IDS[2] }, { callId: 'call-7' }));
-		await vi.waitFor(() => expect(codex().runningCalls).toEqual({ 'call-7': 'generate_scene' }));
+		const running = codex().runCall(toolCall('generate_scenes', { story_id: STORY_ID, scene_ids: [SCENE_IDS[2]] }, { callId: 'call-7' }));
+		await vi.waitFor(() => expect(codex().runningCalls).toEqual({ 'call-7': 'generate_scenes' }));
 		apply({ type: 'codex', kind: 'tool_cancel', call_id: 'call-7', client_id: CLIENT_ID });
 		await running;
 
@@ -193,7 +206,7 @@ describe('events', () => {
 	it('Stop of a running generation call cancels the generation', async () => {
 		const cancel = vi.spyOn(useStoryStore.getState(), 'cancelGeneration').mockResolvedValue();
 		useStoryStore.setState({ cancelGeneration: cancel });
-		useCodexStore.setState({ runningCalls: { 'call-9': 'generate_scene', 'call-8': 'get_story' } });
+		useCodexStore.setState({ runningCalls: { 'call-9': 'generate_scenes', 'call-8': 'get_story' } });
 
 		apply({ type: 'codex', kind: 'tool_cancel', call_id: 'call-8', client_id: CLIENT_ID });
 		expect(cancel).not.toHaveBeenCalled();

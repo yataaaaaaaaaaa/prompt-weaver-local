@@ -4,7 +4,7 @@
 import { create } from 'zustand';
 import { api } from '../api/client';
 import type { OutputRecord } from '../api/types';
-import { buildGenerationRequest, nextSeedSnapshot } from '../domain/generationRequest';
+import { buildGenerationRequest, nextSeedSnapshot, type BuiltGenerationRequest } from '../domain/generationRequest';
 import type { SceneGenerationInput } from '../domain/stories';
 import { isRecord } from '../domain/guards';
 import { useCategoriesStore } from './categoriesStore';
@@ -37,6 +37,10 @@ export type GenerationActions = {
 	 *  are left unchanged and no undo entry is pushed. Resolves with the saved record; rejects on failure (an
 	 *  AbortError when cancelled; GENERATION_BUSY_MESSAGE while another generation runs): the caller reports. */
 	generateScene: (scene: SceneGenerationInput) => Promise<OutputRecord>;
+	/** The request generateScene would send for the scene, built the same way from the same stores (nothing is sent,
+	 *  nothing changes; random seeds are drawn like a generation would). Throws like buildGenerationRequest (no model,
+	 *  no prompt). The co-writer's preview and consistency report read it. */
+	previewScene: (scene: SceneGenerationInput) => BuiltGenerationRequest;
 	cancel: () => Promise<void>;
 };
 
@@ -59,6 +63,18 @@ export function isAbortError(error: unknown): boolean {
 	return isRecord(error) && error.name === 'AbortError';
 }
 
+/** THE request of a generation (of a story scene with `scene`) from the stores' current state. */
+function buildFromStores(scene: SceneGenerationInput | null): BuiltGenerationRequest {
+	return buildGenerationRequest({
+		categories: useCategoriesStore.getState().categories,
+		rules: useForbiddenRulesStore.getState().rules,
+		settings: selectGenerationSettings(useGenerationSettingsStore.getState()),
+		library: useLibraryStore.getState(),
+		character: selectActiveCharacter(useCharactersStore.getState()),
+		scene,
+	});
+}
+
 export const useGenerationStore = create<GenerationStore>()((set, get) => {
 	/** One generation (of a story scene with `scene`); throws on failure. `warnedMissingLoraIds` limits the
 	 *  missing-LoRA warning to once per id per generate() call / continuous run / scene generation. */
@@ -66,14 +82,7 @@ export const useGenerationStore = create<GenerationStore>()((set, get) => {
 		const settings = selectGenerationSettings(useGenerationSettingsStore.getState());
 		const seedsBefore = selectSeedSnapshot(settings);
 		const previousOutputId = useOutputsStore.getState().currentId;
-		const { request, nextCategorySeedState, missingLoraIds, imageSeedLocked } = buildGenerationRequest({
-			categories: useCategoriesStore.getState().categories,
-			rules: useForbiddenRulesStore.getState().rules,
-			settings,
-			library: useLibraryStore.getState(),
-			character: selectActiveCharacter(useCharactersStore.getState()),
-			scene,
-		});
+		const { request, nextCategorySeedState, missingLoraIds, imageSeedLocked } = buildFromStores(scene);
 		const newlyMissing = missingLoraIds.filter((id) => !warnedMissingLoraIds.has(id));
 		if (newlyMissing.length) {
 			newlyMissing.forEach((id) => warnedMissingLoraIds.add(id));
@@ -161,6 +170,7 @@ export const useGenerationStore = create<GenerationStore>()((set, get) => {
 			}
 			return runOnce(new Set(), scene);
 		},
+		previewScene: (scene) => buildFromStores(scene),
 		cancel: async () => {
 			continuousRun += 1;
 			set({ continuous: false });

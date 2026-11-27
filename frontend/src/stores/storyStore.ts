@@ -8,11 +8,13 @@
 //
 // THE action API of story mode: the Story section's views and any tool layer (e.g. a co-writer chat panel) call these
 // actions, never the API directly, so every rule lives once:
-// - stories: load, createStory, updateStory (title, characters), deleteStory, selectStory;
-// - scenes: addScene, updateScene (title, text, extra / negative tags, locks, characters, seed), lockSubPrompt,
-//   unlockCategory, duplicateScene, deleteScene, moveScene / moveSceneNextTo / setSceneOrder, selectScene;
+// - stories: load, createStory, updateStory (title, characters, flow notes), deleteStory, selectStory;
+// - scenes: addScene, addScenes, updateScene, updateScenes (title, text, flow notes, extra / negative tags, locks,
+//   LoRAs, characters, seed), lockSubPrompt, unlockCategory, setSceneLora, removeSceneLora, duplicateScene,
+//   deleteScene, moveScene / moveSceneNextTo /
+//   setSceneOrder, selectScene;
 // - illustrations: generateScene, generateScenes, generateMissing, cancelGeneration, chooseVariant, addVariant,
-//   removeVariant, addSceneFromOutput (Create's "Add to story");
+//   removeVariant, addSceneFromOutput (Create's "Add to story"), previewScene (what generating would send);
 // - reading and export: openReader, closeReader, setReaderPage, exportStory;
 // - the dock (src/features/story/storyDock.ts): setDockCollapsed.
 // Every action resolves (never rejects): failures are reported through the notifications store and the action
@@ -33,13 +35,18 @@ import { useMemo } from 'react';
 import { create } from 'zustand';
 import { persist } from 'zustand/middleware';
 import { ApiError, api } from '../api/client';
-import type { OutputRecord, Scene, SceneCreateRequest, ScenePatch, Story, StoryPatch } from '../api/types';
+import { LORA_WEIGHT_DEFAULTS } from '../api/defaults.gen';
+import type { OutputRecord, Scene, SceneCreateRequest, ScenePatch, Story, StoryCreateRequest, StoryPatch } from '../api/types';
+import type { BuiltGenerationRequest } from '../domain/generationRequest';
 import type { BoardMove, BoardMoveResult, Placement } from '../domain/board';
 import { boardPositionOf } from '../domain/board';
 import { isRecord } from '../domain/guards';
+import { withLora } from '../domain/loraSelection';
 import {
 	clampReaderPage,
 	missingSceneIds,
+	newSceneRequest,
+	newStoryRequest,
 	newStoryTitle,
 	sceneFromOutput,
 	sceneGenerationInput,
@@ -101,9 +108,10 @@ export type StoryActions = {
 	 *  selection when it still exists; selects the first story otherwise. Called at boot by the session store and by
 	 *  the section's Retry. */
 	load: () => Promise<void>;
-	/** Creates a story ('New story', 'New story 2'... unless titled) and selects it. */
-	createStory: (fields?: { title?: string; characterIds?: string[] }) => Promise<Story | null>;
-	/** Changes the title and/or the characters of a story. */
+	/** Creates a story ('New story', 'New story 2'... unless titled; its characters and flow when given) and selects
+	 *  it (`select: false`: the caller selects it later, e.g. once its scenes are added). */
+	createStory: (fields?: Partial<StoryCreateRequest>, options?: { select?: boolean }) => Promise<Story | null>;
+	/** Changes the title, the characters and / or the flow (logline, synopsis, style notes) of a story. */
 	updateStory: (storyId: string, patch: StoryPatch) => Promise<Story | null>;
 	/** Deletes a story (its outputs are kept); the next story is selected when it was the selected one. */
 	deleteStory: (storyId: string) => Promise<boolean>;
@@ -115,13 +123,24 @@ export type StoryActions = {
 	/** Adds a scene (SceneCreateRequest: fields, position, an output illustrating it), selects the story and the scene;
 	 *  answers the new scene. */
 	addScene: (storyId: string, request?: SceneCreateRequest) => Promise<Scene | null>;
-	/** Changes the fields of `patch` (title, text, extra_tags, negative_tags, locks, character_ids: null = the story's
-	 *  characters, seed: null = random). Shown at once; answers the saved story. */
+	/** Adds scenes one after the other from `index` (0-based; null: at the end), in order, then selects the story and
+	 *  the first new scene. Stops at the first failure (reported). Answers the scenes added. */
+	addScenes: (storyId: string, requests: readonly SceneCreateRequest[], index?: number | null) => Promise<Scene[]>;
+	/** Changes the fields of `patch` (title, text, flow notes, extra_tags, negative_tags, locks, loras, character_ids:
+	 *  null = the story's characters, seed: null = random). Shown at once; answers the saved story. */
 	updateScene: (storyId: string, sceneId: string, patch: ScenePatch) => Promise<Story | null>;
+	/** updateScene of several scenes of one story (each shown at once, saved in order); answers the story once every
+	 *  change is saved, null when one failed (reported; the story is read again). */
+	updateScenes: (storyId: string, patches: readonly { sceneId: string; patch: ScenePatch }[]) => Promise<Story | null>;
 	/** Chooses `promptText` for the scene's category `categoryName` (withSceneLock: replaces that category's lock). */
 	lockSubPrompt: (storyId: string, sceneId: string, categoryName: string, promptText: string) => Promise<Story | null>;
 	/** Removes the scene's lock of `categoryName` (the prompt engine picks that category's sub-prompt again). */
 	unlockCategory: (storyId: string, sceneId: string, categoryName: string) => Promise<Story | null>;
+	/** Adds a library LoRA to the scene's LoRAs at `weight` (default LORA_WEIGHT_DEFAULTS.weight), or changes its weight
+	 *  (withLora: clamped). */
+	setSceneLora: (storyId: string, sceneId: string, loraId: string, weight?: number) => Promise<Story | null>;
+	/** Removes a LoRA from the scene's LoRAs. */
+	removeSceneLora: (storyId: string, sceneId: string, loraId: string) => Promise<Story | null>;
 	/** Inserts a copy after the scene and selects it; answers the copy. */
 	duplicateScene: (storyId: string, sceneId: string) => Promise<Scene | null>;
 	/** Deletes the scene (its outputs are kept); its neighbour is selected when it was the selected one. */
@@ -150,8 +169,13 @@ export type StoryActions = {
 	chooseVariant: (storyId: string, sceneId: string, outputId: string) => Promise<Story | null>;
 	/** Adds an existing output to the scene's variants (it becomes the illustration). */
 	addVariant: (storyId: string, sceneId: string, outputId: string) => Promise<Story | null>;
-	/** Removes a variant from the scene (the output is kept). */
+	/** Removes a variant from the scene (the output is kept; the latest remaining variant becomes the picture when it
+	 *  was the picture). */
 	removeVariant: (storyId: string, sceneId: string, outputId: string) => Promise<Story | null>;
+	/** What generating the scene would send, built by THE request builder with the scene's input
+	 *  (useGenerationStore.previewScene): nothing is generated, no store changes. Null for an unknown scene; throws
+	 *  like buildGenerationRequest (no model, no prompt). */
+	previewScene: (storyId: string, sceneId: string) => ScenePreview | null;
 	/** "Add to story" (Create): a new scene of `storyId` (null: a new story with the output's character) prefilled from
 	 *  the current output (sceneFromOutput: its image, its selections as locks, its seed); selects it and announces it
 	 *  with 'Go to Story'. A warning when no output is shown. Answers the new scene. */
@@ -170,6 +194,9 @@ export type StoryActions = {
 };
 
 export type StoryStore = StoryState & StoryActions;
+
+/** A scene's request as generating it would send it (previewScene), and the characters it names that no longer exist. */
+export type ScenePreview = { built: BuiltGenerationRequest; missingCharacterIds: string[] };
 
 /** The persisted part of the story store. */
 export type PersistedStoryState = Pick<StoryState, 'dockCollapsed'>;
@@ -325,10 +352,14 @@ export const useStoryStore = create<StoryStore>()(
 					}
 				},
 
-				createStory: async ({ title, characterIds = [] } = {}) => {
+				createStory: async (fields = {}, { select = true } = {}) => {
 					try {
-						const story = await api.createStory({ title: title?.trim() || newStoryTitle(get().stories), character_ids: characterIds });
-						set((state) => ({ stories: withStory(state.stories, story), selectedStoryId: story.id, selectedSceneId: null, reader: null }));
+						const story = await api.createStory(newStoryRequest({ ...fields, title: fields.title?.trim() || newStoryTitle(get().stories) }));
+						set((state) =>
+							select
+								? { stories: withStory(state.stories, story), selectedStoryId: story.id, selectedSceneId: null, reader: null }
+								: { stories: withStory(state.stories, story) },
+						);
 						return story;
 					} catch (error) {
 						reportError(error, STORY_FAILURES.create);
@@ -372,7 +403,7 @@ export const useStoryStore = create<StoryStore>()(
 					set({ selectedSceneId: sceneId });
 				},
 
-				addScene: async (storyId, request = { text: '' }) => {
+				addScene: async (storyId, request = newSceneRequest()) => {
 					const before = new Set(findStory(storyId)?.scenes.map((scene) => scene.id) ?? []);
 					const saved = await write(storyId, STORY_FAILURES.addScene, () => api.addScene(storyId, request));
 					const scene = saved?.scenes.find((item) => !before.has(item.id)) ?? null;
@@ -410,6 +441,30 @@ export const useStoryStore = create<StoryStore>()(
 					}
 				},
 
+				addScenes: async (storyId, requests, index = null) => {
+					const added: Scene[] = [];
+					for (const [offset, request] of requests.entries()) {
+						const before = new Set(findStory(storyId)?.scenes.map((scene) => scene.id) ?? []);
+						const saved = await write(storyId, STORY_FAILURES.addScene, () =>
+							api.addScene(storyId, { ...request, index: index === null ? null : index + offset }),
+						);
+						const scene = saved?.scenes.find((item) => !before.has(item.id)) ?? null;
+						if (!scene) {
+							break;
+						}
+						added.push(scene);
+					}
+					if (added.length > 0) {
+						set({ selectedStoryId: storyId, selectedSceneId: added[0].id, reader: null });
+					}
+					return added;
+				},
+
+				updateScenes: async (storyId, patches) => {
+					const saved = await Promise.all(patches.map(({ sceneId, patch }) => get().updateScene(storyId, sceneId, patch)));
+					return saved.every((story) => story !== null) ? (findStory(storyId) ?? null) : null;
+				},
+
 				lockSubPrompt: async (storyId, sceneId, categoryName, promptText) => {
 					const scene = selectScene(storyId, sceneId)(get());
 					return scene ? get().updateScene(storyId, sceneId, { locks: withSceneLock(scene.locks, categoryName, promptText) }) : null;
@@ -418,6 +473,20 @@ export const useStoryStore = create<StoryStore>()(
 				unlockCategory: async (storyId, sceneId, categoryName) => {
 					const scene = selectScene(storyId, sceneId)(get());
 					return scene ? get().updateScene(storyId, sceneId, { locks: withoutSceneLock(scene.locks, categoryName) }) : null;
+				},
+
+				setSceneLora: async (storyId, sceneId, loraId, weight = LORA_WEIGHT_DEFAULTS.weight) => {
+					const scene = selectScene(storyId, sceneId)(get());
+					if (!scene) {
+						return null;
+					}
+					const loras = withLora(scene.loras, loraId, weight);
+					return loras === scene.loras ? findStory(storyId) : get().updateScene(storyId, sceneId, { loras });
+				},
+
+				removeSceneLora: async (storyId, sceneId, loraId) => {
+					const scene = selectScene(storyId, sceneId)(get());
+					return scene ? get().updateScene(storyId, sceneId, { loras: scene.loras.filter((item) => item.id !== loraId) }) : null;
 				},
 
 				duplicateScene: async (storyId, sceneId) => {
@@ -544,6 +613,17 @@ export const useStoryStore = create<StoryStore>()(
 				removeVariant: (storyId, sceneId, outputId) =>
 					write(storyId, STORY_FAILURES.variant, () => api.removeSceneVariant(storyId, sceneId, outputId)),
 
+				previewScene: (storyId, sceneId) => {
+					const story = findStory(storyId);
+					const scene = story?.scenes.find((item) => item.id === sceneId);
+					if (!story || !scene) {
+						return null;
+					}
+					const characters = useCharactersStore.getState();
+					const { input, missingCharacterIds } = sceneGenerationInput(story, scene, characters.characters, selectActiveCharacter(characters));
+					return { built: useGenerationStore.getState().previewScene(input), missingCharacterIds };
+				},
+
 				addSceneFromOutput: async (storyId) => {
 					const { record } = useOutputsStore.getState();
 					if (!record) {
@@ -555,7 +635,7 @@ export const useStoryStore = create<StoryStore>()(
 						return null;
 					}
 					if (story === null) {
-						story = await get().createStory({ characterIds: storyCharacterIdsFromOutput(record) });
+						story = await get().createStory({ character_ids: storyCharacterIdsFromOutput(record) });
 						if (!story) {
 							return null;
 						}

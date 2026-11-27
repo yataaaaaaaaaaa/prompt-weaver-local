@@ -29,7 +29,7 @@ export function codexStatus(overrides: Partial<CodexStatus> = {}): CodexStatus {
 }
 
 export function entry(overrides: Partial<CodexEntry> & Pick<CodexEntry, 'id'>): CodexEntry {
-	return { kind: 'assistant', text: '', status: 'completed', tool: null, story_id: null, scene_id: null, ...overrides };
+	return { kind: 'assistant', text: '', status: 'completed', tool: null, story_id: null, scene_id: null, character_id: null, ...overrides };
 }
 
 export function conversation(overrides: Partial<CodexConversation> = {}): CodexConversation {

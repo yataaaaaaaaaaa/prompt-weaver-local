@@ -142,6 +142,17 @@ export type CharactersActions = {
 	/** Saves a new IP-Adapter strength (clamped to REFERENCE_DEFAULTS.min..max) for a saved character
 	 *  (api.updateCharacter with its other values unchanged); no-op when unchanged. */
 	setReferenceStrength: (characterId: string, strength: number) => Promise<void>;
+
+	// The values API (the co-writer's tools; the editor keeps its own form): every call answers the saved character,
+	// null when it failed (reported) or the character is busy.
+	/** Creates a character from `values` and imports `sources` as its reference images (all or nothing; the first one
+	 *  is its thumbnail); it joins the gallery and is selected (the caller reports it, like the story store's
+	 *  createStory). */
+	createCharacter: (values: CharacterValues, sources?: CharacterImageSource[]) => Promise<Character | null>;
+	/** Changes fields of a saved character (api.updateCharacter with its other values unchanged). */
+	updateCharacter: (characterId: string, patch: Partial<CharacterValues>) => Promise<Character | null>;
+	/** Imports one more reference image (e.g. an output's image: {kind: 'output'}). */
+	addReferenceImage: (characterId: string, source: CharacterImageSource) => Promise<Character | null>;
 };
 
 export type CharactersStore = CharactersState & CharactersActions;
@@ -169,19 +180,25 @@ export const useCharactersStore = create<CharactersStore>()((set, get) => {
 	const setBusy = (characterId: string, on: boolean) => set((state) => ({ busyIds: withFlag(state.busyIds, characterId, on) }));
 
 	/** Runs a request of one character, once at a time per character (busyIds set meanwhile); failures reported
-	 *  under `failureTitle`. Never rejects. */
-	const whileBusy = async (characterId: string, failureTitle: string, action: () => Promise<void>): Promise<void> => {
+	 *  under `failureTitle`. Answers what the request answers, null when it failed or the character was busy. Never
+	 *  rejects. */
+	const busyRequest = async <T,>(characterId: string, failureTitle: string, action: () => Promise<T>): Promise<T | null> => {
 		if (get().busyIds[characterId]) {
-			return;
+			return null;
 		}
 		setBusy(characterId, true);
 		try {
-			await action();
+			return await action();
 		} catch (error) {
 			reportError(error, failureTitle);
+			return null;
 		} finally {
 			setBusy(characterId, false);
 		}
+	};
+
+	const whileBusy = async (characterId: string, failureTitle: string, action: () => Promise<void>): Promise<void> => {
+		await busyRequest(characterId, failureTitle, action);
 	};
 
 	/** Imports the image `pickSource` gives (none: nothing happens) into a saved character, which the answer replaces. */
@@ -465,6 +482,37 @@ export const useCharactersStore = create<CharactersStore>()((set, get) => {
 				applyCharacter(await api.updateCharacter(characterId, { ...characterValuesOf(character), reference_strength: next }));
 			});
 		},
+
+		createCharacter: async (values, sources = []) => {
+			try {
+				const saved = await api.createCharacter({ ...values, reference_sources: sources });
+				applyCharacter(saved);
+				set({ selectedId: saved.id });
+				return saved;
+			} catch (error) {
+				reportError(error, 'Could not create the character');
+				return null;
+			}
+		},
+
+		updateCharacter: async (characterId, patch) => {
+			const character = selectCharacter(characterId)(get());
+			if (!character) {
+				return null;
+			}
+			return busyRequest(characterId, 'Could not save the character', async () => {
+				const saved = await api.updateCharacter(characterId, { ...characterValuesOf(character), ...patch });
+				applyCharacter(saved);
+				return saved;
+			});
+		},
+
+		addReferenceImage: (characterId, source) =>
+			busyRequest(characterId, 'Could not add the reference image', async () => {
+				const saved = await api.addCharacterReferenceImage(characterId, source);
+				applyCharacter(saved);
+				return saved;
+			}),
 	};
 });
 

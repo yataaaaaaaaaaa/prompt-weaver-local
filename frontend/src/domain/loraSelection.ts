@@ -1,6 +1,7 @@
-// LoRA selection: which LoRAs a generation uses (the active character's LoRAs + the user's selection with its
-// per-LoRA weights + the LoRAs induced by the selected sub-prompts), which requested ids are missing from the
-// library, and the pure edits of the selection (LoraWeight items, the one representation: see src/api/types.ts).
+// LoRA selection: which LoRAs a generation uses (the active character's LoRAs (a story scene's cast) + a story scene's
+// own LoRAs + the user's selection with its per-LoRA weights + the LoRAs induced by the selected sub-prompts), which
+// requested ids are missing from the library, and the pure edits of a LoRA list (LoraWeight items, the one
+// representation: see src/api/types.ts; the selection, a character's LoRAs, a scene's LoRAs).
 // Pure module; the selection itself lives in src/stores/libraryStore.ts.
 import { LORA_WEIGHT_DEFAULTS } from '../api/defaults.gen';
 import type { GenerationLoRA, GenerationSelection, LoraWeight, LoRASpec } from '../api/types';
@@ -71,6 +72,12 @@ export function addLorasToSelection(selection: readonly LoraWeight[], loraIds: r
 	return added.length > 0 ? [...selection, ...added.map(loraAtDefaultWeight)] : (selection as LoraWeight[]);
 }
 
+/** `loras` with `loraId` at clampLoraWeight(weight): its weight changed when it is there, else appended. The same
+ *  array when nothing changes. */
+export function withLora(loras: readonly LoraWeight[], loraId: string, weight: number): LoraWeight[] {
+	return loras.some((item) => item.id === loraId) ? withLoraWeight(loras, loraId, weight) : [...loras, { id: loraId, weight: clampLoraWeight(weight) }];
+}
+
 /** `selection` with the weight of `loraId` set to clampLoraWeight(weight). The same array when the LoRA is not
  *  selected or its weight is unchanged. */
 export function withLoraWeight(selection: readonly LoraWeight[], loraId: string, weight: number): LoraWeight[] {
@@ -83,44 +90,65 @@ export function withLoraWeight(selection: readonly LoraWeight[], loraId: string,
 }
 
 export type ResolvedLoraSelection = {
-	/** The known LoRAs of the active character (src/domain/characters.ts), unique, in order. */
+	/** The known LoRAs of the active character (src/domain/characters.ts; a scene's cast), unique, in order. */
 	characterIds: string[];
+	/** The known LoRAs of a story scene (src/domain/stories.ts), unique, in order. */
+	sceneIds: string[];
 	/** The known selected LoRAs (also when the character has them too), unique, in order. */
 	selectedIds: string[];
 	promptLinkedIds: string[];
-	/** character ∪ selected ∪ prompt-linked, in that order. */
+	/** character ∪ scene ∪ selected ∪ prompt-linked, in that order. */
 	activeIds: string[];
-	/** The library LoRAs of activeIds with their weights: a character LoRA has the character's weight (also when it
-	 *  is selected), a selected LoRA keeps its selected weight, a LoRA that is only prompt-linked gets
-	 *  LORA_WEIGHT_DEFAULTS.weight. */
+	/** The library LoRAs of activeIds with their weights: a scene LoRA has the scene's weight (also when the character
+	 *  or the selection has it), a character LoRA the character's weight (also when it is selected), a selected LoRA
+	 *  keeps its selected weight, a LoRA that is only prompt-linked gets LORA_WEIGHT_DEFAULTS.weight. */
 	activeLoras: GenerationLoRA[];
-	/** Requested ids absent from the library, unique, in request order: character first, then user-selected, then
-	 *  prompt-linked. */
+	/** Requested ids absent from the library, unique, in request order: character first, then scene, then
+	 *  user-selected, then prompt-linked. */
 	missingIds: string[];
 };
 
-/** The LoRAs of a generation: `characterLoras` (the active character's, [] without one) first, then the user's
- *  selection, then the LoRAs induced by the selected sub-prompts (see ResolvedLoraSelection). */
+/** Where the weight of a LoRA of a generation comes from: the scene, else the character, else the selection, else a
+ *  sub-prompt (the default weight). */
+export type LoraSource = 'character' | 'scene' | 'selection' | 'prompt';
+
+export function loraSourceOf(resolution: Pick<ResolvedLoraSelection, 'characterIds' | 'sceneIds' | 'selectedIds'>, loraId: string): LoraSource {
+	if (resolution.sceneIds.includes(loraId)) {
+		return 'scene';
+	}
+	if (resolution.characterIds.includes(loraId)) {
+		return 'character';
+	}
+	return resolution.selectedIds.includes(loraId) ? 'selection' : 'prompt';
+}
+
+/** The LoRAs of a generation: `characterLoras` (the active character's or a scene's cast's, [] without one) first,
+ *  then `sceneLoras` (a story scene's own, [] otherwise), then the user's selection, then the LoRAs induced by the
+ *  selected sub-prompts (see ResolvedLoraSelection). */
 export function resolveLoraSelection(
 	library: LoraLibrary,
 	selectedLoras: readonly LoraWeight[],
 	promptSelections: readonly Pick<GenerationSelection, 'induced_lora_ids'>[],
 	characterLoras: readonly LoraWeight[] = [],
+	sceneLoras: readonly LoraWeight[] = [],
 ): ResolvedLoraSelection {
 	const lorasById = makeLoraMap(library);
 	const known = (loraId: string) => lorasById.has(loraId);
 	const character = filterKnownLoras(characterLoras, library);
+	const scene = filterKnownLoras(sceneLoras, library);
 	const selected = filterKnownLoras(selectedLoras, library);
-	// Later entries win: the character's weight over the selected one.
-	const weights = new Map([...selected, ...character].map((item) => [item.id, item.weight]));
-	const requestedIds = [...characterLoras, ...selectedLoras].map((item) => item.id);
+	// Later entries win: the scene's weight over the character's, the character's over the selected one.
+	const weights = new Map([...selected, ...character, ...scene].map((item) => [item.id, item.weight]));
+	const requestedIds = [...characterLoras, ...sceneLoras, ...selectedLoras].map((item) => item.id);
 	const promptLoraIds = promptSelections.flatMap((item) => item.induced_lora_ids);
 	const characterIds = character.map((item) => item.id);
+	const sceneIds = scene.map((item) => item.id);
 	const selectedIds = selected.map((item) => item.id);
 	const promptLinkedIds = uniqueStrings(promptLoraIds).filter(known);
-	const activeIds = uniqueStrings([...characterIds, ...selectedIds, ...promptLinkedIds]);
+	const activeIds = uniqueStrings([...characterIds, ...sceneIds, ...selectedIds, ...promptLinkedIds]);
 	return {
 		characterIds,
+		sceneIds,
 		selectedIds,
 		promptLinkedIds,
 		activeIds,

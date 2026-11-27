@@ -4,6 +4,9 @@ import { ALICE_ID, BOB, BOB_ID, character, outputCharacter } from '../test/chara
 import { illustratedScene, scene, SCENE_IDS, story, STORY_ID } from '../test/storyData';
 import type { Category } from './categories';
 import {
+	newSceneRequest,
+	newStoryRequest,
+	sceneLockedSeed,
 	availableVariantIds,
 	clampReaderPage,
 	isLockOverriddenByCast,
@@ -118,10 +121,10 @@ describe('characters of a scene', () => {
 	});
 
 	it('builds the generation input of a scene', () => {
-		const storm = illustratedScene(['0000000002'], { id: SCENE_IDS[1], extra_tags: ['storm'], negative_tags: ['sunny'], seed: 42, locks: [lock('Mood', 'calm')] });
+		const storm = illustratedScene(['0000000002'], { id: SCENE_IDS[1], extra_tags: ['storm'], negative_tags: ['sunny'], seed: 42, locks: [lock('Mood', 'calm')], loras: [{ id: 'ink', weight: 0.4 }] });
 
 		expect(sceneGenerationInput(story({ character_ids: [ALICE_ID, 'chr-gone00000000'] }), storm, characters, null)).toEqual({
-			input: { storyId: STORY_ID, sceneId: SCENE_IDS[1], cast: [ALICE], locks: [lock('Mood', 'calm')], extraTags: ['storm'], negativeTags: ['sunny'], seed: 42 },
+			input: { storyId: STORY_ID, sceneId: SCENE_IDS[1], cast: [ALICE], locks: [lock('Mood', 'calm')], extraTags: ['storm'], negativeTags: ['sunny'], seed: 42, loras: [{ id: 'ink', weight: 0.4 }] },
 			missingCharacterIds: ['chr-gone00000000'],
 		});
 	});
@@ -181,6 +184,7 @@ describe('sceneFromOutput (Add to story)', () => {
 		expect(sceneFromOutput(record, [ALICE_ID], [ALICE, BOB], USER)).toEqual({
 			output_id: '0000000007',
 			text: '',
+			beat: '', shot: '', setting: '', mood: '',
 			character_ids: null,
 			locks: [lock('Subject', '1girl'), lock('Background', 'beach')],
 			seed: 51111,
@@ -304,5 +308,20 @@ describe('names, reader and export', () => {
 		expect(storyExportFileName('Ends with dots...')).toBe('Ends with dots.html');
 		expect(storyExportFileName('<>|*')).toBe('Story.html');
 		expect(storyExportFileName('x'.repeat(200))).toBe(`${'x'.repeat(120)}.html`);
+	});
+});
+
+describe('new scenes and stories', () => {
+	it('fills the notes and the flow a request needs', () => {
+		expect(newSceneRequest()).toEqual({ text: '', beat: '', shot: '', setting: '', mood: '' });
+		expect(newSceneRequest({ title: 'Dock', beat: 'Arrival', seed: 3 })).toEqual({ text: '', beat: 'Arrival', shot: '', setting: '', mood: '', title: 'Dock', seed: 3 });
+		expect(newStoryRequest({ title: 'Rain', logline: 'Wet.' })).toEqual({ title: 'Rain', character_ids: [], logline: 'Wet.', synopsis: '', style_notes: '' });
+	});
+
+	it("gives a scene its fixed seed, else its cast's locked seed (rule 5)", () => {
+		const locked = character({ seed: 77, seed_locked: true });
+		expect(sceneLockedSeed({ seed: 5, cast: [locked] })).toBe(5);
+		expect(sceneLockedSeed({ seed: null, cast: [BOB, locked] })).toBe(77);
+		expect(sceneLockedSeed({ seed: null, cast: [BOB] })).toBeNull();
 	});
 });

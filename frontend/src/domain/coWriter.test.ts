@@ -1,15 +1,12 @@
 import { describe, expect, it } from 'vitest';
-import type { Category } from './categories';
 import {
-	CATEGORY_PROMPT_LIMIT,
-	categoriesForCodex,
-	charactersForCodex,
 	conversationKey,
 	DRAFT_KEY,
+	GENERATION_TOOLS,
+	isCodexToolName,
 	sceneLabel,
-	storiesForCodex,
-	storyForCodex,
 	toolActivityText,
+	toolTargets,
 	withConversation,
 	withDelta,
 	withEntry,
@@ -17,7 +14,7 @@ import {
 } from './coWriter';
 import { BOB, character } from '../test/characterData';
 import { conversation, CONVERSATION_ID, entry, OTHER_CONVERSATION_ID } from '../test/codexData';
-import { illustratedScene, scene, SCENE_IDS, story, STORY_ID, OTHER_STORY_ID } from '../test/storyData';
+import { SCENE_IDS, story, STORY_ID, OTHER_STORY_ID } from '../test/storyData';
 
 const EMPTY: ConversationIndex = { conversations: {}, byStory: {} };
 
@@ -77,66 +74,31 @@ describe('tool activity', () => {
 	});
 
 	it('says what a running tool does, then its summary', () => {
-		const running = entry({ id: 't', kind: 'tool', tool: 'generate_scene', status: 'running', story_id: STORY_ID, scene_id: SCENE_IDS[1] });
+		const running = entry({ id: 't', kind: 'tool', tool: 'generate_scenes', status: 'running', story_id: STORY_ID, scene_id: SCENE_IDS[1] });
 		expect(toolActivityText(running, [tale])).toBe('Generating Scene 2 · The storm…');
-		expect(toolActivityText({ ...running, tool: 'add_scene' }, [tale])).toBe('Adding a scene…');
+		expect(toolActivityText({ ...running, scene_id: null }, [tale])).toBe('Generating the scenes of The lighthouse…');
+		expect(toolActivityText({ ...running, tool: 'add_scenes' }, [tale])).toBe('Adding scenes to The lighthouse…');
 		expect(toolActivityText({ ...running, tool: 'get_story', scene_id: null }, [tale])).toBe('Reading The lighthouse…');
+		expect(toolActivityText({ ...running, tool: 'update_scenes', scene_id: null }, [tale])).toBe('Editing the scenes of The lighthouse…');
 		expect(toolActivityText({ ...running, status: 'completed', text: 'Illustrated Scene 2 · The storm' }, [tale])).toBe('Illustrated Scene 2 · The storm');
 		expect(toolActivityText({ ...running, status: 'failed', text: '' }, [tale])).toBe('Generating Scene 2 · The storm did not finish');
-		expect(toolActivityText({ ...running, story_id: null, scene_id: null }, [])).toBe('Generating a scene…');
+		expect(toolActivityText({ ...running, story_id: null, scene_id: null }, [])).toBe('Generating the scenes of the story…');
 		expect(toolActivityText({ ...running, tool: 'web_search' }, [tale])).toBe('Using web_search…');
-	});
-});
-
-describe('what the tools answer Codex', () => {
-	const outputs = new Set(['0000000001', '0000000003']);
-
-	it('lists the stories with their progress and the one viewed', () => {
-		expect(storiesForCodex([story(), story({ id: OTHER_STORY_ID, title: 'Other', scenes: [] })], STORY_ID, outputs)).toEqual([
-			{ story_id: STORY_ID, title: 'The lighthouse', scenes: 3, illustrated: 2, viewing: true },
-			{ story_id: OTHER_STORY_ID, title: 'Other', scenes: 0, illustrated: 0, viewing: false },
-		]);
+		// An entry of a tool that no longer exists (an older conversation) shows its summary.
+		expect(toolActivityText({ ...running, tool: 'add_scene', status: 'completed', text: 'Added Scene 4 · The harbor' }, [tale])).toBe('Added Scene 4 · The harbor');
 	});
 
-	it('reads a story with every scene', () => {
-		const tale = story({
-			scenes: [
-				illustratedScene(['0000000001'], { id: SCENE_IDS[0], title: 'Arrival', locks: [{ category_name: 'Mood', prompt_text: 'calm' }], seed: 7 }),
-				scene({ id: SCENE_IDS[1], title: 'Storm', character_ids: [] }),
-			],
-		});
-
-		const read = storyForCodex(tale, [character()], outputs);
-
-		expect(read.characters).toEqual([{ character_id: character().id, name: character().name }]);
-		expect(read.scenes).toEqual([
-			{ scene_id: SCENE_IDS[0], position: 1, title: 'Arrival', text: 'Mira climbed the stairs.', extra_tags: [], negative_tags: [], locked_sub_prompts: [{ category: 'Mood', sub_prompt: 'calm' }], characters: 'story', seed: 7, illustrated: true, pictures: 1 },
-			{ scene_id: SCENE_IDS[1], position: 2, title: 'Storm', text: 'Mira climbed the stairs.', extra_tags: [], negative_tags: [], locked_sub_prompts: [], characters: [], seed: 'random', illustrated: false, pictures: 0 },
-		]);
-		expect(storyForCodex(story({ character_ids: ['chr-999999999999'] }), [], outputs).characters).toEqual([{ character_id: 'chr-999999999999', name: '(deleted)' }]);
+	it('names the character a tool acts on', () => {
+		const editing = entry({ id: 't', kind: 'tool', tool: 'update_character', status: 'running', character_id: BOB.id });
+		expect(toolActivityText(editing, [], [character(), BOB])).toBe('Editing Bob…');
+		expect(toolActivityText(editing, [], [])).toBe('Editing a character…');
+		expect(toolTargets(editing, [tale], [BOB])).toEqual({ scene: null, story: null, character: 'Bob' });
+		expect(toolTargets(entry({ id: 'u', kind: 'tool', story_id: STORY_ID, scene_id: SCENE_IDS[2] }), [tale])).toEqual({ scene: 'Scene 3 · Morning calm', story: 'The lighthouse', character: null });
 	});
 
-	it('lists the characters and which one Create uses', () => {
-		expect(charactersForCodex([character(), BOB], BOB.id)).toEqual([
-			{ character_id: character().id, name: character().name, identity_tags: character().identity_tags, outfit_tags: character().outfit_tags, negative_tags: character().negative_tags, active_in_create: false },
-			{ character_id: BOB.id, name: BOB.name, identity_tags: BOB.identity_tags, outfit_tags: BOB.outfit_tags, negative_tags: BOB.negative_tags, active_in_create: true },
-		]);
-	});
-
-	it('lists the categories in generation order, shortened unless one is asked for', () => {
-		const many = Array.from({ length: CATEGORY_PROMPT_LIMIT + 5 }, (_unused, index) => ({ text: `tag ${index}`, state: 'normal' as const, extraLoraIds: [] }));
-		const categories: Category[] = [
-			{ text: 'Weather', activation_text: '', priority: 2, state: 'normal', subPrompts: [{ text: 'rain', state: 'normal', extraLoraIds: [] }, { text: 'snow', state: 'skip', extraLoraIds: [] }, { text: ' ', state: 'normal', extraLoraIds: [] }] },
-			{ text: 'Place', activation_text: 'outdoors', priority: 1, state: 'skip', subPrompts: many },
-		];
-
-		const all = categoriesForCodex(categories, null);
-		expect(all.map((item) => item.category)).toEqual(['Place', 'Weather']);
-		expect(all[0]).toMatchObject({ skipped: true, activation_text: 'outdoors', more_sub_prompts: 5 });
-		expect(all[0].sub_prompts).toHaveLength(CATEGORY_PROMPT_LIMIT);
-		expect(all[1]).toEqual({ category: 'Weather', skipped: false, activation_text: null, sub_prompts: ['rain'] });
-		const place = categoriesForCodex(categories, 'PLA');
-		expect(place).toHaveLength(1);
-		expect(place[0].sub_prompts).toHaveLength(CATEGORY_PROMPT_LIMIT + 5);
+	it('knows which tools generate (Stop cancels them)', () => {
+		expect([...GENERATION_TOOLS]).toEqual(['generate_scenes']);
+		expect(isCodexToolName('view_images')).toBe(true);
+		expect(isCodexToolName('generate_scene')).toBe(false);
 	});
 });

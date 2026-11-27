@@ -142,6 +142,14 @@ export function joinPromptTags(tags: readonly string[]): string {
 		.join(', ');
 }
 
+/** `tags` with `remove` taken out and `add` appended, tag identity by normalizeTagId: a tag added that is already there
+ *  stays once, in its place; blank tags are dropped. The one tag-list edit (the co-writer's add / remove tags). */
+export function editTags(tags: readonly string[], { add = [], remove = [] }: { add?: readonly string[]; remove?: readonly string[] }): string[] {
+	const removed = new Set(remove.map(normalizeTagId));
+	const kept = tags.filter((tag) => !removed.has(normalizeTagId(tag)));
+	return splitPromptTags(joinPromptTags([...kept, ...add]));
+}
+
 /** Normalized tag ids of a prompt. */
 export function promptTagIds(promptText: string): Set<string> {
 	return new Set(splitPromptTags(promptText).map((tag) => normalizeTagId(tag)));

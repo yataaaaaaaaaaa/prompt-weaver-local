@@ -1,11 +1,8 @@
 // The co-writer's pure logic (the user's Codex in the Story section): the conversations as the frontend keeps them
 // (one per story, the draft while no story is selected; the backend owns them: services/codex/conversations.py), the
-// events that change them, what a running tool shows ('Generating The storm…'), and what the app's tools answer Codex
-// (the stories, characters and categories as compact data). The tools themselves run in src/stores/coWriterTools.ts.
-import type { Character, CodexConversation, CodexEntry, CodexToolName, Scene, Story } from '../api/types';
-import type { Category } from './categories';
-import { sortCategories } from './categories';
-import { missingSceneIds, sceneIllustrationId } from './stories';
+// events that change them, and what a tool entry says ('Generating Scene 3 · The storm…') and links to. What the app's
+// tools answer Codex is src/domain/coWriterViews.ts; the tools themselves run in src/stores/coWriterTools.ts.
+import type { Character, CodexConversation, CodexEntry, CodexToolName, Story } from '../api/types';
 
 /** The key of the draft conversation (used while no story is selected) among the stories' keys. */
 export const DRAFT_KEY = '';
@@ -75,112 +72,62 @@ export function sceneLabel(story: Pick<Story, 'scenes'>, sceneId: string): strin
 	return index < 0 ? null : `Scene ${index + 1} · ${story.scenes[index].title}`;
 }
 
-const RUNNING_LABELS: Readonly<Record<CodexToolName, (scene: string | null, story: string | null) => string>> = {
+/** What a tool entry names: its scene ('Scene 2 · The storm'), its story's title and its character's name (null when
+ *  it names none or they no longer exist). */
+export type ToolTargets = { scene: string | null; story: string | null; character: string | null };
+
+const RUNNING_LABELS: Readonly<Record<CodexToolName, (target: ToolTargets) => string>> = {
 	list_stories: () => 'Reading the stories…',
-	get_story: (_scene, story) => `Reading ${story ?? 'the story'}…`,
+	get_story: ({ story }) => `Reading ${story ?? 'the story'}…`,
 	list_characters: () => 'Reading the characters…',
-	list_categories: () => 'Reading the prompt categories…',
+	list_categories: () => 'Reading the prompt board…',
+	list_loras: () => 'Reading the LoRAs…',
+	get_generation_setup: () => 'Reading the generation setup…',
+	preview_scenes: ({ scene, story }) => `Previewing the prompts of ${scene ?? story ?? 'the scenes'}…`,
+	consistency_report: ({ story }) => `Checking the consistency of ${story ?? 'the story'}…`,
+	view_images: ({ story, character }) => `Looking at the pictures of ${story ?? character ?? 'the story'}…`,
 	create_story: () => 'Creating a story…',
-	update_story: (_scene, story) => `Editing ${story ?? 'the story'}…`,
-	add_scene: () => 'Adding a scene…',
-	update_scene: (scene) => `Editing ${scene ?? 'a scene'}…`,
-	lock_sub_prompt: (scene) => `Locking a sub-prompt of ${scene ?? 'a scene'}…`,
-	unlock_category: (scene) => `Unlocking a category of ${scene ?? 'a scene'}…`,
-	move_scene: (scene) => `Moving ${scene ?? 'a scene'}…`,
-	duplicate_scene: (scene) => `Duplicating ${scene ?? 'a scene'}…`,
-	delete_scene: (scene) => `Deleting ${scene ?? 'a scene'}…`,
-	generate_scene: (scene) => `Generating ${scene ?? 'a scene'}…`,
-	generate_missing_scenes: (_scene, story) => `Generating the missing scenes of ${story ?? 'the story'}…`,
+	update_story: ({ story }) => `Editing ${story ?? 'the story'}…`,
+	delete_story: ({ story }) => `Deleting ${story ?? 'a story'}…`,
+	add_scenes: ({ story }) => `Adding scenes to ${story ?? 'the story'}…`,
+	update_scenes: ({ scene, story }) => `Editing ${scene ?? `the scenes of ${story ?? 'the story'}`}…`,
+	reorder_scenes: ({ story }) => `Reordering the scenes of ${story ?? 'the story'}…`,
+	duplicate_scene: ({ scene }) => `Duplicating ${scene ?? 'a scene'}…`,
+	delete_scenes: ({ story }) => `Deleting scenes of ${story ?? 'the story'}…`,
+	generate_scenes: ({ scene, story }) => `Generating ${scene ?? `the scenes of ${story ?? 'the story'}`}…`,
+	edit_variants: ({ scene }) => `Changing the pictures of ${scene ?? 'a scene'}…`,
+	create_character: () => 'Creating a character…',
+	update_character: ({ character }) => `Editing ${character ?? 'a character'}…`,
+	delete_character: ({ character }) => `Deleting ${character ?? 'a character'}…`,
+	install_ip_adapter: () => 'Starting the download of the IP-Adapter files…',
 };
 
 export function isCodexToolName(tool: string | null): tool is CodexToolName {
 	return tool !== null && Object.hasOwn(RUNNING_LABELS, tool);
 }
 
+/** The scene, story and character a tool entry names (ToolTargets). */
+export function toolTargets(entry: CodexEntry, stories: readonly Story[], characters: readonly Pick<Character, 'id' | 'name'>[] = []): ToolTargets {
+	const story = entry.story_id ? (stories.find((item) => item.id === entry.story_id) ?? null) : null;
+	const character = entry.character_id ? (characters.find((item) => item.id === entry.character_id) ?? null) : null;
+	return {
+		scene: story && entry.scene_id ? sceneLabel(story, entry.scene_id) : null,
+		story: story?.title ?? null,
+		character: character?.name ?? null,
+	};
+}
+
 /** What a tool entry says: its summary once done; while it runs, what it does ('Generating Scene 3 · The storm…'). */
-export function toolActivityText(entry: CodexEntry, stories: readonly Story[]): string {
+export function toolActivityText(entry: CodexEntry, stories: readonly Story[], characters: readonly Pick<Character, 'id' | 'name'>[] = []): string {
 	if (entry.status !== 'running' && entry.text) {
 		return entry.text;
 	}
-	const story = entry.story_id ? (stories.find((item) => item.id === entry.story_id) ?? null) : null;
-	const scene = story && entry.scene_id ? sceneLabel(story, entry.scene_id) : null;
 	if (!isCodexToolName(entry.tool)) {
 		return entry.status === 'running' ? `Using ${entry.tool ?? 'a tool'}…` : `Used ${entry.tool ?? 'a tool'}`;
 	}
-	const running = RUNNING_LABELS[entry.tool](scene, story?.title ?? null);
+	const running = RUNNING_LABELS[entry.tool](toolTargets(entry, stories, characters));
 	return entry.status === 'running' ? running : `${running.replace(/…$/, '')} did not finish`;
 }
 
 /** The tools whose call runs a generation (Stop cancels it). */
-export const GENERATION_TOOLS: ReadonlySet<CodexToolName> = new Set<CodexToolName>(['generate_scene', 'generate_missing_scenes']);
-
-// ---------------------------------------------------------------------------
-// What the tools answer Codex (compact data; ids for the next calls)
-// ---------------------------------------------------------------------------
-
-/** A story's scene as Codex reads it. */
-function sceneForCodex(scene: Scene, position: number, outputIds: ReadonlySet<string>) {
-	return {
-		scene_id: scene.id,
-		position,
-		title: scene.title,
-		text: scene.text,
-		extra_tags: scene.extra_tags,
-		negative_tags: scene.negative_tags,
-		locked_sub_prompts: scene.locks.map((lock) => ({ category: lock.category_name, sub_prompt: lock.prompt_text })),
-		characters: scene.character_ids === null ? 'story' : scene.character_ids,
-		seed: scene.seed ?? 'random',
-		illustrated: sceneIllustrationId(scene, outputIds) !== null,
-		pictures: scene.variants.length,
-	};
-}
-
-export function storyForCodex(story: Story, characters: readonly Character[], outputIds: ReadonlySet<string>) {
-	return {
-		story_id: story.id,
-		title: story.title,
-		characters: story.character_ids.map((id) => ({ character_id: id, name: characters.find((item) => item.id === id)?.name ?? '(deleted)' })),
-		scenes: story.scenes.map((scene, index) => sceneForCodex(scene, index + 1, outputIds)),
-	};
-}
-
-export function storiesForCodex(stories: readonly Story[], selectedId: string | null, outputIds: ReadonlySet<string>) {
-	return stories.map((story) => ({
-		story_id: story.id,
-		title: story.title,
-		scenes: story.scenes.length,
-		illustrated: story.scenes.length - missingSceneIds(story, outputIds).length,
-		viewing: story.id === selectedId,
-	}));
-}
-
-export function charactersForCodex(characters: readonly Character[], activeId: string | null) {
-	return characters.map((character) => ({
-		character_id: character.id,
-		name: character.name,
-		identity_tags: character.identity_tags,
-		outfit_tags: character.outfit_tags,
-		negative_tags: character.negative_tags,
-		active_in_create: character.id === activeId,
-	}));
-}
-
-/** At most this many sub-prompts per category, unless one category is asked for. */
-export const CATEGORY_PROMPT_LIMIT = 30;
-
-/** The prompt categories in generation order with their sub-prompts (shortened unless `query` picks categories). */
-export function categoriesForCodex(categories: readonly Category[], query: string | null) {
-	const needle = query?.trim().toLowerCase() ?? '';
-	const picked = sortCategories(categories).filter((category) => !needle || category.text.toLowerCase().includes(needle));
-	return picked.map((category) => {
-		const prompts = category.subPrompts.filter((subPrompt) => subPrompt.text.trim() && subPrompt.state !== 'skip').map((subPrompt) => subPrompt.text);
-		const limit = needle ? prompts.length : CATEGORY_PROMPT_LIMIT;
-		return {
-			category: category.text,
-			skipped: category.state === 'skip',
-			activation_text: category.activation_text || null,
-			sub_prompts: prompts.slice(0, limit),
-			...(prompts.length > limit ? { more_sub_prompts: prompts.length - limit } : {}),
-		};
-	});
-}
+export const GENERATION_TOOLS: ReadonlySet<CodexToolName> = new Set<CodexToolName>(['generate_scenes']);
