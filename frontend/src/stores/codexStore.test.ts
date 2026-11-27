@@ -1,7 +1,7 @@
 import { describe, expect, it, vi } from 'vitest';
 import { api } from '../api/client';
 import { CLIENT_ID } from '../api/clientId';
-import type { CodexEvent, ModelSpec } from '../api/types';
+import type { CodexConversation, CodexEvent, ModelSpec } from '../api/types';
 import { DRAFT_KEY } from '../domain/coWriter';
 import { codexStatus, conversation, CONVERSATION_ID, entry, OTHER_CONVERSATION_ID, toolCall } from '../test/codexData';
 import { story, SCENE_IDS, STORY_ID } from '../test/storyData';
@@ -143,6 +143,14 @@ describe('conversations', () => {
 	});
 });
 
+function deferredConversation() {
+	let resolve!: (value: CodexConversation) => void;
+	const promise = new Promise<CodexConversation>((onResolve) => {
+		resolve = onResolve;
+	});
+	return { promise, resolve };
+}
+
 describe('events', () => {
 	const apply = (event: CodexEvent) => codex().applyEvent(event);
 
@@ -172,17 +180,37 @@ describe('events', () => {
 		await vi.waitFor(() => expect(codex().runningCalls).toEqual({}));
 	});
 
-	it('a story the co-writer creates shows with the conversation that created it at once', async () => {
+	it('a story the co-writer creates shows with the conversation that created it, from before it is shown', async () => {
 		useStoryStore.setState({ stories: [story()], selectedStoryId: STORY_ID });
 		apply({ type: 'codex', kind: 'conversation', conversation: conversation({ story_ids: [STORY_ID], running: true }) });
 		vi.spyOn(api, 'sendCodexToolResult').mockResolvedValue();
 		vi.spyOn(api, 'createStory').mockResolvedValue(story({ id: 'sty-00000000000b', title: 'Rain', scenes: [] }));
+		let shownWith: string | undefined;
+		const unsubscribe = useStoryStore.subscribe((state, previous) => {
+			if (state.selectedStoryId === 'sty-00000000000b' && previous.selectedStoryId !== state.selectedStoryId) {
+				shownWith = selectConversation('sty-00000000000b')(codex())?.id;
+			}
+		});
 
 		await codex().runCall(toolCall('create_story', { title: 'Rain', character_ids: [], logline: '', synopsis: '', style_notes: '', scenes: [] }, { callId: 'call-create' }));
+		unsubscribe();
 
+		expect(shownWith).toBe(CONVERSATION_ID);
 		expect(useStoryStore.getState().selectedStoryId).toBe('sty-00000000000b');
 		expect(selectConversation('sty-00000000000b')(codex())?.id).toBe(CONVERSATION_ID);
 		expect(selectConversation(STORY_ID)(codex())?.id).toBe(CONVERSATION_ID);
+	});
+
+	it('a conversation read for a story that got another one meanwhile does not replace it', async () => {
+		const read = deferredConversation();
+		vi.spyOn(api, 'codexConversation').mockReturnValue(read.promise);
+
+		const opening = codex().openConversation('sty-00000000000b');
+		apply({ type: 'codex', kind: 'conversation', conversation: conversation({ story_ids: [STORY_ID, 'sty-00000000000b'], running: true, revision: 4 }) });
+		read.resolve(conversation({ id: OTHER_CONVERSATION_ID, story_ids: ['sty-00000000000b'] }));
+		await opening;
+
+		expect(selectConversation('sty-00000000000b')(codex())?.id).toBe(CONVERSATION_ID);
 	});
 
 	it('an abandoned call (Stop) runs to its end but sends no result', async () => {

@@ -537,7 +537,13 @@ function previewOf(storyId: string, sceneId: string): Preview {
 // The tools
 // ---------------------------------------------------------------------------
 
-type ToolHandlers = { [T in CodexToolName]: (args: CodexToolArguments<T>) => Promise<CodexToolResult> };
+/** What the window running a call learns from it as it runs (codexStore.runCall). */
+export type ToolHooks = {
+	/** A story was created by the call, before it is shown: the window shows it with the call's conversation. */
+	storyCreated?: (storyId: string) => void;
+};
+
+type ToolHandlers = { [T in CodexToolName]: (args: CodexToolArguments<T>, hooks: ToolHooks) => Promise<CodexToolResult> };
 
 const TOOLS: ToolHandlers = {
 	// --- Reading ---
@@ -701,7 +707,7 @@ const TOOLS: ToolHandlers = {
 
 	// --- Stories and scenes ---
 
-	create_story: async ({ title, character_ids, logline, synopsis, style_notes, scenes }) => {
+	create_story: async ({ title, character_ids, logline, synopsis, style_notes, scenes }, hooks) => {
 		const refusal = unknownCharacters(character_ids);
 		if (refusal) {
 			return refusal;
@@ -715,6 +721,7 @@ const TOOLS: ToolHandlers = {
 		if (!story) {
 			return failed('Could not create the story', becauseOf(problems, 'The story could not be created.'));
 		}
+		hooks.storyCreated?.(story.id);
 		const { value: added, problems: sceneProblems } = await reporting(() => useStoryStore.getState().addScenes(story.id, requests.value));
 		if (added.length === 0) {
 			useStoryStore.getState().selectStory(story.id);
@@ -1148,10 +1155,10 @@ const TOOLS: ToolHandlers = {
 };
 
 /** Runs one tool call (never rejects). */
-export async function runCoWriterTool(call: CodexToolCall): Promise<CodexToolResult> {
-	const handler = TOOLS[call.tool] as (args: unknown) => Promise<CodexToolResult>;
+export async function runCoWriterTool(call: CodexToolCall, hooks: ToolHooks = {}): Promise<CodexToolResult> {
+	const handler = TOOLS[call.tool] as (args: unknown, hooks: ToolHooks) => Promise<CodexToolResult>;
 	try {
-		return await handler(call.arguments);
+		return await handler(call.arguments, hooks);
 	} catch (error) {
 		return failed(`${call.tool} failed`, `${call.tool} failed: ${describeError(error)}`);
 	}

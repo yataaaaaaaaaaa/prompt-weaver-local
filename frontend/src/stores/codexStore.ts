@@ -46,7 +46,8 @@ export type CodexStoreActions = {
 	setCodexPath: (path: string | null) => Promise<void>;
 	/** The co-writer's model (null: the default of the user's Codex). */
 	setModel: (model: string | null) => Promise<void>;
-	/** Reads the conversation of a story (null: the draft) unless it is known (`refresh`: read it again). */
+	/** Reads the conversation of a story (null: the draft) unless it is known (`refresh`: read it again). An answer
+	 *  arriving after the story got another conversation (a story the co-writer created) is ignored. */
 	openConversation: (storyId: string | null, refresh?: boolean) => Promise<void>;
 	/** Sends the user's message about the story (and the scene selected in the story store); the composer's draft is
 	 *  cleared once sent. False when nothing was sent. */
@@ -143,7 +144,12 @@ export const useCodexStore = create<CodexStore>()((set, get) => {
 			}
 			set((state) => ({ loading: withFlag(state.loading, key, true), loadErrors: withoutKey(state.loadErrors, key) }));
 			try {
-				applyConversation(await api.codexConversation(storyId));
+				const conversation = await api.codexConversation(storyId);
+				// Meanwhile the story may have got its conversation (a story the co-writer created): that one stays.
+				const mapped = get().byStory[key];
+				if (refresh || mapped === undefined || mapped === conversation.id) {
+					applyConversation(conversation);
+				}
 			} catch (error) {
 				set((state) => ({ loadErrors: { ...state.loadErrors, [key]: describeError(error) } }));
 			} finally {
@@ -232,12 +238,12 @@ export const useCodexStore = create<CodexStore>()((set, get) => {
 			takenCalls.add(call.call_id);
 			set((state) => ({ runningCalls: { ...state.runningCalls, [call.call_id]: call.tool } }));
 			try {
-				const result = await runCoWriterTool(call);
-				if (call.tool === 'create_story' && result.ok && result.story_id) {
-					// The new story joins this conversation (the backend says so once it has the result): shown with it at once.
-					const storyId = result.story_id;
-					set((state) => (state.byStory[storyId] === call.conversation_id ? state : { byStory: { ...state.byStory, [storyId]: call.conversation_id } }));
-				}
+				const result = await runCoWriterTool(call, {
+					// A story the call creates joins its conversation (the backend says so once it has the result): shown
+					// with it from the start, never with an empty conversation of its own while the turn runs.
+					storyCreated: (storyId) =>
+						set((state) => (state.byStory[storyId] === call.conversation_id ? state : { byStory: { ...state.byStory, [storyId]: call.conversation_id } })),
+				});
 				if (!abandonedCalls.has(call.call_id)) {
 					await api.sendCodexToolResult(call.call_id, result).catch(() => undefined); // 404: the call is over (timed out)
 				}
