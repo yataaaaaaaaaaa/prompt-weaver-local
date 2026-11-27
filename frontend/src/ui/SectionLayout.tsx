@@ -1,17 +1,39 @@
-// The layout of the full-page library sections (Models, Images, Characters): a header row (the section title, then
-// its search, filters and commands), and below it the results (a grid that scrolls on its own) next to a detail panel
-// of the selected item (scrolls on its own; shows `emptyDetail` while nothing is selected). One layout for the three
-// sections, so they look and behave alike. The section <main> landmark itself is rendered by the shell.
+// The layout of the full-page sections (Models, Images, Characters, Story): a header row (the section title, then its
+// search, filters and commands), and below it the results (a grid that scrolls on its own) next to a detail panel of
+// the selected item (scrolls on its own; shows `emptyDetail` while nothing is selected). Optional, docked in the same
+// row: a navigation pane before the results (e.g. the Story section's list of stories) and a dock after the detail
+// panel (a side panel plugged into the section, e.g. a chat panel). One layout for every section, so they look and
+// behave alike. The section <main> landmark itself is rendered by the shell.
 //
-// Landmarks and keyboard: the header, the results and the detail panel are F6 regions (src/app/sections.ts
-// F6_REGION_ATTRIBUTE); the results are a region named `resultsLabel`, the detail panel a complementary landmark named
-// `detailLabel`. A search box inside `toolbar` should carry SECTION_SEARCH_ATTRIBUTE so Ctrl+F focuses it.
+// Landmarks and keyboard: the header, the navigation pane, the results, the detail panel and the dock are F6 regions
+// (src/app/sections.ts F6_REGION_ATTRIBUTE), in that order; the navigation pane is a navigation landmark named
+// `navigationLabel`, the results a region named `resultsLabel`, the detail panel and the dock complementary landmarks
+// named `detailLabel` / `dockLabel`. Without `detailLabel` there is no detail panel (the results take its room). A
+// search box inside `toolbar` should carry SECTION_SEARCH_ATTRIBUTE so Ctrl+F focuses it.
 import { makeStyles, mergeClasses, Title3, tokens } from '@fluentui/react-components';
 import type { ReactNode } from 'react';
 import { F6_REGION_ATTRIBUTE } from '../app/sections';
 
 /** Width of the detail panel: about a third of the section, at least 360 px and at most 560 px. */
 export const DETAIL_PANEL_WIDTH = 'clamp(360px, 34%, 560px)';
+/** Width of the detail panel next to a dock (both share the room the results leave). */
+export const DOCKED_DETAIL_PANEL_WIDTH = 'clamp(320px, 28%, 480px)';
+/** Width of the navigation pane before the results. */
+export const NAVIGATION_PANE_WIDTH = 'clamp(200px, 18%, 280px)';
+/** Width of the dock after the detail panel. */
+export const DOCK_PANEL_WIDTH = 'clamp(300px, 26%, 420px)';
+
+/** The columns of the body: [navigation] results [detail] [dock]. */
+function bodyColumns(navigation: boolean, detail: boolean, dock: boolean): string {
+	return [
+		navigation ? NAVIGATION_PANE_WIDTH : null,
+		'minmax(0, 1fr)',
+		detail ? (dock ? DOCKED_DETAIL_PANEL_WIDTH : DETAIL_PANEL_WIDTH) : null,
+		dock ? DOCK_PANEL_WIDTH : null,
+	]
+		.filter(Boolean)
+		.join(' ');
+}
 
 const useStyles = makeStyles({
 	root: {
@@ -46,11 +68,28 @@ const useStyles = makeStyles({
 	},
 	body: {
 		display: 'grid',
-		gridTemplateColumns: `minmax(0, 1fr) ${DETAIL_PANEL_WIDTH}`,
 		minHeight: 0,
 		minWidth: 0,
 	},
+	navigation: {
+		minHeight: 0,
+		minWidth: 0,
+		overflow: 'auto',
+		borderRight: `${tokens.strokeWidthThin} solid ${tokens.colorNeutralStroke2}`,
+		backgroundColor: tokens.colorNeutralBackground1,
+	},
+	dock: {
+		minHeight: 0,
+		minWidth: 0,
+		overflow: 'hidden',
+		display: 'flex',
+		flexDirection: 'column',
+		borderLeft: `${tokens.strokeWidthThin} solid ${tokens.colorNeutralStroke2}`,
+		backgroundColor: tokens.colorNeutralBackground1,
+	},
 	results: {
+		// Positioned: what the results scroll inside it (src/features/categories/scrollWithin.ts) is measured from it.
+		position: 'relative',
 		minHeight: 0,
 		minWidth: 0,
 		overflow: 'auto',
@@ -82,16 +121,40 @@ export type SectionLayoutProps = {
 	/** Accessible name of the results region (e.g. 'Model search results'). */
 	resultsLabel: string;
 	/** The detail of the selected item; null shows `emptyDetail`. */
-	detail: ReactNode | null;
-	/** Accessible name of the detail panel (e.g. 'Model details'). */
-	detailLabel: string;
+	detail?: ReactNode | null;
+	/** Accessible name of the detail panel (e.g. 'Model details'); without it the section has no detail panel. */
+	detailLabel?: string;
 	/** What the detail panel says while nothing is selected. */
 	emptyDetail?: ReactNode;
+	/** A pane before the results (e.g. the list of stories); it scrolls on its own. */
+	navigation?: ReactNode;
+	/** Accessible name of the navigation pane (required with `navigation`). */
+	navigationLabel?: string;
+	/** A side panel docked after the detail panel (e.g. a chat panel plugged into the section); it lays out its own
+	 *  scrolling. null / absent: no dock. */
+	dock?: ReactNode | null;
+	/** Accessible name of the dock (required with `dock`). */
+	dockLabel?: string;
 };
 
-export function SectionLayout({ title, toolbar, results, resultsLabel, detail, detailLabel, emptyDetail }: SectionLayoutProps): JSX.Element {
+export function SectionLayout({
+	title,
+	toolbar,
+	results,
+	resultsLabel,
+	detail = null,
+	detailLabel,
+	emptyDetail,
+	navigation,
+	navigationLabel,
+	dock = null,
+	dockLabel,
+}: SectionLayoutProps): JSX.Element {
 	const styles = useStyles();
 	const region = (id: string) => ({ [F6_REGION_ATTRIBUTE]: id, tabIndex: -1 });
+	const hasNavigation = navigation !== undefined && navigation !== null;
+	const hasDetail = detailLabel !== undefined;
+	const hasDock = dock !== null;
 	return (
 		<div className={styles.root}>
 			<header className={mergeClasses(styles.header, styles.focusable)} {...region('toolbar')}>
@@ -100,13 +163,25 @@ export function SectionLayout({ title, toolbar, results, resultsLabel, detail, d
 				</Title3>
 				{toolbar ? <div className={styles.toolbar}>{toolbar}</div> : null}
 			</header>
-			<div className={styles.body}>
+			<div className={styles.body} style={{ gridTemplateColumns: bodyColumns(hasNavigation, hasDetail, hasDock) }}>
+				{hasNavigation ? (
+					<nav aria-label={navigationLabel} className={mergeClasses(styles.navigation, styles.focusable)} {...region('navigation')}>
+						{navigation}
+					</nav>
+				) : null}
 				<section aria-label={resultsLabel} className={mergeClasses(styles.results, styles.focusable)} {...region('results')}>
 					{results}
 				</section>
-				<aside aria-label={detailLabel} className={mergeClasses(styles.detail, styles.focusable)} {...region('detail')}>
-					{detail ?? emptyDetail ?? null}
-				</aside>
+				{hasDetail ? (
+					<aside aria-label={detailLabel} className={mergeClasses(styles.detail, styles.focusable)} {...region('detail')}>
+						{detail ?? emptyDetail ?? null}
+					</aside>
+				) : null}
+				{hasDock ? (
+					<aside aria-label={dockLabel} className={mergeClasses(styles.dock, styles.focusable)} {...region('dock')}>
+						{dock}
+					</aside>
+				) : null}
 			</div>
 		</div>
 	);

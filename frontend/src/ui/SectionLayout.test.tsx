@@ -46,4 +46,33 @@ describe('SectionLayout', () => {
 		const regions = Array.from(container.querySelectorAll(`[${F6_REGION_ATTRIBUTE}]`)).map((element) => element.getAttribute(F6_REGION_ATTRIBUTE));
 		expect(regions).toEqual(['toolbar', 'results', 'detail']);
 	});
+
+	it('docks a navigation pane before the results and a dock after the detail panel, all F6 regions', () => {
+		const { container } = renderWithProviders(
+			<SectionLayout
+				title="Story"
+				navigation={<p>Story list</p>}
+				navigationLabel="Stories"
+				results={<p>Scenes</p>}
+				resultsLabel="Scenes"
+				detail={<p>Scene</p>}
+				detailLabel="Scene details"
+				dock={<p>Chat</p>}
+				dockLabel="Co-writer"
+			/>,
+		);
+
+		expect(screen.getByRole('navigation', { name: 'Stories' })).toHaveTextContent('Story list');
+		expect(screen.getByRole('complementary', { name: 'Co-writer' })).toHaveTextContent('Chat');
+		const regions = Array.from(container.querySelectorAll(`[${F6_REGION_ATTRIBUTE}]`)).map((element) => element.getAttribute(F6_REGION_ATTRIBUTE));
+		expect(regions).toEqual(['toolbar', 'navigation', 'results', 'detail', 'dock']);
+	});
+
+	it('has no detail panel without a detail label (the results take its room)', () => {
+		renderWithProviders(<SectionLayout title="Story" results={<p>Reader</p>} resultsLabel="Reader" />);
+
+		expect(screen.getByRole('region', { name: 'Reader' })).toBeInTheDocument();
+		expect(screen.queryByRole('complementary')).not.toBeInTheDocument();
+		expect(screen.queryByRole('navigation')).not.toBeInTheDocument();
+	});
 });
