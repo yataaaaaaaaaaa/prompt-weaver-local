@@ -1,5 +1,6 @@
-// Pointer drag and drop of the prompt board's cards (ephemeral view state of PromptBoard): a pointer down on a card's
-// reorder handle starts a drag once the pointer moved DRAG_THRESHOLD_PX; while dragging, the card under the pointer
+// Pointer drag and drop of the cards of a grid (ephemeral view state of its view: the prompt board's category cards,
+// the Story section's scene cards; the grid items carry `itemAttribute`, BOARD_CARD_ATTRIBUTE by default, whose value
+// is the card's key): a pointer down on a card's reorder handle starts a drag once the pointer moved DRAG_THRESHOLD_PX; while dragging, the card under the pointer
 // and the pointer's half of it (domain/board.ts dropPlacementAt) give the drop target the board draws an insertion
 // indicator for; near the top / bottom edge of the board the grid scrolls (auto-scroll); releasing drops the card
 // there (onDrop -> boardStore.moveCategoryNextTo), Escape or a cancelled pointer leaves the order untouched. Pointer
@@ -44,6 +45,8 @@ export type BoardDragOptions = {
 	/** The card grid (column count). */
 	gridRef: RefObject<HTMLElement>;
 	onDrop: (key: CategoryKey, target: CategoryKey, placement: Placement) => void;
+	/** The attribute marking the grid items (its value is the item's key). Default BOARD_CARD_ATTRIBUTE. */
+	itemAttribute?: string;
 };
 
 function isSingleColumn(grid: HTMLElement | null): boolean {
@@ -85,7 +88,7 @@ function autoScrollStep(rect: DOMRect, x: number, y: number): number {
 	return 0;
 }
 
-export function useBoardDrag({ scrollRef, gridRef, onDrop }: BoardDragOptions): {
+export function useBoardDrag({ scrollRef, gridRef, onDrop, itemAttribute = BOARD_CARD_ATTRIBUTE }: BoardDragOptions): {
 	drag: BoardDragView | null;
 	startPointerDrag: (key: CategoryKey, event: ReactPointerEvent<HTMLElement>) => void;
 } {
@@ -109,12 +112,12 @@ export function useBoardDrag({ scrollRef, gridRef, onDrop }: BoardDragOptions): 
 				current.target = null;
 				return;
 			}
-			const item = document.elementFromPoint(current.x, current.y)?.closest<HTMLElement>(`[${BOARD_CARD_ATTRIBUTE}]`);
+			const item = document.elementFromPoint(current.x, current.y)?.closest<HTMLElement>(`[${itemAttribute}]`);
 			if (!item || !gridRef.current?.contains(item)) {
 				// Between two cards: the last target stays.
 				return;
 			}
-			const target = item.getAttribute(BOARD_CARD_ATTRIBUTE);
+			const target = item.getAttribute(itemAttribute);
 			if (target === null || target === current.key) {
 				current.target = null;
 				return;
@@ -122,7 +125,7 @@ export function useBoardDrag({ scrollRef, gridRef, onDrop }: BoardDragOptions): 
 			current.target = target;
 			current.placement = dropPlacementAt({ x: current.x, y: current.y }, item.getBoundingClientRect(), current.singleColumn);
 		},
-		[gridRef, scrollRef],
+		[gridRef, itemAttribute, scrollRef],
 	);
 
 	const finish = useCallback(

@@ -82,6 +82,7 @@ export function CategoryHeader({ categoryKey, cardState, bodyId, nameRef, onEdit
 	const renameCategory = useCategoriesStore((state) => state.renameCategory);
 	const collapsed = useIsCardCollapsed(categoryKey);
 	const toggleCollapsed = useBoardStore((state) => state.toggleCollapsed);
+	const moveCategory = useBoardStore((state) => state.moveCategory);
 
 	if (text === undefined) {
 		return null;
@@ -95,7 +96,7 @@ export function CategoryHeader({ categoryKey, cardState, bodyId, nameRef, onEdit
 		<header className={mergeClasses(styles.header, collapsed && styles.collapsed, cardState ? frame.header[cardState] : undefined)}>
 			<div className={styles.titleRow}>
 				<span className={styles.control}>
-					<ReorderHandle categoryKey={categoryKey} name={name} />
+					<ReorderHandle itemKey={categoryKey} name={name} onMove={(move) => moveCategory(categoryKey, move)} />
 				</span>
 				<Tooltip content={toggleLabel} relationship="label">
 					<Button
