@@ -41,6 +41,7 @@ const DETAILS: CurrentOutputDetails = {
 	prompt: '1girl, red hair',
 	negativePrompt: 'lowres',
 	character: null,
+	story: null,
 };
 
 const RECORD = { output_id: '0000000002', prompt: '1girl, red hair' } as OutputRecord;
@@ -78,7 +79,7 @@ describe('OutputViewer toolbar', () => {
 		show(['0000000001', '0000000002', '0000000003'], '0000000002', RECORD);
 		renderWithProviders(<OutputViewer />);
 
-		for (const name of ['First output', 'Previous output', 'Next output', 'Last output', 'Copy prompt', 'Create character', 'Undo', 'Delete']) {
+		for (const name of ['First output', 'Previous output', 'Next output', 'Last output', 'Copy prompt', 'Create character', 'Add to story', 'Undo', 'Delete']) {
 			expect(button(name)).toBeInTheDocument();
 		}
 		expect(button(VIEWER_LABELS.detailsToggle)).toHaveAttribute('aria-pressed', 'true');
@@ -101,7 +102,7 @@ describe('OutputViewer toolbar', () => {
 		show([], null);
 		renderWithProviders(<OutputViewer />);
 
-		for (const name of ['First output', 'Previous output', 'Next output', 'Last output', 'Delete', 'Copy prompt', 'Create character', 'Undo']) {
+		for (const name of ['First output', 'Previous output', 'Next output', 'Last output', 'Delete', 'Copy prompt', 'Create character', 'Add to story', 'Undo']) {
 			expect(button(name)).toBeDisabled();
 		}
 		expect(within(toolbar()).getByText('— / 0')).toBeInTheDocument();
@@ -337,5 +338,22 @@ describe('OutputViewer details panel', () => {
 		vi.mocked(useCurrentOutputDetails).mockReturnValue(DETAILS);
 		renderWithProviders(<OutputViewer />);
 		expect(within(screen.getByLabelText('Output details', { selector: 'dl' })).queryByText('Character')).not.toBeInTheDocument();
+	});
+
+	it('shows the story scene an output was generated for', () => {
+		show(['0000000002'], '0000000002', RECORD);
+		vi.mocked(useCurrentOutputDetails).mockReturnValue({
+			...DETAILS,
+			story: { story_id: 'sty-000000000001', scene_id: 'scn-000000000001', story_title: 'The lighthouse', scene_title: 'The storm' },
+		});
+		const { unmount } = renderWithProviders(<OutputViewer />);
+
+		const list = within(screen.getByLabelText('Output details', { selector: 'dl' }));
+		expect(list.getByText('Story').nextElementSibling).toHaveTextContent('The lighthouse · The storm');
+		unmount();
+
+		vi.mocked(useCurrentOutputDetails).mockReturnValue(DETAILS);
+		renderWithProviders(<OutputViewer />);
+		expect(within(screen.getByLabelText('Output details', { selector: 'dl' })).queryByText('Story')).not.toBeInTheDocument();
 	});
 });

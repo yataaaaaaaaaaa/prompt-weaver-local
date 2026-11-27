@@ -1,6 +1,6 @@
 // Output domain: output id format, ordering/navigation over the ascending id list, the current-output
 // selection index and the details view model. Pure; state lives in src/stores/outputsStore.ts.
-import type { GenerationSelection, LoRASpec, OutputCharacter, OutputRecord } from '../api/types';
+import type { GenerationSelection, LoRASpec, OutputCharacter, OutputRecord, OutputStory } from '../api/types';
 import { categoryKeyOf, subPromptKeyOf, type CategoryKey, type SubPromptKey } from './categories';
 import { basename } from './paths';
 import { formatWeight } from './text';
@@ -152,6 +152,8 @@ export type CurrentOutputDetails = {
 	negativePrompt: string;
 	/** The character active for the output and how its reference images were used (null without one). */
 	character: OutputCharacter | null;
+	/** The story scene the output was generated for (null for other outputs). */
+	story: OutputStory | null;
 };
 
 /** Details shown by the output browser; LoRA ids missing from the library are shown as is (with their weight). */
@@ -172,7 +174,13 @@ export function outputDetails(record: OutputRecord, modelName: string, loras: re
 		prompt: record.prompt,
 		negativePrompt: record.negative_prompt,
 		character: record.character ?? null,
+		story: record.story ?? null,
 	};
+}
+
+/** Display text of an output's story scene: 'The lighthouse · The storm' (the titles when the output was made). */
+export function outputStoryText(story: Pick<OutputStory, 'story_title' | 'scene_title'>): string {
+	return `${story.story_title} · ${story.scene_title}`;
 }
 
 /** Display text of an output's character: 'Alice · references applied (strength 0.6, 2 images)', or

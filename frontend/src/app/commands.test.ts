@@ -240,6 +240,7 @@ describe('runCommand', () => {
 			'show-models': [spies.showSection, ['models', { focus: true }]],
 			'show-images': [spies.showSection, ['images', { focus: true }]],
 			'show-characters': [spies.showSection, ['characters', { focus: true }]],
+			'show-story': [spies.showSection, ['story', { focus: true }]],
 			'next-region': [spies.cycleRegion, [1]],
 			'previous-region': [spies.cycleRegion, [-1]],
 			find: [spies.focusSearch, []],

@@ -2,6 +2,8 @@
 // where section views are declared; the shell renders the rail and the section <main> from it.
 import type { FluentIcon } from '@fluentui/react-icons';
 import {
+	BookOpenFilled,
+	BookOpenRegular,
 	bundleIcon,
 	ImageSearchFilled,
 	ImageSearchRegular,
@@ -17,6 +19,7 @@ import type { SectionId } from '../app/sections';
 import { CharactersSection } from '../features/characters/CharactersSection';
 import { ImagesSection } from '../features/images/ImagesSection';
 import { ModelsSection } from '../features/models/ModelsSection';
+import { StorySection } from '../features/story/StorySection';
 import { CreateSection } from './CreateSection';
 
 export type SectionView = {
@@ -30,4 +33,5 @@ export const SECTION_VIEWS: Readonly<Record<SectionId, SectionView>> = {
 	models: { icon: bundleIcon(LibraryFilled, LibraryRegular), component: ModelsSection },
 	images: { icon: bundleIcon(ImageSearchFilled, ImageSearchRegular), component: ImagesSection },
 	characters: { icon: bundleIcon(PeopleFilled, PeopleRegular), component: CharactersSection },
+	story: { icon: bundleIcon(BookOpenFilled, BookOpenRegular), component: StorySection },
 };

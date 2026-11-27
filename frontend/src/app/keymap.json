@@ -5,6 +5,7 @@
 	{ "command": "show-models", "accelerator": "CommandOrControl+2", "label": "Show Models", "menu": true, "allowInEditable": true },
 	{ "command": "show-images", "accelerator": "CommandOrControl+3", "label": "Show Images", "menu": true, "allowInEditable": true },
 	{ "command": "show-characters", "accelerator": "CommandOrControl+4", "label": "Show Characters", "menu": true, "allowInEditable": true },
+	{ "command": "show-story", "accelerator": "CommandOrControl+5", "label": "Show Story", "menu": true, "allowInEditable": true },
 	{ "command": "next-region", "accelerator": "F6", "label": "Next region", "menu": false, "allowInEditable": true },
 	{ "command": "previous-region", "accelerator": "Shift+F6", "label": "Previous region", "menu": false, "allowInEditable": true },
 	{ "command": "find", "accelerator": "CommandOrControl+F", "label": "Search in this section", "menu": true, "allowInEditable": true },

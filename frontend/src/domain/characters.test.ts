@@ -2,12 +2,16 @@ import { describe, expect, it } from 'vitest';
 import { BOB, character } from '../test/characterData';
 import { makeCategory, type Category } from './categories';
 import {
+	appendNegativeTags,
+	castCategories,
+	castNegativePrompt,
 	CHARACTER_CATEGORY_NAME,
 	CHARACTER_OUTFIT_CATEGORY_NAME,
 	characterCategories,
 	characterGallery,
 	characterMatchesQuery,
 	characterNegativePrompt,
+	lockedCastSeed,
 	lockedCharacterSeed,
 } from './characters';
 
@@ -121,5 +125,35 @@ describe('lockedCharacterSeed', () => {
 		expect(lockedCharacterSeed(character({ seed: 1234, seed_locked: false }))).toBeNull();
 		expect(lockedCharacterSeed(character({ seed: null, seed_locked: true }))).toBeNull();
 		expect(lockedCharacterSeed(null)).toBeNull();
+	});
+});
+
+describe('casts (several characters)', () => {
+	const alice = character();
+	const user: Category[] = [makeCategory('Subject')];
+
+	it('pins the first character like the active one, the next ones numbered', () => {
+		const pinned = castCategories([alice, BOB], user);
+
+		expect(pinned.map((category) => category.text)).toEqual(['Character', 'Character outfit', 'Character 2']);
+		expect(pinned.map((category) => category.subPrompts[0].text)).toEqual(['1girl, silver hair, blue eyes', 'school uniform', '1boy, black hair']);
+		expect(castCategories([alice], user)).toEqual(characterCategories(alice, user));
+		expect(castCategories([], user)).toEqual([]);
+	});
+
+	it('keeps every pinned name unique against the user categories and the names before it', () => {
+		const pinned = castCategories([alice, BOB], [makeCategory('Character 2')]);
+
+		expect(pinned.map((category) => category.text)).toEqual(['Character', 'Character outfit', 'character-2-2']);
+	});
+
+	it('appends every character negative tag once, in cast order, and takes the first locked seed', () => {
+		const locked = character({ id: 'chr-000000000009', negative_tags: ['blurry', 'short hair'], seed: 99, seed_locked: true });
+
+		expect(castNegativePrompt('ugly', [alice, locked])).toBe('ugly, short hair, blurry');
+		expect(appendNegativeTags('ugly, blurry', ['Blurry', 'lowres', ''])).toBe('ugly, blurry, lowres');
+		expect(appendNegativeTags('ugly', [])).toBe('ugly');
+		expect(lockedCastSeed([alice, locked, character({ seed: 5, seed_locked: true })])).toBe(99);
+		expect(lockedCastSeed([alice, BOB])).toBeNull();
 	});
 });

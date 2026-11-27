@@ -14,6 +14,7 @@ import {
 	selectFilmstripIds,
 	selectLatestOutputId,
 	selectNavigation,
+	selectOutputIdSet,
 	useCurrentOutputDetails,
 	useCurrentSelectionKey,
 	useIsSubPromptInCurrentOutput,
@@ -229,6 +230,26 @@ describe('outputsStore generation, delete and restore', () => {
 
 		expect(outputs()).toMatchObject({ ids: [id(1), id(2)], currentId: id(2), record: generated, loadingRecord: false });
 		expect(backend.spies.getOutput).toHaveBeenCalledTimes(2);
+	});
+
+	it('addGenerated lists the output of a story scene without changing the output viewed', async () => {
+		fakeOutputsBackend([1, 3]);
+		await outputs().initialize([id(1), id(3)], id(1));
+		const record = outputs().record;
+
+		outputs().addGenerated(makeRecord(id(2)));
+
+		expect(outputs()).toMatchObject({ ids: [id(1), id(2), id(3)], currentId: id(1), record });
+	});
+
+	it('selectOutputIdSet answers the ids as a set, the same one while the list is unchanged', () => {
+		useOutputsStore.setState({ ids: [id(1), id(2)] });
+		const first = selectOutputIdSet(outputs());
+
+		expect([...first]).toEqual([id(1), id(2)]);
+		expect(selectOutputIdSet(outputs())).toBe(first);
+		useOutputsStore.setState({ ids: [id(1)] });
+		expect(selectOutputIdSet(outputs()).has(id(2))).toBe(false);
 	});
 
 	it('deleteCurrent trashes, shows the output now at the same index and pushes an undo entry', async () => {

@@ -32,6 +32,12 @@ import type {
 	RemoteModel,
 	ResolvedImageResource,
 	ResolveImageResourcesRequest,
+	SceneCreateRequest,
+	ScenePatch,
+	Story,
+	StoryCollection,
+	StoryCreateRequest,
+	StoryPatch,
 	TaskSnapshot,
 } from './types';
 
@@ -75,6 +81,8 @@ const storePath = (name: string) => ({ params: { path: { name } } });
 const providerPath = (provider: string) => ({ params: { path: { provider } } });
 const characterPath = (characterId: string) => ({ params: { path: { character_id: characterId } } });
 const characterImagePath = (characterId: string, imageId: string) => ({ params: { path: { character_id: characterId, image_id: imageId } } });
+const storyPath = (storyId: string) => ({ params: { path: { story_id: storyId } } });
+const scenePath = (storyId: string, sceneId: string) => ({ params: { path: { story_id: storyId, scene_id: sceneId } } });
 
 export const api = {
 	health: () => unwrap(http.GET('/api/health')),
@@ -160,6 +168,44 @@ export const api = {
 		unwrap(http.GET('/api/ip-adapters', { params: { query: { model_path: modelPath ?? undefined } }, signal })),
 	installIpAdapter: (variantId: string): Promise<IpAdapterInstallResponse> =>
 		unwrap(http.POST('/api/ip-adapters/{variant_id}/install', { params: { path: { variant_id: variantId } } })),
+
+	// Stories (backend app/routers/stories.py). Every scene change answers the whole story.
+	listStories: (): Promise<StoryCollection> => unwrap(http.GET('/api/stories')),
+	getStory: (storyId: string): Promise<Story> => unwrap(http.GET('/api/stories/{story_id}', storyPath(storyId))),
+	createStory: (request: StoryCreateRequest): Promise<Story> => unwrap(http.POST('/api/stories', { body: request })),
+	/** Only the fields of `patch` change. */
+	updateStory: (storyId: string, patch: StoryPatch): Promise<Story> =>
+		unwrap(http.PATCH('/api/stories/{story_id}', { ...storyPath(storyId), body: patch })),
+	deleteStory: async (storyId: string): Promise<void> => {
+		await unwrap(http.DELETE('/api/stories/{story_id}', storyPath(storyId)));
+	},
+	/** The story as one self-contained HTML document (illustrations embedded). */
+	exportStory: (storyId: string): Promise<string> =>
+		unwrap(http.GET('/api/stories/{story_id}/export', { ...storyPath(storyId), parseAs: 'text' })) as Promise<string>,
+	/** Every scene id of the story, in the new order. */
+	reorderScenes: (storyId: string, sceneIds: string[]): Promise<Story> =>
+		unwrap(http.PUT('/api/stories/{story_id}/scene-order', { ...storyPath(storyId), body: { scene_ids: sceneIds } })),
+	addScene: (storyId: string, request: SceneCreateRequest): Promise<Story> =>
+		unwrap(http.POST('/api/stories/{story_id}/scenes', { ...storyPath(storyId), body: request })),
+	/** Only the fields of `patch` change. */
+	updateScene: (storyId: string, sceneId: string, patch: ScenePatch): Promise<Story> =>
+		unwrap(http.PATCH('/api/stories/{story_id}/scenes/{scene_id}', { ...scenePath(storyId, sceneId), body: patch })),
+	deleteScene: (storyId: string, sceneId: string): Promise<Story> =>
+		unwrap(http.DELETE('/api/stories/{story_id}/scenes/{scene_id}', scenePath(storyId, sceneId))),
+	duplicateScene: (storyId: string, sceneId: string): Promise<Story> =>
+		unwrap(http.POST('/api/stories/{story_id}/scenes/{scene_id}/duplicate', scenePath(storyId, sceneId))),
+	/** Adds an existing output to the scene's variants; it becomes the chosen illustration. */
+	addSceneVariant: (storyId: string, sceneId: string, outputId: string): Promise<Story> =>
+		unwrap(http.POST('/api/stories/{story_id}/scenes/{scene_id}/variants', { ...scenePath(storyId, sceneId), body: { output_id: outputId } })),
+	chooseSceneVariant: (storyId: string, sceneId: string, outputId: string): Promise<Story> =>
+		unwrap(http.PUT('/api/stories/{story_id}/scenes/{scene_id}/chosen', { ...scenePath(storyId, sceneId), body: { output_id: outputId } })),
+	/** Removes a variant from the scene (the output is kept). */
+	removeSceneVariant: (storyId: string, sceneId: string, outputId: string): Promise<Story> =>
+		unwrap(
+			http.DELETE('/api/stories/{story_id}/scenes/{scene_id}/variants/{output_id}', {
+				params: { path: { story_id: storyId, scene_id: sceneId, output_id: outputId } },
+			}),
+		),
 };
 
 export type Api = typeof api;

@@ -56,6 +56,9 @@ export type OutputsActions = {
 	last: () => Promise<void>;
 	/** A finished generation: appends its id, makes it current with the returned record (no refetch). */
 	showGenerated: (record: OutputRecord) => void;
+	/** A finished generation shown elsewhere (a story scene's illustration): lists its id (filmstrip, Last) without
+	 *  changing the output being viewed. */
+	addGenerated: (record: OutputRecord) => void;
 	/** Moves the current output to the app trash, shows its neighbour and pushes {type:'delete-output'} to undo. */
 	deleteCurrent: () => Promise<void>;
 	/** Restores a trashed output and shows it (used by undo). Throws when the backend refuses, so the
@@ -212,6 +215,8 @@ export const useOutputsStore = create<OutputsStore>()(
 					}));
 				},
 
+				addGenerated: (record) => set((state) => ({ ids: insertOutputId(state.ids, record.output_id) })),
+
 				deleteCurrent: async () => {
 					const outputId = get().currentId;
 					if (outputId === null) {
@@ -279,6 +284,18 @@ export const selectNavigation = (state: OutputsState): OutputNavigation => {
  *  so a history of thousands of outputs never renders thousands of thumbnails. Use with useShallow (new array). */
 export const selectFilmstripIds = (state: OutputsState, radius: number = FILMSTRIP_RADIUS): string[] =>
 	outputIdWindow(state.ids, state.currentId, radius);
+
+const outputIdSetCache = new WeakMap<readonly string[], ReadonlySet<string>>();
+
+/** The output ids as a set (computed once per id list): which outputs exist on disk (story scene illustrations). */
+export const selectOutputIdSet = (state: OutputsState): ReadonlySet<string> => {
+	let ids = outputIdSetCache.get(state.ids);
+	if (!ids) {
+		ids = new Set(state.ids);
+		outputIdSetCache.set(state.ids, ids);
+	}
+	return ids;
+};
 
 /** The latest output id (the one "Jump to latest" shows), or null without outputs. */
 export const selectLatestOutputId = (state: OutputsState): string | null => state.ids[state.ids.length - 1] ?? null;

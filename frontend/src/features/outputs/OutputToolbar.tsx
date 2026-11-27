@@ -1,9 +1,9 @@
 // The output actions of the viewer (a Fluent Toolbar named 'Output actions'; arrow keys move between its buttons): the
 // output number and position, First / Previous / Next / Last, Copy prompt, Create character (prefilled from the output),
-// Undo, Delete (the red danger action: it moves the output to the app trash, Undo restores it) and the 'Output details'
+// Add to story (a menu of the stories: the output becomes a new scene), Undo, Delete (the red danger action: it moves the output to the app trash, Undo restores it) and the 'Output details'
 // toggle of the details panel (layout store). Icon-only buttons named by their action; the tooltips add what they do and
 // the keyboard shortcut (aria-keyshortcuts too). The toolbar wraps onto a second row in a narrow viewer.
-// Thin view over the outputs, undo, characters and layout stores.
+// Thin view over the outputs, undo, characters, story and layout stores.
 import { Body1Strong, Caption1, makeStyles, Toolbar, ToolbarButton, ToolbarDivider, ToolbarToggleButton, tokens, Tooltip } from '@fluentui/react-components';
 import {
 	ArrowNext20Regular,
@@ -20,6 +20,7 @@ import type { ReactElement } from 'react';
 import { useShallow } from 'zustand/react/shallow';
 import type { AppCommand } from '../../app/commands';
 import { useCharactersStore } from '../../stores/charactersStore';
+import { AddToStoryButton } from '../story/AddToStoryButton';
 import { useLayoutStore } from '../../stores/layoutStore';
 import { selectNavigation, useOutputsStore } from '../../stores/outputsStore';
 import { selectCanUndo, useUndoStore } from '../../stores/undoStore';
@@ -147,6 +148,7 @@ export function OutputToolbar(): JSX.Element {
 					disabled={!hasRecord}
 					onClick={() => startCreateFromOutput()}
 				/>
+				<AddToStoryButton />
 				<ActionButton label="Undo" icon={<ArrowUndo20Regular />} disabled={!canUndo} command="undo" onClick={() => void undo()} />
 				<ActionButton
 					label="Delete"

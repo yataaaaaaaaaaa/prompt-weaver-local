@@ -5,7 +5,7 @@
 //
 // Keyboard: the shell turns the navigation store's focus requests into DOM focus (src/shell/regionFocus.ts): F6 /
 // Shift+F6 move to the next / previous region on screen (the rail, then the shown section's regions, wrapping), Ctrl+F
-// to the shown section's search box, and a section shown from the keyboard (Ctrl+1..4) gets the focus on its first
+// to the shown section's search box, and a section shown from the keyboard (Ctrl+1..5) gets the focus on its first
 // region. A rail click keeps the focus on the rail.
 import { makeStyles, tokens } from '@fluentui/react-components';
 import { useEffect, useRef, type RefObject } from 'react';

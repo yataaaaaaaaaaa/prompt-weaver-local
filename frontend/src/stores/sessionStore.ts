@@ -23,6 +23,7 @@ import { useLibraryStore } from './libraryStore';
 import { useModelCatalogStore } from './modelCatalogStore';
 import { describeError, useNotificationsStore } from './notificationsStore';
 import { useOutputsStore } from './outputsStore';
+import { useStoryStore } from './storyStore';
 import { useTasksStore } from './tasksStore';
 
 export type SessionPhase = 'idle' | 'booting' | 'ready' | 'failed';
@@ -44,8 +45,8 @@ export type SessionActions = {
 	 *  4. useOutputsStore.initialize(payload.output_ids, persisted currentId ?? payload.current_output_id);
 	 *  5. useTasksStore.connect(), then useModelCatalogStore.resumeInstalls() in the background (fire and forget:
 	 *     never fails or delays boot); setPersistErrorHandler -> notifications; phase 'ready'.
-	 *  Right after step 2, useCharactersStore.load() starts in the background (fire and forget: it never fails or
-	 *  delays boot; a failure only sets the characters store's loadError, which the Characters section shows). */
+	 *  Right after step 2, useCharactersStore.load() and useStoryStore.load() start in the background (fire and forget:
+	 *  they never fail or delay boot; a failure only sets that store's loadError, which its section shows). */
 	start: () => Promise<void>;
 	/** After 'failed': resets and runs start() again. */
 	retry: () => Promise<void>;
@@ -152,8 +153,9 @@ export const useSessionStore = create<SessionStore>()((set, get) => ({
 				});
 				return;
 			}
-			// The backend-owned characters load meanwhile (load never rejects: failures stay in the characters store).
+			// The backend-owned characters and stories load meanwhile (load never rejects: failures stay in their store).
 			void useCharactersStore.getState().load();
+			void useStoryStore.getState().load();
 			setPersistErrorHandler(reportPersistError);
 			seedFromLegacy(payload);
 			const outputs = useOutputsStore.getState();

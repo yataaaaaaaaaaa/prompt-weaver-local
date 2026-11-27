@@ -3,6 +3,7 @@
 // comes from config/appConfig.cjs (single owner, honors the PROMPT_WEAVER_BACKEND_URL override set by the
 // launcher).
 const { app, BrowserWindow, Menu, dialog, ipcMain, nativeTheme, shell } = require('electron');
+const fs = require('node:fs/promises');
 const http = require('node:http');
 const path = require('node:path');
 const { spawn } = require('node:child_process');
@@ -10,6 +11,7 @@ const { backendUrl } = require('../../config/appConfig.cjs');
 const keymap = require('../src/app/keymap.json');
 const channels = require('./ipcChannels.cjs');
 const { installExternalLinkHandler } = require('./externalLinks.cjs');
+const { saveTextFile } = require('./saveTextFile.cjs');
 const { shortcutMenuItems } = require('./shortcutMenu.cjs');
 const { windowBackgroundColor } = require('./windowTheme.cjs');
 
@@ -167,6 +169,7 @@ async function pickPaths(options, defaultTitle, properties) {
 ipcMain.handle(channels.PICK_DIRECTORY, async (_event, options = {}) => (await pickPaths(options, 'Select folder', ['openDirectory']))[0] ?? null);
 ipcMain.handle(channels.PICK_FILE, async (_event, options = {}) => (await pickPaths(options, 'Select file', ['openFile']))[0] ?? null);
 ipcMain.handle(channels.PICK_FILES, (_event, options = {}) => pickPaths(options, 'Select files', ['openFile', 'multiSelections']));
+ipcMain.handle(channels.SAVE_TEXT_FILE, (_event, options = {}) => saveTextFile(dialog, fs, options));
 
 nativeTheme.on('updated', () => {
 	const color = windowBackgroundColor(nativeTheme.shouldUseDarkColors);

@@ -29,6 +29,12 @@
 //    OutputRecord.character.
 // 8. Names: a user category whose key is 'character' (or 'character-outfit') keeps its name; the pinned category is
 //    then renamed with uniqueKey ('character-2').
+// 9. Casts: a story scene can have several characters (src/domain/stories.ts). They take part in this order
+//    (castCategories, castNegativePrompt, lockedCastSeed): the first one exactly like the active character above, each
+//    further one with pinned categories 'Character <n>' / 'Character outfit <n>' (n = its position, from 2); their
+//    LoRAs follow in cast order (the first character naming a LoRA sets its weight), their negative tags are appended
+//    in cast order, the first locked seed wins, and only the first character's reference images apply
+//    (GenerateRequest.character_id).
 import type { Character } from '../api/types';
 import { categoryKeyOf, makeCategory, makeSubPrompt, type Category } from './categories';
 import { joinPromptTags, normalizeTagId, promptTagIds, splitPromptWords, textContains, uniqueKey } from './text';
@@ -76,14 +82,30 @@ export const CHARACTER_OUTFIT_CATEGORY_NAME = 'Character outfit';
  *  no activation text, state 'normal', no induced LoRAs (priority irrelevant: pinned categories are never sorted). A
  *  name whose key is taken by a user category is made unique with uniqueKey (src/domain/text.ts). [] for null. */
 export function characterCategories(character: CharacterGenerationInput | null, userCategories: readonly Category[]): Category[] {
-	if (!character) {
-		return [];
-	}
-	const takenKeys = new Set(userCategories.map((category) => categoryKeyOf(category.text)));
+	return character ? pinnedCategoriesOf(character, 1, categoryKeys(userCategories)) : [];
+}
+
+/** The pinned categories of a cast (rule 9): each character's (characterCategories for the first one; 'Character <n>'
+ *  / 'Character outfit <n>' for the n-th one), in cast order; every name unique against the user categories and the
+ *  names before it. [] for an empty cast. */
+export function castCategories(cast: readonly CharacterGenerationInput[], userCategories: readonly Category[]): Category[] {
+	const takenKeys = categoryKeys(userCategories);
+	return cast.flatMap((character, index) => pinnedCategoriesOf(character, index + 1, takenKeys));
+}
+
+function categoryKeys(categories: readonly Category[]): Set<string> {
+	return new Set(categories.map((category) => categoryKeyOf(category.text)));
+}
+
+/** The pinned categories of the character at 1-based cast `position` (names suffixed ' <position>' from 2), each
+ *  omitted when its tags are empty; a name whose key is in `takenKeys` is made unique with uniqueKey. Adds the names
+ *  used to `takenKeys`. */
+function pinnedCategoriesOf(character: CharacterGenerationInput, position: number, takenKeys: Set<string>): Category[] {
+	const suffix = position > 1 ? ` ${position}` : '';
 	const pinned: Category[] = [];
 	const parts: [string, readonly string[]][] = [
-		[CHARACTER_CATEGORY_NAME, character.identity_tags],
-		[CHARACTER_OUTFIT_CATEGORY_NAME, character.outfit_tags],
+		[`${CHARACTER_CATEGORY_NAME}${suffix}`, character.identity_tags],
+		[`${CHARACTER_OUTFIT_CATEGORY_NAME}${suffix}`, character.outfit_tags],
 	];
 	for (const [baseName, tags] of parts) {
 		const text = joinPromptTags(tags);
@@ -97,15 +119,12 @@ export function characterCategories(character: CharacterGenerationInput | null, 
 	return pinned;
 }
 
-/** `negativePrompt` followed by the character's negative tags that it does not contain yet (tag identity:
- *  normalizeTagId), joined with joinPromptTags. Unchanged for null or without new negative tags. */
-export function characterNegativePrompt(negativePrompt: string, character: CharacterGenerationInput | null): string {
-	if (!character) {
-		return negativePrompt;
-	}
+/** `negativePrompt` followed by the `tags` it does not contain yet (tag identity: normalizeTagId), joined with
+ *  joinPromptTags. Unchanged without new tags. The one negative-tag merge (characters, story scenes). */
+export function appendNegativeTags(negativePrompt: string, tags: readonly string[]): string {
 	const presentIds = promptTagIds(negativePrompt);
 	const added: string[] = [];
-	for (const tag of character.negative_tags) {
+	for (const tag of tags) {
 		const tagId = normalizeTagId(tag);
 		if (tagId && !presentIds.has(tagId)) {
 			presentIds.add(tagId);
@@ -115,7 +134,29 @@ export function characterNegativePrompt(negativePrompt: string, character: Chara
 	return added.length > 0 ? joinPromptTags([negativePrompt, ...added]) : negativePrompt;
 }
 
+/** `negativePrompt` followed by the character's negative tags that it does not contain yet (appendNegativeTags).
+ *  Unchanged for null or without new negative tags. */
+export function characterNegativePrompt(negativePrompt: string, character: CharacterGenerationInput | null): string {
+	return character ? appendNegativeTags(negativePrompt, character.negative_tags) : negativePrompt;
+}
+
+/** characterNegativePrompt of every character of the cast, in order. */
+export function castNegativePrompt(negativePrompt: string, cast: readonly CharacterGenerationInput[]): string {
+	return cast.reduce((prompt, character) => characterNegativePrompt(prompt, character), negativePrompt);
+}
+
 /** The image seed the character imposes: `seed` when seed_locked (and set), else null (no lock; null for null). */
 export function lockedCharacterSeed(character: CharacterGenerationInput | null): number | null {
 	return character?.seed_locked && character.seed != null ? character.seed : null;
+}
+
+/** The image seed a cast imposes: the first locked seed (lockedCharacterSeed) in cast order, else null. */
+export function lockedCastSeed(cast: readonly CharacterGenerationInput[]): number | null {
+	for (const character of cast) {
+		const seed = lockedCharacterSeed(character);
+		if (seed !== null) {
+			return seed;
+		}
+	}
+	return null;
 }

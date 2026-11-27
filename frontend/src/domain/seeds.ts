@@ -51,6 +51,13 @@ export function parseOptionalSeed(value: string): number | null {
 	return parseNumberText(value);
 }
 
+/** A seed field's text -> the non-negative integer seed the backend accepts (characters, story scenes); null when
+ *  empty or not such a number. */
+export function nonNegativeSeedOf(value: string): number | null {
+	const seed = parseOptionalSeed(value);
+	return seed !== null && Number.isSafeInteger(seed) && seed >= 0 ? seed : null;
+}
+
 export type SeedPlan = {
 	/** Seed sent with the request. */
 	requestSeed: number;

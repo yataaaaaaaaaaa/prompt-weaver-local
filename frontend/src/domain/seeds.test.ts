@@ -5,6 +5,7 @@ import {
 	IMAGE_SEED_BEHAVIORS,
 	isSeedBehavior,
 	makeRandomSeed,
+	nonNegativeSeedOf,
 	normalizeCategorySeedEntry,
 	parseOptionalSeed,
 	planSeed,
@@ -101,5 +102,16 @@ describe('per-category cycle entries', () => {
 		).toEqual({ main: { seed: 484998770, remaining: 2, prompt_count: 2 } });
 		expect(sanitizeCategorySeedState([])).toEqual({});
 		expect(sanitizeCategorySeedState(undefined)).toEqual({});
+	});
+});
+
+describe('nonNegativeSeedOf', () => {
+	it('reads the non-negative integers the backend accepts', () => {
+		expect(nonNegativeSeedOf(' 42 ')).toBe(42);
+		expect(nonNegativeSeedOf('0')).toBe(0);
+		expect(nonNegativeSeedOf('')).toBeNull();
+		expect(nonNegativeSeedOf('-1')).toBeNull();
+		expect(nonNegativeSeedOf('1.5')).toBeNull();
+		expect(nonNegativeSeedOf('abc')).toBeNull();
 	});
 });

@@ -11,8 +11,8 @@ import { CHARACTER_OUTFIT_CATEGORY_NAME } from './characters';
 import { clamp } from './guards';
 import { imageTags } from './imageLibrary';
 import { clampLoraWeight } from './loraSelection';
-import { parseOptionalSeed } from './seeds';
-import { joinPromptTags, splitPromptTags, toKey, uniqueKey } from './text';
+import { nonNegativeSeedOf } from './seeds';
+import { joinPromptTags, splitPromptTags, uniqueDisplayName } from './text';
 import type {
 	Character,
 	CharacterDraft,
@@ -70,12 +70,9 @@ export function emptyCharacterValues(name: string): CharacterValues {
 /** Default name of a manually created character. */
 export const NEW_CHARACTER_NAME = 'New character';
 
-/** Name of a new character: 'New character', else 'New character 2', 3, ... (the first one whose key, toKey, no
- *  character uses: the suffixes of uniqueKey, src/domain/text.ts). */
+/** Name of a new character: 'New character', else 'New character 2', 3, ... (uniqueDisplayName, src/domain/text.ts). */
 export function newCharacterName(characters: readonly Pick<Character, 'name'>[]): string {
-	const baseKey = toKey(NEW_CHARACTER_NAME);
-	const key = uniqueKey(NEW_CHARACTER_NAME, characters.map((character) => toKey(character.name)));
-	return key === baseKey ? NEW_CHARACTER_NAME : `${NEW_CHARACTER_NAME} ${key.slice(baseKey.length + 1)}`;
+	return uniqueDisplayName(NEW_CHARACTER_NAME, characters.map((character) => character.name));
 }
 
 /** A usable IP-Adapter strength: clamped to REFERENCE_DEFAULTS.min..max (the backend's accepted range); a
@@ -130,11 +127,10 @@ export function characterFormErrors(form: CharacterForm): CharacterFormErrors {
 	return errors;
 }
 
-/** The seed of the form's seed field (parseOptionalSeed of src/domain/seeds.ts, restricted to the non-negative
- *  integers the backend accepts); null when empty or invalid. */
+/** The seed of the form's seed field (nonNegativeSeedOf of src/domain/seeds.ts: the non-negative integers the backend
+ *  accepts); null when empty or invalid. */
 export function characterSeedOf(seedText: string): number | null {
-	const seed = parseOptionalSeed(seedText);
-	return seed !== null && Number.isSafeInteger(seed) && seed >= 0 ? seed : null;
+	return nonNegativeSeedOf(seedText);
 }
 
 /** The values of a valid form (call when characterFormErrors is empty): name trimmed, tags split with

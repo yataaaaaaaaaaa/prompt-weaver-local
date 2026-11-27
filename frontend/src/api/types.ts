@@ -107,6 +107,24 @@ export type IpAdapterFileRole = IpAdapterFile['role'];
 export type ReferenceSupport = Schemas['ReferenceSupport'];
 export type IpAdapterInstallResponse = Schemas['IpAdapterInstallResponse'];
 
+// Stories (backend-owned illustrated storyboards, /api/stories)
+export type Story = Schemas['Story'];
+export type StoryCollection = Schemas['StoryCollection'];
+export type StoryCreateRequest = Schemas['StoryCreateRequest'];
+/** Only the fields sent change (PATCH /api/stories/{story_id}). */
+export type StoryPatch = Schemas['StoryPatch'];
+export type Scene = Schemas['Scene'];
+/** A sub-prompt chosen for one scene (pinned like the characters' tags, src/domain/stories.ts). */
+export type SceneLock = Schemas['SceneLock'];
+export type SceneVariant = Schemas['SceneVariant'];
+export type SceneCreateRequest = Schemas['SceneCreateRequest'];
+/** Only the fields sent change (PATCH /api/stories/{story_id}/scenes/{scene_id}); character_ids and seed accept null. */
+export type ScenePatch = Schemas['ScenePatch'];
+/** The story scene a generation illustrates (GenerateRequest.story). */
+export type StoryLink = Schemas['StoryLink'];
+/** The story scene an output was generated for (OutputRecord.story). */
+export type OutputStory = Schemas['OutputStory'];
+
 // Persisted stores / bootstrap
 export type PersistedStoreEnvelope = Schemas['PersistedStoreEnvelope-Output'];
 export type PersistedStoreEnvelopeInput = Schemas['PersistedStoreEnvelope-Input'];

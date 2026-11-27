@@ -1,13 +1,13 @@
 // The 'Output details' list of the viewer's Details tab: number and position, image name, size, steps, CFG, seed, prompt
 // seed, model, the LoRAs with their weights (one per line; a long name is truncated with its full text in a tooltip, the
-// weight always stays visible), the character, then the prompt and negative prompt. Thin view over the outputs store
-// (useCurrentOutputDetails, selectNavigation).
+// weight always stays visible), the story scene, the character, then the prompt and negative prompt. Thin view over the
+// outputs store (useCurrentOutputDetails, selectNavigation).
 import { makeStyles, Spinner, tokens, Tooltip } from '@fluentui/react-components';
 import { DocumentTextRegular } from '@fluentui/react-icons';
 import type { ReactNode } from 'react';
 import { useShallow } from 'zustand/react/shallow';
 import { weightedLoraParts, weightedLoraText } from '../../domain/loraSelection';
-import { outputCharacterText } from '../../domain/outputs';
+import { outputCharacterText, outputStoryText } from '../../domain/outputs';
 import { selectNavigation, useCurrentOutputDetails, useOutputsStore } from '../../stores/outputsStore';
 import { EmptyState } from '../../ui/EmptyState';
 import { FactList } from '../../ui/FactList';
@@ -89,6 +89,9 @@ export function OutputDetailsList(): JSX.Element {
 			),
 		],
 	];
+	if (details.story) {
+		rows.push(['Story', outputStoryText(details.story)]);
+	}
 	if (details.character) {
 		rows.push(['Character', outputCharacterText(details.character)]);
 	}

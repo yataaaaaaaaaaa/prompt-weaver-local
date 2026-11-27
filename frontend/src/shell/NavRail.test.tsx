@@ -57,12 +57,14 @@ describe('NavRail', () => {
 		expect(item('Models')).toHaveAttribute('aria-current', 'false');
 	});
 
-	it('describes each section and its Ctrl+1..4 shortcut', () => {
+	it('describes each section and its Ctrl+1..5 shortcut', () => {
 		renderWithProviders(<NavRail />);
 
 		expect(item('Create')).toHaveAttribute('aria-description', SECTION_DESCRIPTIONS.create);
 		expect(item('Create')).toHaveAttribute('aria-keyshortcuts', 'Control+1');
 		expect(item('Characters')).toHaveAttribute('aria-keyshortcuts', 'Control+4');
+		expect(item('Story')).toHaveAttribute('aria-keyshortcuts', 'Control+5');
+		expect(item('Story')).toHaveAttribute('aria-description', SECTION_DESCRIPTIONS.story);
 	});
 
 	it('shows a section when its item is clicked, and keeps the focus on the rail', async () => {

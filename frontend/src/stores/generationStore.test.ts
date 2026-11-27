@@ -4,11 +4,12 @@ import { api, ApiError } from '../api/client';
 import { LORA_WEIGHT_DEFAULTS } from '../api/defaults.gen';
 import type { GenerateRequest, LoRASpec, ModelSpec, OutputRecord } from '../api/types';
 import type { Category } from '../domain/categories';
+import type { SceneGenerationInput } from '../domain/stories';
 import { ALICE_ID, BOB, character } from '../test/characterData';
 import { useCategoriesStore } from './categoriesStore';
 import { useCharactersStore } from './charactersStore';
 import { useGenerationSettingsStore } from './generationSettingsStore';
-import { GENERATION_FAILED_TITLE, useCanGenerate, useCanToggleContinuous, useGenerationStore } from './generationStore';
+import { GENERATION_BUSY_MESSAGE, GENERATION_FAILED_TITLE, isAbortError, useCanGenerate, useCanToggleContinuous, useGenerationStore } from './generationStore';
 import { useLibraryStore } from './libraryStore';
 import { useNotificationsStore } from './notificationsStore';
 import { useOutputsStore } from './outputsStore';
@@ -349,5 +350,66 @@ describe('useCanToggleContinuous', () => {
 		expect(result.current).toBe(true);
 		act(() => useLibraryStore.setState({ selectedModelId: '' }));
 		expect(result.current).toBe(true);
+	});
+});
+
+describe('generateScene', () => {
+	const SCENE: SceneGenerationInput = {
+		storyId: 'sty-000000000001',
+		sceneId: 'scn-000000000001',
+		cast: [BOB],
+		locks: [],
+		extraTags: ['storm'],
+		negativeTags: [],
+		seed: 77,
+	};
+
+	it("sends the scene's request through the same path, lists the output and leaves the seeds, the viewer and undo alone", async () => {
+		const { showGenerated, push } = setup();
+		const addGenerated = vi.fn();
+		useOutputsStore.setState({ addGenerated });
+		useCharactersStore.setState({ characters: [character()], activeId: ALICE_ID });
+		const generate = vi.spyOn(api, 'generate').mockImplementation(async (request) => record(request, '0000000009'));
+
+		const saved = await store().generateScene(SCENE);
+
+		const [request, signal] = generate.mock.calls[0];
+		expect(request).toMatchObject({
+			prompt: '1boy, black hair, storm, 1girl, smile',
+			seed: 77,
+			prompt_seed: 5,
+			character_id: BOB.id,
+			story: { story_id: 'sty-000000000001', scene_id: 'scn-000000000001' },
+		});
+		expect(signal).toBeInstanceOf(AbortSignal);
+		expect(saved.output_id).toBe('0000000009');
+		expect(addGenerated).toHaveBeenCalledWith(saved);
+		expect(showGenerated).not.toHaveBeenCalled();
+		expect(push).not.toHaveBeenCalled();
+		expect(useGenerationSettingsStore.getState()).toMatchObject({ seedInput: '10', promptSeedInput: '5' });
+		expect(store().generating).toBe(false);
+	});
+
+	it('refuses while another generation runs, and rejects with the failure (the caller reports it)', async () => {
+		setup();
+		useGenerationStore.setState({ generating: true });
+		await expect(store().generateScene(SCENE)).rejects.toThrow(GENERATION_BUSY_MESSAGE);
+
+		useGenerationStore.setState({ generating: false });
+		vi.spyOn(api, 'generate').mockRejectedValue(new ApiError('Generation failed: out of memory', 409, null));
+		await expect(store().generateScene(SCENE)).rejects.toThrow('out of memory');
+		expect(notifications()).toEqual([]);
+		expect(store().generating).toBe(false);
+	});
+
+	it('is cancelled by cancel (an AbortError)', async () => {
+		const { cancelGeneration } = setup();
+		vi.spyOn(api, 'generate').mockImplementation((_request, signal) => untilAborted(signal));
+
+		const running = store().generateScene(SCENE);
+		await store().cancel();
+
+		await expect(running).rejects.toSatisfy(isAbortError);
+		expect(cancelGeneration).toHaveBeenCalled();
 	});
 });

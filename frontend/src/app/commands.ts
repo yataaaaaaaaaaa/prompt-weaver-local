@@ -18,6 +18,7 @@ export const APP_COMMANDS = [
 	'show-models',
 	'show-images',
 	'show-characters',
+	'show-story',
 	'next-region',
 	'previous-region',
 	'find',
@@ -201,7 +202,7 @@ export const COMMAND_DEDUPE_MS = 200;
 export type CommandSource = 'keyboard' | 'menu';
 
 const showSection = (section: SectionId) => useNavigationStore.getState().showSection(section);
-/** Ctrl+1..4 and the menu: show the section and move the keyboard focus into it (its first region). */
+/** Ctrl+1..5 and the menu: show the section and move the keyboard focus into it (its first region). */
 const openSection = (section: SectionId) => useNavigationStore.getState().showSection(section, { focus: true });
 const isCreateShown = () => useNavigationStore.getState().section === 'create';
 
@@ -212,6 +213,7 @@ const COMMAND_HANDLERS: Record<AppCommand, () => unknown> = {
 	'show-models': () => openSection('models'),
 	'show-images': () => openSection('images'),
 	'show-characters': () => openSection('characters'),
+	'show-story': () => openSection('story'),
 	'next-region': () => useNavigationStore.getState().cycleRegion(1),
 	'previous-region': () => useNavigationStore.getState().cycleRegion(-1),
 	find: () => useNavigationStore.getState().focusSearch(),

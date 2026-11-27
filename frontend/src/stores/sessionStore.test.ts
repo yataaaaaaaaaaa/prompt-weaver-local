@@ -5,6 +5,7 @@ import type { AppState, BootstrapResponse, CharacterCollection, OutputRecord } f
 import { flushPersistence } from '../persistence/persist';
 import { createMemoryStoreBackend, setStoreBackend, type StoreBackend } from '../persistence/storeBackend';
 import { BOB, BOB_ID, characterCollection } from '../test/characterData';
+import { story, storyCollection } from '../test/storyData';
 import { useCategoriesStore } from './categoriesStore';
 import { useCharactersStore } from './charactersStore';
 import { useForbiddenRulesStore } from './forbiddenRulesStore';
@@ -14,6 +15,7 @@ import { useModelCatalogStore } from './modelCatalogStore';
 import { useNotificationsStore } from './notificationsStore';
 import { useOutputsStore } from './outputsStore';
 import { BOOTSTRAP_TIMEOUT_MS, useSessionStore } from './sessionStore';
+import { useStoryStore } from './storyStore';
 import { useTasksStore } from './tasksStore';
 import { useBoardStore } from './boardStore';
 import { useLayoutStore } from './layoutStore';
@@ -108,8 +110,9 @@ beforeEach(() => {
 	vi.spyOn(api, 'getOutput').mockImplementation(async (outputId) => record(outputId));
 	// No download running in the backend (resumeInstalls at boot).
 	vi.spyOn(api, 'listInstalls').mockResolvedValue([]);
-	// No character yet (loaded in the background at boot).
+	// No character and no story yet (loaded in the background at boot).
 	vi.spyOn(api, 'listCharacters').mockResolvedValue(characterCollection([]));
+	vi.spyOn(api, 'listStories').mockResolvedValue(storyCollection([]));
 });
 
 afterEach(() => {
@@ -416,6 +419,33 @@ describe('sessionStore.start: characters', () => {
 
 		expect(session().phase).toBe('failed');
 		expect(api.listCharacters).not.toHaveBeenCalled();
+	});
+});
+
+describe('sessionStore.start: stories', () => {
+	it('loads the stories in the background and selects the first one', async () => {
+		vi.spyOn(api, 'bootstrap').mockResolvedValue(payload());
+		spyOnSeeding();
+		vi.mocked(api.listStories).mockResolvedValue(storyCollection([story()]));
+
+		await session().start();
+		await new Promise((resolve) => setTimeout(resolve, 0));
+
+		expect(api.listStories).toHaveBeenCalledTimes(1);
+		expect(useStoryStore.getState()).toMatchObject({ stories: [story()], loadStatus: 'ready', selectedStoryId: story().id });
+	});
+
+	it('does not fail boot when the stories cannot be read', async () => {
+		vi.spyOn(api, 'bootstrap').mockResolvedValue(payload());
+		spyOnSeeding();
+		vi.mocked(api.listStories).mockRejectedValue(new Error('stories.json is corrupt'));
+
+		await session().start();
+		await new Promise((resolve) => setTimeout(resolve, 0));
+
+		expect(session()).toMatchObject({ phase: 'ready', bootError: null });
+		expect(useStoryStore.getState()).toMatchObject({ loadStatus: 'failed', loadError: 'stories.json is corrupt' });
+		expect(useNotificationsStore.getState().notifications).toEqual([]);
 	});
 });
 

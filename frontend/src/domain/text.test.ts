@@ -18,6 +18,7 @@ import {
 	splitPromptWords,
 	textContains,
 	toKey,
+	uniqueDisplayName,
 	uniqueKey,
 	uniqueStrings,
 } from './text';
@@ -145,5 +146,13 @@ describe('formatWeight', () => {
 		expect(formatWeight(-1.25)).toBe('-1.25');
 		expect(formatWeight(0.1 + 0.2)).toBe('0.3');
 		expect(formatWeight(0.333333)).toBe('0.33');
+	});
+});
+
+describe('uniqueDisplayName', () => {
+	it('keeps the base name when free, else numbers it like uniqueKey', () => {
+		expect(uniqueDisplayName('New story', [])).toBe('New story');
+		expect(uniqueDisplayName('New story', ['new story'])).toBe('New story 2');
+		expect(uniqueDisplayName('New story', ['New story', 'New-Story 2'])).toBe('New story 3');
 	});
 });

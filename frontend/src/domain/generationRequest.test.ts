@@ -14,6 +14,7 @@ import {
 	type GenerationSettings,
 } from './generationRequest';
 import { PromptSelectionError } from './promptEngine';
+import type { SceneGenerationInput } from './stories';
 
 const MODEL: ModelSpec = { id: 'model', name: 'model.safetensors', path: 'D:/m/model.safetensors', default_width: 1024, default_height: 1024, torch_dtype: 'float16', source: null };
 const LORAS: LoRASpec[] = [
@@ -92,6 +93,7 @@ describe('buildGenerationRequest', () => {
 			seed: 200,
 			negative_prompt: 'ugly',
 			character_id: null,
+			story: null,
 		});
 		expect(nextCategorySeedState).toBe(SETTINGS.promptCategorySeedState);
 		expect(missingLoraIds).toEqual(['deleted', 'gone']);
@@ -182,6 +184,7 @@ describe('buildGenerationRequest with an active character', () => {
 			seed: 4242,
 			negative_prompt: 'ugly, short hair',
 			character_id: ALICE_ID,
+			story: null,
 		});
 		expect(nextCategorySeedState).toBe(SETTINGS.promptCategorySeedState);
 		expect(missingLoraIds).toEqual(['missing-character-lora', 'deleted', 'gone']);
@@ -224,6 +227,75 @@ describe('buildGenerationRequest with an active character', () => {
 		expect(withCharacter.request.prompt_seed).toBe(without.request.prompt_seed);
 		expect(withCharacter.nextCategorySeedState).toEqual(without.nextCategorySeedState);
 		expect(Object.keys(withCharacter.nextCategorySeedState)).toEqual(['main', 'empty-text', 'style']);
+	});
+});
+
+describe('buildGenerationRequest with a story scene', () => {
+	const ALICE = character({ loras: [{ id: 'style', weight: 0.3 }], negative_tags: ['short hair'], seed: 4242, seed_locked: false });
+	const SCENE: SceneGenerationInput = {
+		storyId: 'sty-000000000001',
+		sceneId: 'scn-000000000001',
+		cast: [ALICE, BOB],
+		locks: [{ category_name: 'Style', prompt_text: 'watercolor' }],
+		extraTags: ['storm', 'night'],
+		negativeTags: ['sunny', 'UGLY'],
+		seed: null,
+	};
+
+	it("pins the scene's cast, locks and tags, names the scene, and keeps the selected LoRAs", () => {
+		vi.spyOn(Math, 'random').mockReturnValue(0.5);
+		// The active character is ignored: the scene's cast replaces it.
+		const { request, nextCategorySeedState } = buildGenerationRequest(inputs({ character: character({ id: 'chr-000000000777' }), scene: SCENE }));
+
+		expect(request.selections?.map((item) => [item.category_name, item.prompt_text, item.locked])).toEqual([
+			['Character', '1girl, silver hair, blue eyes', true],
+			['Character outfit', 'school uniform', true],
+			['Character 2', '1boy, black hair', true],
+			// The lock replaces the user category 'Style' (its 'oil painting' is not picked).
+			['Style', 'watercolor', true],
+			['Scene', 'storm, night', true],
+			['Main', '1girl, smile', true],
+			['Empty text', '', false],
+		]);
+		expect(request.prompt).toBe('1girl, silver hair, blue eyes, school uniform, 1boy, black hair, watercolor, storm, night, 1girl, smile');
+		expect(request.loras).toEqual([
+			{ ...LORAS[0], weight: 0.3 },
+			{ ...LORAS[1], weight: 0.6 },
+		]);
+		expect(request.negative_prompt).toBe('ugly, short hair, sunny');
+		expect(request.character_id).toBe(ALICE_ID);
+		expect(request.story).toEqual({ story_id: 'sty-000000000001', scene_id: 'scn-000000000001' });
+		// The prompt seed field is fixed at 100: the scene uses it; the image seed is a new random one.
+		expect(request.prompt_seed).toBe(100);
+		expect(request.seed).toBe(1073741824);
+		expect(nextCategorySeedState).toBe(SETTINGS.promptCategorySeedState);
+	});
+
+	it("uses the scene's fixed seed, else the cast's locked seed", () => {
+		expect(buildGenerationRequest(inputs({ scene: { ...SCENE, seed: 7 } }))).toMatchObject({ request: { seed: 7 }, imageSeedLocked: true });
+		const locked = { ...SCENE, cast: [{ ...ALICE, seed_locked: true }] };
+		expect(buildGenerationRequest(inputs({ scene: locked })).request.seed).toBe(4242);
+		expect(buildGenerationRequest(inputs({ scene: { ...locked, seed: 7 } })).request.seed).toBe(7);
+	});
+
+	it('a scene without characters has none, even with an active character', () => {
+		const { request } = buildGenerationRequest(inputs({ character: ALICE, scene: { ...SCENE, cast: [], locks: [], extraTags: [] } }));
+
+		expect(request.character_id).toBeNull();
+		expect(request.selections?.map((item) => item.category_name)).toEqual(['Main', 'Empty text', 'Style']);
+	});
+
+	it('never reads nor advances the per-category cycle counters', () => {
+		const settings: GenerationSettings = {
+			...SETTINGS,
+			promptSeedBehavior: 'per_category_cycle',
+			promptCategorySeedState: { main: { seed: 3, remaining: 1, prompt_count: 1 } },
+		};
+		vi.spyOn(Math, 'random').mockReturnValue(0.25);
+		const { request, nextCategorySeedState } = buildGenerationRequest(inputs({ settings, scene: { ...SCENE, locks: [] } }));
+
+		expect(request.prompt_seed).toBe(536870912);
+		expect(nextCategorySeedState).toBe(settings.promptCategorySeedState);
 	});
 });
 

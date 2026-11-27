@@ -1,11 +1,11 @@
 // THE single owner of the app's navigation vocabulary: the task sections of the navigation rail (Create, Models,
-// Images, Characters), the docked regions of the Create section, and the accessible names of the shell landmarks.
+// Images, Characters, Story), the docked regions of the Create section, and the accessible names of the shell landmarks.
 // Views render these names (the shell, the section views), the stores use the ids (navigationStore, layoutStore),
 // and the e2e suite (frontend/e2e/support/app.ts) finds the landmarks by these names: a rename fails everywhere at
 // once. Pure data (no React, no icons) so the Node-side e2e helpers can import it.
 
-/** The task sections, in navigation rail order (Ctrl+1..4). */
-export const SECTION_IDS = ['create', 'models', 'images', 'characters'] as const;
+/** The task sections, in navigation rail order (Ctrl+1..5). */
+export const SECTION_IDS = ['create', 'models', 'images', 'characters', 'story'] as const;
 export type SectionId = (typeof SECTION_IDS)[number];
 
 /** The section's name: the rail item's accessible name and the section <main> landmark's accessible name. */
@@ -14,6 +14,7 @@ export const SECTION_LABELS: Readonly<Record<SectionId, string>> = {
 	models: 'Models',
 	images: 'Images',
 	characters: 'Characters',
+	story: 'Story',
 };
 
 /** What each section is for (rail item tooltips). */
@@ -22,6 +23,7 @@ export const SECTION_DESCRIPTIONS: Readonly<Record<SectionId, string>> = {
 	models: 'Find, download and pick checkpoints, LoRAs and embeddings',
 	images: 'Find online images and reuse their LoRAs, tags and checkpoint',
 	characters: 'Keep the same character across generations',
+	story: 'Illustrate a story scene by scene and read it as a picture book',
 };
 
 /** The app command (src/app/commands.ts, keymap.json) that shows each section. */
@@ -30,6 +32,7 @@ export const SECTION_COMMANDS = {
 	models: 'show-models',
 	images: 'show-images',
 	characters: 'show-characters',
+	story: 'show-story',
 } as const satisfies Readonly<Record<SectionId, string>>;
 
 /** The section shown at startup. */

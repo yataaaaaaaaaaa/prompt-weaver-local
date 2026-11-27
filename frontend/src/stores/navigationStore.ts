@@ -1,8 +1,8 @@
-// Navigation store: single truth holder of which task section is shown (Create, Models, Images, Characters; ids and
+// Navigation store: single truth holder of which task section is shown (Create, Models, Images, Characters, Story; ids and
 // names in src/app/sections.ts), of the sections visited so far (a section view mounts on its first visit and then
 // stays mounted, hidden, so its scroll position and focus survive) and of the keyboard focus requests the shell turns
 // into DOM focus: F6 / Shift+F6 region cycling, Ctrl+F (focus the shown section's search box) and the focus move of a
-// section shown from the keyboard (Ctrl+1..4: the section's first region; a rail click keeps the focus on the rail).
+// section shown from the keyboard (Ctrl+1..5: the section's first region; a rail click keeps the focus on the rail).
 // Not persisted: the app always starts on DEFAULT_SECTION.
 //
 // Cross-store hand-offs go through here: "Create character" opens the Characters section
@@ -26,7 +26,7 @@ export type NavigationState = {
 	regionCycle: FocusRequest<RegionCycleDirection> | null;
 	/** The last Ctrl+F press; the shell focuses the shown section's search box (SECTION_SEARCH_ATTRIBUTE). */
 	searchFocus: FocusRequest<SectionId> | null;
-	/** The last section shown with `{ focus: true }` (Ctrl+1..4, the Electron menu); the shell focuses its first region
+	/** The last section shown with `{ focus: true }` (Ctrl+1..5, the Electron menu); the shell focuses its first region
 	 *  (F6_REGION_ATTRIBUTE). */
 	sectionFocus: FocusRequest<SectionId> | null;
 };

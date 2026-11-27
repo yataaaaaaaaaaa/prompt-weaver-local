@@ -42,6 +42,14 @@ export function uniqueKey(base: string, existingKeys: Iterable<string>): string 
 	return `${initial}-${counter}`;
 }
 
+/** A display name unique among `names` (by key, toKey): `baseName` itself when free, else '<baseName> 2', 3, ... (the
+ *  suffixes of uniqueKey). New characters, new stories. */
+export function uniqueDisplayName(baseName: string, names: Iterable<string>): string {
+	const baseKey = toKey(baseName);
+	const key = uniqueKey(baseName, Array.from(names, (name) => toKey(name)));
+	return key === baseKey ? baseName : `${baseName} ${key.slice(baseKey.length + 1)}`;
+}
+
 /** Unique values in first-occurrence order (id lists). */
 export function uniqueStrings(values: Iterable<string>): string[] {
 	return Array.from(new Set(values));

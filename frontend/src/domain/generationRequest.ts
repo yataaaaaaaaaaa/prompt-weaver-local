@@ -1,14 +1,16 @@
 // Generation request building: categories + forbidden rules + generation settings
-// + library + active character -> the GenerateRequest sent to the backend, and the seed settings after the generation.
-// Pure module; the generation store snapshots the stores and calls it. The character's precedence is documented in
-// src/domain/characters.ts.
+// + library + active character (or a story scene) -> the GenerateRequest sent to the backend, and the seed settings
+// after the generation. THE prompt builder of the app: Create's generations and story scenes' illustrations both go
+// through buildGenerationRequest. Pure module; the generation store snapshots the stores and calls it. The character's
+// precedence is documented in src/domain/characters.ts, a scene's in src/domain/stories.ts.
 import { GENERATION_DEFAULTS } from '../api/defaults.gen';
 import type { ForbiddenRule, GenerateRequest, GenerationDefaults, GenerationSelection, OutputRecord } from '../api/types';
 import type { Category } from './categories';
-import { characterCategories, characterNegativePrompt, lockedCharacterSeed, type CharacterGenerationInput } from './characters';
+import { appendNegativeTags, castCategories, castNegativePrompt, lockedCastSeed, type CharacterGenerationInput } from './characters';
 import type { LibraryData } from './library';
 import { filterSelectionLoraIds, makeLoraMap, resolveLoraSelection } from './loraSelection';
 import { selectPrompts, selectPromptsWithCategoryCycle } from './promptEngine';
+import { scenePinnedCategories, type SceneGenerationInput } from './stories';
 import {
 	IMAGE_SEED_BEHAVIORS,
 	isSeedBehavior,
@@ -67,8 +69,11 @@ export type GenerationInputs = {
 	rules: readonly ForbiddenRule[];
 	settings: GenerationSettings;
 	library: Pick<LibraryData, 'models' | 'loras' | 'selectedModelId' | 'selectedLoras'>;
-	/** The active character (null / absent: none). */
+	/** The active character (null / absent: none). Ignored with `scene` (the scene's cast replaces it). */
 	character?: CharacterGenerationInput | null;
+	/** A story scene to illustrate (src/domain/stories.ts): its cast, locks, tags and seed take part as documented
+	 *  there, and the request names it (GenerateRequest.story). */
+	scene?: SceneGenerationInput | null;
 };
 
 export type BuiltGenerationRequest = {
@@ -78,7 +83,8 @@ export type BuiltGenerationRequest = {
 	/** LoRA ids requested by the character, the selection or the selected sub-prompts but absent from the library
 	 *  (ignored). */
 	missingLoraIds: string[];
-	/** The character's seed lock replaced the image seed (nextSeedSnapshot then leaves the image seed field as is). */
+	/** The character's seed lock (or the scene's fixed seed) replaced the image seed (nextSeedSnapshot then leaves the
+	 *  image seed field as is). */
 	imageSeedLocked: boolean;
 };
 
@@ -89,8 +95,9 @@ function isCycle(settings: Pick<GenerationSettings, 'promptSeedBehavior'>): bool
 /** Throws (Error / PromptSelectionError) when no model is selected or no prompt can be selected. The active character
  *  takes part as documented in src/domain/characters.ts: its pinned categories (built against the user categories)
  *  are selected first, its LoRAs come first, its negative tags are appended and its locked seed replaces the image
- *  seed. */
-export function buildGenerationRequest({ categories, rules, settings, library, character = null }: GenerationInputs): BuiltGenerationRequest {
+ *  seed. With `scene`, the scene's cast replaces the active character and its overrides take part as documented in
+ *  src/domain/stories.ts (pinned locks and tags, negative tags, its seed rules, GenerateRequest.story). */
+export function buildGenerationRequest({ categories, rules, settings, library, character = null, scene = null }: GenerationInputs): BuiltGenerationRequest {
 	if (!library.selectedModelId) {
 		throw new Error('Select a model before generating.');
 	}
@@ -99,26 +106,37 @@ export function buildGenerationRequest({ categories, rules, settings, library, c
 		throw new Error(`Unknown model '${library.selectedModelId}'.`);
 	}
 
-	const pinned = characterCategories(character, categories);
-	const lockedSeed = lockedCharacterSeed(character);
-	const imageSeed = lockedSeed ?? planSeed(settings.imageSeedBehavior, settings.seedInput).requestSeed;
+	const cast: readonly CharacterGenerationInput[] = scene ? scene.cast : character ? [character] : [];
+	const { pinned, userCategories } = scene
+		? scenePinnedCategories(scene, categories)
+		: { pinned: castCategories(cast, categories), userCategories: categories };
+	const lockedSeed = scene?.seed ?? lockedCastSeed(cast);
+	// A scene without a fixed or locked seed gets a new random image seed (every regeneration is a new variant).
+	const imageSeed = lockedSeed ?? planSeed(scene ? 'randomize' : settings.imageSeedBehavior, settings.seedInput).requestSeed;
 	let selections: GenerationSelection[];
 	let promptSeed: number | null;
 	let nextCategorySeedState: CategorySeedState;
-	if (isCycle(settings)) {
-		const result = selectPromptsWithCategoryCycle(categories, rules, settings.promptCategorySeedState, pinned);
+	if (isCycle(settings) && !scene) {
+		const result = selectPromptsWithCategoryCycle(userCategories, rules, settings.promptCategorySeedState, pinned);
 		selections = result.selections;
 		promptSeed = result.promptSeed;
 		nextCategorySeedState = result.nextCategorySeedState;
 	} else {
-		promptSeed = planSeed(settings.promptSeedBehavior, settings.promptSeedInput).requestSeed;
-		selections = selectPrompts(categories, rules, promptSeed, pinned);
+		// A scene never reads or advances the per-category cycle counters: it draws a random prompt seed instead.
+		promptSeed = planSeed(isCycle(settings) ? 'randomize' : settings.promptSeedBehavior, settings.promptSeedInput).requestSeed;
+		selections = selectPrompts(userCategories, rules, promptSeed, pinned);
 		nextCategorySeedState = settings.promptCategorySeedState;
 	}
 
 	const knownLoraIds = new Set(makeLoraMap(library).keys());
-	const loraResolution = resolveLoraSelection(library, library.selectedLoras, selections, character?.loras ?? []);
+	const loraResolution = resolveLoraSelection(
+		library,
+		library.selectedLoras,
+		selections,
+		cast.flatMap((member) => member.loras),
+	);
 	const requestSelections = filterSelectionLoraIds(selections, knownLoraIds);
+	const castNegative = castNegativePrompt(settings.negativePrompt, cast);
 	const request: GenerateRequest = {
 		model,
 		// Character LoRAs with their weight, then selected LoRAs with their selected weight, then prompt-linked ones at
@@ -135,8 +153,9 @@ export function buildGenerationRequest({ categories, rules, settings, library, c
 		guidance_scale: settings.guidanceScale,
 		prompt_seed: promptSeed,
 		seed: imageSeed,
-		negative_prompt: characterNegativePrompt(settings.negativePrompt, character),
-		character_id: character?.id ?? null,
+		negative_prompt: scene ? appendNegativeTags(castNegative, scene.negativeTags) : castNegative,
+		character_id: cast[0]?.id ?? null,
+		story: scene ? { story_id: scene.storyId, scene_id: scene.sceneId } : null,
 	};
 	return { request, nextCategorySeedState, missingLoraIds: loraResolution.missingIds, imageSeedLocked: lockedSeed !== null };
 }
