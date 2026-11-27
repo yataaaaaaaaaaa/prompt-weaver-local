@@ -809,7 +809,7 @@ export interface paths {
         head?: never;
         /**
          * Update Story
-         * @description Changes the fields sent (title, characters).
+         * @description Changes the fields sent (title, characters, flow notes: logline, synopsis, style_notes).
          */
         patch: operations["update_story_api_stories__story_id__patch"];
         trace?: never;
@@ -893,7 +893,7 @@ export interface paths {
         head?: never;
         /**
          * Update Scene
-         * @description Changes the fields sent (title, text, tags, locked sub-prompts, characters, seed).
+         * @description Changes the fields sent (title, text, flow notes, tags, locked sub-prompts, characters, seed, LoRAs).
          */
         patch: operations["update_scene_api_stories__story_id__scenes__scene_id__patch"];
         trace?: never;
@@ -1391,43 +1391,38 @@ export interface components {
             /** Source */
             source: components["schemas"]["OutputImageSource"] | components["schemas"]["FileImageSource"] | components["schemas"]["UrlImageSource"] | components["schemas"]["CharacterImageCopySource"];
         };
-        /** CodexAddSceneArgs */
-        CodexAddSceneArgs: {
-            /**
-             * Characters
-             * @description "story": the story's characters; a list: its own.
-             * @default story
-             */
-            characters: "story" | string[];
-            /**
-             * Extra Tags
-             * @description Danbooru-style tags of the scene's picture.
-             */
-            extra_tags: string[];
-            /** Negative Tags */
-            negative_tags: string[];
+        /**
+         * CodexAddScenesArgs
+         * @example {
+         *       "position": 2,
+         *       "scenes": [
+         *         {
+         *           "beat": "The boat reaches the harbor",
+         *           "extra_tags": [
+         *             "harbor",
+         *             "fishing boats",
+         *             "morning"
+         *           ],
+         *           "title": "The harbor"
+         *         }
+         *       ],
+         *       "story_id": "sty-0123456789ab"
+         *     }
+         */
+        CodexAddScenesArgs: {
             /**
              * Position
-             * @description 1-based position; null: at the end.
+             * @description 1-based position of the first new scene (the others follow it); null: at the end.
              */
             position: number | null;
+            /** Scenes */
+            scenes: components["schemas"]["CodexSceneSpec"][];
             /** Story Id */
             story_id: string;
-            /**
-             * Text
-             * @description The narrative text of the scene.
-             * @default
-             */
-            text: string;
-            /**
-             * Title
-             * @description null: 'Scene <n>'.
-             */
-            title: string | null;
         };
-        /** CodexAddSceneCall */
-        CodexAddSceneCall: {
-            arguments: components["schemas"]["CodexAddSceneArgs"];
+        /** CodexAddScenesCall */
+        CodexAddScenesCall: {
+            arguments: components["schemas"]["CodexAddScenesArgs"];
             /** Call Id */
             call_id: string;
             /** Client Id */
@@ -1438,7 +1433,22 @@ export interface components {
              * @description discriminator enum property added by openapi-typescript
              * @enum {string}
              */
-            tool: "add_scene";
+            tool: "add_scenes";
+        };
+        /** CodexConsistencyReportCall */
+        CodexConsistencyReportCall: {
+            arguments: components["schemas"]["CodexScenesArgs"];
+            /** Call Id */
+            call_id: string;
+            /** Client Id */
+            client_id: string;
+            /** Conversation Id */
+            conversation_id: string;
+            /**
+             * @description discriminator enum property added by openapi-typescript
+             * @enum {string}
+             */
+            tool: "consistency_report";
         };
         /**
          * CodexConversation
@@ -1497,13 +1507,174 @@ export interface components {
             /** Story Id */
             story_id?: string | null;
         };
-        /** CodexCreateStoryArgs */
+        /**
+         * CodexCreateCharacterArgs
+         * @description A new character. From a picture (from_output_id or from_scene) it is prefilled like the app's "Create character":
+         *     the tags of the picture's prompt as identity tags (its 'Character outfit' as outfit tags), its LoRAs with their
+         *     weights, its seed (not locked), and the picture as the first reference image. The fields given replace the
+         *     prefilled ones.
+         * @example {
+         *       "identity_tags": [
+         *         "1girl",
+         *         "short red hair",
+         *         "green eyes",
+         *         "freckles"
+         *       ],
+         *       "loras": [
+         *         {
+         *           "lora": "Watercolor Wash",
+         *           "weight": 0.5
+         *         }
+         *       ],
+         *       "name": "Mira",
+         *       "outfit_tags": [
+         *         "leather jacket",
+         *         "white scarf"
+         *       ]
+         *     }
+         * @example {
+         *       "from_scene": {
+         *         "scene_id": "scn-0123456789ab",
+         *         "story_id": "sty-0123456789ab"
+         *       },
+         *       "name": "Mira",
+         *       "seed_locked": true
+         *     }
+         */
+        CodexCreateCharacterArgs: {
+            /**
+             * From Output Id
+             * @description Prefill from this output (see above).
+             */
+            from_output_id: string | null;
+            /** @description Or prefill from a scene's picture. */
+            from_scene: components["schemas"]["CodexSceneRef"] | null;
+            /**
+             * Identity Tags
+             * @description Appearance: face, hair, eyes, body (never clothes).
+             */
+            identity_tags: string[] | null;
+            /**
+             * Loras
+             * @description Character LoRAs with their weights.
+             */
+            loras: components["schemas"]["CodexLoraSpec"][] | null;
+            /**
+             * Name
+             * @description null: 'New character' or 'Character from #<output>'.
+             */
+            name: string | null;
+            /** Negative Tags */
+            negative_tags: string[] | null;
+            /**
+             * Outfit Tags
+             * @description Default outfit, kept apart from the identity.
+             */
+            outfit_tags: string[] | null;
+            /**
+             * Reference Focus
+             * @description 'face': keep the face; 'general': the whole look.
+             */
+            reference_focus: ("face" | "general") | null;
+            /**
+             * Reference Output Ids
+             * @description More reference images (outputs).
+             */
+            reference_output_ids: string[];
+            /**
+             * Reference Strength
+             * @description IP-Adapter strength of the reference images (0 to 1).
+             */
+            reference_strength: number | null;
+            /**
+             * Seed
+             * @description The character's image seed.
+             */
+            seed: number | null;
+            /**
+             * Seed Locked
+             * @description Generate every picture of the character with its seed.
+             */
+            seed_locked: boolean | null;
+        };
+        /** CodexCreateCharacterCall */
+        CodexCreateCharacterCall: {
+            arguments: components["schemas"]["CodexCreateCharacterArgs"];
+            /** Call Id */
+            call_id: string;
+            /** Client Id */
+            client_id: string;
+            /** Conversation Id */
+            conversation_id: string;
+            /**
+             * @description discriminator enum property added by openapi-typescript
+             * @enum {string}
+             */
+            tool: "create_character";
+        };
+        /**
+         * CodexCreateStoryArgs
+         * @example {
+         *       "character_ids": [
+         *         "chr-0123456789ab"
+         *       ],
+         *       "logline": "A lonely keeper must guide a lost boat home through the storm of the century.",
+         *       "scenes": [
+         *         {
+         *           "beat": "Mira takes over the lighthouse",
+         *           "extra_tags": [
+         *             "lighthouse",
+         *             "spiral stairs",
+         *             "looking up"
+         *           ],
+         *           "setting": "rocky island, evening",
+         *           "shot": "wide shot",
+         *           "text": "Mira climbs the spiral stairs for the first time.",
+         *           "title": "Arrival"
+         *         },
+         *         {
+         *           "beat": "The storm hits",
+         *           "extra_tags": [
+         *             "storm",
+         *             "night",
+         *             "crashing waves"
+         *           ],
+         *           "title": "The storm"
+         *         }
+         *       ],
+         *       "style_notes": "soft watercolor, muted blues, warm lamp light, children's picture book",
+         *       "title": "The lighthouse keeper"
+         *     }
+         */
         CodexCreateStoryArgs: {
             /**
              * Character Ids
-             * @description The story's characters (list_characters).
+             * @description The story's characters (list_characters), in every scene without its own.
              */
             character_ids: string[];
+            /**
+             * Logline
+             * @description The story in one sentence.
+             * @default
+             */
+            logline: string;
+            /**
+             * Scenes
+             * @description The outline: its scenes in reading order (one per beat).
+             */
+            scenes: components["schemas"]["CodexSceneSpec"][];
+            /**
+             * Style Notes
+             * @description Style and tone of the story and its pictures.
+             * @default
+             */
+            style_notes: string;
+            /**
+             * Synopsis
+             * @description The whole story in a few paragraphs, beginning to end.
+             * @default
+             */
+            synopsis: string;
             /** Title */
             title: string;
         };
@@ -1522,21 +1693,19 @@ export interface components {
              */
             tool: "create_story";
         };
-        /** CodexDeleteSceneArgs */
-        CodexDeleteSceneArgs: {
-            /** Scene Id */
-            scene_id: string;
-            /** Story Id */
-            story_id: string;
+        /** CodexDeleteCharacterArgs */
+        CodexDeleteCharacterArgs: {
+            /** Character Id */
+            character_id: string;
             /**
              * User Confirmed
              * @description True only when the user confirmed this deletion in the conversation.
              */
             user_confirmed: boolean;
         };
-        /** CodexDeleteSceneCall */
-        CodexDeleteSceneCall: {
-            arguments: components["schemas"]["CodexDeleteSceneArgs"];
+        /** CodexDeleteCharacterCall */
+        CodexDeleteCharacterCall: {
+            arguments: components["schemas"]["CodexDeleteCharacterArgs"];
             /** Call Id */
             call_id: string;
             /** Client Id */
@@ -1547,7 +1716,59 @@ export interface components {
              * @description discriminator enum property added by openapi-typescript
              * @enum {string}
              */
-            tool: "delete_scene";
+            tool: "delete_character";
+        };
+        /** CodexDeleteScenesArgs */
+        CodexDeleteScenesArgs: {
+            /** Scene Ids */
+            scene_ids: string[];
+            /** Story Id */
+            story_id: string;
+            /**
+             * User Confirmed
+             * @description True only when the user confirmed this deletion in the conversation.
+             */
+            user_confirmed: boolean;
+        };
+        /** CodexDeleteScenesCall */
+        CodexDeleteScenesCall: {
+            arguments: components["schemas"]["CodexDeleteScenesArgs"];
+            /** Call Id */
+            call_id: string;
+            /** Client Id */
+            client_id: string;
+            /** Conversation Id */
+            conversation_id: string;
+            /**
+             * @description discriminator enum property added by openapi-typescript
+             * @enum {string}
+             */
+            tool: "delete_scenes";
+        };
+        /** CodexDeleteStoryArgs */
+        CodexDeleteStoryArgs: {
+            /** Story Id */
+            story_id: string;
+            /**
+             * User Confirmed
+             * @description True only when the user confirmed this deletion in the conversation.
+             */
+            user_confirmed: boolean;
+        };
+        /** CodexDeleteStoryCall */
+        CodexDeleteStoryCall: {
+            arguments: components["schemas"]["CodexDeleteStoryArgs"];
+            /** Call Id */
+            call_id: string;
+            /** Client Id */
+            client_id: string;
+            /** Conversation Id */
+            conversation_id: string;
+            /**
+             * @description discriminator enum property added by openapi-typescript
+             * @enum {string}
+             */
+            tool: "delete_story";
         };
         /**
          * CodexDeltaEvent
@@ -1593,10 +1814,55 @@ export interface components {
             tool: "duplicate_scene";
         };
         /**
+         * CodexEditVariantsArgs
+         * @description A scene's pictures (variants): every picture made for it or added to it; one of them is its picture.
+         */
+        CodexEditVariantsArgs: {
+            /**
+             * Add
+             * @description Existing outputs added as variants (the last one becomes the picture).
+             */
+            add: string[];
+            /**
+             * Choose
+             * @description The variant that becomes the scene's picture.
+             */
+            choose: string | null;
+            /**
+             * Remove
+             * @description Variants removed from the scene (the outputs are kept).
+             */
+            remove: string[];
+            /** Scene Id */
+            scene_id: string;
+            /** Story Id */
+            story_id: string;
+        };
+        /** CodexEditVariantsCall */
+        CodexEditVariantsCall: {
+            arguments: components["schemas"]["CodexEditVariantsArgs"];
+            /** Call Id */
+            call_id: string;
+            /** Client Id */
+            client_id: string;
+            /** Conversation Id */
+            conversation_id: string;
+            /**
+             * @description discriminator enum property added by openapi-typescript
+             * @enum {string}
+             */
+            tool: "edit_variants";
+        };
+        /**
          * CodexEntry
          * @description One entry of a conversation: a message, a tool activity, an error or a notice ('Stopped.').
          */
         CodexEntry: {
+            /**
+             * Character Id
+             * @description The character a tool entry acted on.
+             */
+            character_id: string | null;
             /** Id */
             id: string;
             /**
@@ -1655,24 +1921,19 @@ export interface components {
             type: "codex";
         };
         CodexEvent: components["schemas"]["CodexStatusEvent"] | components["schemas"]["CodexConversationEvent"] | components["schemas"]["CodexEntryEvent"] | components["schemas"]["CodexDeltaEvent"] | components["schemas"]["CodexToolCallEvent"] | components["schemas"]["CodexToolCancelEvent"];
-        /** CodexGenerateMissingScenesCall */
-        CodexGenerateMissingScenesCall: {
-            arguments: components["schemas"]["CodexStoryArgs"];
-            /** Call Id */
-            call_id: string;
-            /** Client Id */
-            client_id: string;
-            /** Conversation Id */
-            conversation_id: string;
+        /** CodexGenerateScenesArgs */
+        CodexGenerateScenesArgs: {
             /**
-             * @description discriminator enum property added by openapi-typescript
-             * @enum {string}
+             * Scene Ids
+             * @description The scenes to illustrate, in this order; null: every scene without a picture.
              */
-            tool: "generate_missing_scenes";
+            scene_ids: string[] | null;
+            /** Story Id */
+            story_id: string;
         };
-        /** CodexGenerateSceneCall */
-        CodexGenerateSceneCall: {
-            arguments: components["schemas"]["CodexSceneArgs"];
+        /** CodexGenerateScenesCall */
+        CodexGenerateScenesCall: {
+            arguments: components["schemas"]["CodexGenerateScenesArgs"];
             /** Call Id */
             call_id: string;
             /** Client Id */
@@ -1683,7 +1944,22 @@ export interface components {
              * @description discriminator enum property added by openapi-typescript
              * @enum {string}
              */
-            tool: "generate_scene";
+            tool: "generate_scenes";
+        };
+        /** CodexGetGenerationSetupCall */
+        CodexGetGenerationSetupCall: {
+            arguments: components["schemas"]["CodexNoArgs"];
+            /** Call Id */
+            call_id: string;
+            /** Client Id */
+            client_id: string;
+            /** Conversation Id */
+            conversation_id: string;
+            /**
+             * @description discriminator enum property added by openapi-typescript
+             * @enum {string}
+             */
+            tool: "get_generation_setup";
         };
         /** CodexGetStoryCall */
         CodexGetStoryCall: {
@@ -1700,17 +1976,39 @@ export interface components {
              */
             tool: "get_story";
         };
-        /** CodexListCategoriesArgs */
-        CodexListCategoriesArgs: {
+        /** CodexInstallIpAdapterArgs */
+        CodexInstallIpAdapterArgs: {
             /**
-             * Query
-             * @description Only the categories whose name contains it.
+             * Focus
+             * @description The reference focus to install for the current model.
+             * @default face
+             * @enum {string}
              */
-            query: string | null;
+            focus: "face" | "general";
+            /**
+             * User Confirmed
+             * @description True only when the user agreed to the download (it can be several GB).
+             */
+            user_confirmed: boolean;
+        };
+        /** CodexInstallIpAdapterCall */
+        CodexInstallIpAdapterCall: {
+            arguments: components["schemas"]["CodexInstallIpAdapterArgs"];
+            /** Call Id */
+            call_id: string;
+            /** Client Id */
+            client_id: string;
+            /** Conversation Id */
+            conversation_id: string;
+            /**
+             * @description discriminator enum property added by openapi-typescript
+             * @enum {string}
+             */
+            tool: "install_ip_adapter";
         };
         /** CodexListCategoriesCall */
         CodexListCategoriesCall: {
-            arguments: components["schemas"]["CodexListCategoriesArgs"];
+            arguments: components["schemas"]["CodexQueryArgs"];
             /** Call Id */
             call_id: string;
             /** Client Id */
@@ -1738,6 +2036,21 @@ export interface components {
              */
             tool: "list_characters";
         };
+        /** CodexListLorasCall */
+        CodexListLorasCall: {
+            arguments: components["schemas"]["CodexQueryArgs"];
+            /** Call Id */
+            call_id: string;
+            /** Client Id */
+            client_id: string;
+            /** Conversation Id */
+            conversation_id: string;
+            /**
+             * @description discriminator enum property added by openapi-typescript
+             * @enum {string}
+             */
+            tool: "list_loras";
+        };
         /** CodexListStoriesCall */
         CodexListStoriesCall: {
             arguments: components["schemas"]["CodexNoArgs"];
@@ -1753,37 +2066,38 @@ export interface components {
              */
             tool: "list_stories";
         };
-        /** CodexLockArgs */
-        CodexLockArgs: {
+        /**
+         * CodexLockSpec
+         * @description A sub-prompt of one of the user's prompt categories, locked for a scene (it replaces that category's pick).
+         */
+        CodexLockSpec: {
             /**
              * Category
-             * @description A prompt category (list_categories).
+             * @description A prompt category (list_categories), e.g. 'Background'.
              */
             category: string;
-            /** Scene Id */
-            scene_id: string;
-            /** Story Id */
-            story_id: string;
             /**
              * Sub Prompt
-             * @description One of that category's sub-prompts.
+             * @description One of that category's sub-prompts, as listed.
              */
             sub_prompt: string;
         };
-        /** CodexLockSubPromptCall */
-        CodexLockSubPromptCall: {
-            arguments: components["schemas"]["CodexLockArgs"];
-            /** Call Id */
-            call_id: string;
-            /** Client Id */
-            client_id: string;
-            /** Conversation Id */
-            conversation_id: string;
+        /**
+         * CodexLoraSpec
+         * @description A LoRA of the user's library with its weight.
+         */
+        CodexLoraSpec: {
             /**
-             * @description discriminator enum property added by openapi-typescript
-             * @enum {string}
+             * Lora
+             * @description The LoRA's lora_id or its name (list_loras).
              */
-            tool: "lock_sub_prompt";
+            lora: string;
+            /**
+             * Weight
+             * @description Its weight (usually 0.4 to 1; 0 turns it off for the scene).
+             * @default 1
+             */
+            weight: number;
         };
         /**
          * CodexModelOption
@@ -1795,21 +2109,11 @@ export interface components {
             /** Name */
             name: string;
         };
-        /** CodexMoveSceneArgs */
-        CodexMoveSceneArgs: {
-            /**
-             * Position
-             * @description The new 1-based position.
-             */
-            position: number;
-            /** Scene Id */
-            scene_id: string;
-            /** Story Id */
-            story_id: string;
-        };
-        /** CodexMoveSceneCall */
-        CodexMoveSceneCall: {
-            arguments: components["schemas"]["CodexMoveSceneArgs"];
+        /** CodexNoArgs */
+        CodexNoArgs: Record<string, never>;
+        /** CodexPreviewScenesCall */
+        CodexPreviewScenesCall: {
+            arguments: components["schemas"]["CodexScenesArgs"];
             /** Call Id */
             call_id: string;
             /** Client Id */
@@ -1820,14 +2124,251 @@ export interface components {
              * @description discriminator enum property added by openapi-typescript
              * @enum {string}
              */
-            tool: "move_scene";
+            tool: "preview_scenes";
         };
-        /** CodexNoArgs */
-        CodexNoArgs: Record<string, never>;
+        /** CodexQueryArgs */
+        CodexQueryArgs: {
+            /**
+             * Query
+             * @description Only the entries whose name contains it (case-insensitive); null: all.
+             */
+            query: string | null;
+        };
+        /**
+         * CodexReorderScenesArgs
+         * @example {
+         *       "position": 1,
+         *       "scene_id": "scn-0123456789ab",
+         *       "story_id": "sty-0123456789ab"
+         *     }
+         */
+        CodexReorderScenesArgs: {
+            /**
+             * Order
+             * @description Every scene_id of the story once, in the new order.
+             */
+            order: string[] | null;
+            /**
+             * Position
+             * @description Its new 1-based position.
+             */
+            position: number | null;
+            /**
+             * Scene Id
+             * @description Or one scene to move (with position).
+             */
+            scene_id: string | null;
+            /** Story Id */
+            story_id: string;
+        };
+        /** CodexReorderScenesCall */
+        CodexReorderScenesCall: {
+            arguments: components["schemas"]["CodexReorderScenesArgs"];
+            /** Call Id */
+            call_id: string;
+            /** Client Id */
+            client_id: string;
+            /** Conversation Id */
+            conversation_id: string;
+            /**
+             * @description discriminator enum property added by openapi-typescript
+             * @enum {string}
+             */
+            tool: "reorder_scenes";
+        };
         /** CodexSceneArgs */
         CodexSceneArgs: {
             /** Scene Id */
             scene_id: string;
+            /** Story Id */
+            story_id: string;
+        };
+        /**
+         * CodexSceneChange
+         * @description One change of update_scenes: its target (scene_id, or scene_ids for the same change to several scenes) and the
+         *     fields to change. Replacing fields (null: unchanged) and edits of the current values ([]: none) can be mixed.
+         */
+        CodexSceneChange: {
+            /** Add Negative Tags */
+            add_negative_tags: string[];
+            /**
+             * Add Tags
+             * @description Scene tags added (one that is there already stays once).
+             */
+            add_tags: string[];
+            /** Beat */
+            beat: string | null;
+            /**
+             * Characters
+             * @description "story": the story's characters; a list of character_id: its own ([]: none).
+             */
+            characters: "story" | string[] | null;
+            /**
+             * Extra Tags
+             * @description Replaces the scene tags.
+             */
+            extra_tags: string[] | null;
+            /**
+             * Lock
+             * @description Locks these (each replaces its category's lock).
+             */
+            lock: components["schemas"]["CodexLockSpec"][];
+            /**
+             * Locks
+             * @description Replaces every locked sub-prompt ([]: none).
+             */
+            locks: components["schemas"]["CodexLockSpec"][] | null;
+            /**
+             * Loras
+             * @description Replaces the scene's LoRAs ([]: none).
+             */
+            loras: components["schemas"]["CodexLoraSpec"][] | null;
+            /** Mood */
+            mood: string | null;
+            /**
+             * Negative Tags
+             * @description Replaces the negative tags.
+             */
+            negative_tags: string[] | null;
+            /**
+             * Remove Loras
+             * @description LoRAs (lora_id or name) removed from the scene.
+             */
+            remove_loras: string[];
+            /** Remove Negative Tags */
+            remove_negative_tags: string[];
+            /**
+             * Remove Tags
+             * @description Scene tags removed.
+             */
+            remove_tags: string[];
+            /**
+             * Scene Id
+             * @description The scene to change.
+             */
+            scene_id: string | null;
+            /**
+             * Scene Ids
+             * @description Or several scenes ([ids] or "all").
+             */
+            scene_ids: "all" | string[] | null;
+            /**
+             * Seed
+             * @description A fixed seed, or "random".
+             */
+            seed: number | "random" | null;
+            /**
+             * Set Loras
+             * @description Adds these LoRAs, or changes their weight.
+             */
+            set_loras: components["schemas"]["CodexLoraSpec"][];
+            /** Setting */
+            setting: string | null;
+            /** Shot */
+            shot: string | null;
+            /** Text */
+            text: string | null;
+            /**
+             * Title
+             * @description Only with scene_id.
+             */
+            title: string | null;
+            /**
+             * Unlock
+             * @description Categories whose lock is removed.
+             */
+            unlock: string[];
+        };
+        /**
+         * CodexSceneRef
+         * @description A scene: its picture (chosen variant) is used.
+         */
+        CodexSceneRef: {
+            /** Scene Id */
+            scene_id: string;
+            /** Story Id */
+            story_id: string;
+        };
+        /**
+         * CodexSceneSpec
+         * @description A new scene. Its picture is made from its tags, locks, LoRAs, characters and seed; the flow notes (beat, shot,
+         *     setting, mood) plan it and are never added to the prompt.
+         */
+        CodexSceneSpec: {
+            /**
+             * Beat
+             * @description What happens and why it matters to the story (one line).
+             * @default
+             */
+            beat: string;
+            /**
+             * Characters
+             * @description "story": the story's characters; a list of character_id: its own ([]: none).
+             * @default story
+             */
+            characters: "story" | string[];
+            /**
+             * Extra Tags
+             * @description Danbooru-style tags of the picture: action, expression, pose, setting, composition, light (never the characters' appearance).
+             */
+            extra_tags: string[];
+            /**
+             * Locks
+             * @description Sub-prompts of the user's categories to use.
+             */
+            locks: components["schemas"]["CodexLockSpec"][];
+            /**
+             * Loras
+             * @description LoRAs of this scene only, with their weights.
+             */
+            loras: components["schemas"]["CodexLoraSpec"][];
+            /**
+             * Mood
+             * @description Mood and emotional tone, e.g. 'quiet hope'.
+             * @default
+             */
+            mood: string;
+            /**
+             * Negative Tags
+             * @description Added to the negative prompt of this scene.
+             */
+            negative_tags: string[];
+            /**
+             * Seed
+             * @description A fixed image seed (the same picture again); null: random.
+             */
+            seed: number | null;
+            /**
+             * Setting
+             * @description Place and time, e.g. 'harbor at dawn, light fog'.
+             * @default
+             */
+            setting: string;
+            /**
+             * Shot
+             * @description Framing and camera, e.g. 'wide shot, low angle'.
+             * @default
+             */
+            shot: string;
+            /**
+             * Text
+             * @description The narrative text read under the picture (prose).
+             * @default
+             */
+            text: string;
+            /**
+             * Title
+             * @description Short title; null: 'Scene <n>'.
+             */
+            title: string | null;
+        };
+        /** CodexScenesArgs */
+        CodexScenesArgs: {
+            /**
+             * Scene Ids
+             * @description The scenes; null: every scene.
+             */
+            scene_ids: string[] | null;
             /** Story Id */
             story_id: string;
         };
@@ -1923,7 +2464,7 @@ export interface components {
         /** CodexToolCallEvent */
         CodexToolCallEvent: {
             /** Call */
-            call: components["schemas"]["CodexListStoriesCall"] | components["schemas"]["CodexGetStoryCall"] | components["schemas"]["CodexListCharactersCall"] | components["schemas"]["CodexListCategoriesCall"] | components["schemas"]["CodexCreateStoryCall"] | components["schemas"]["CodexUpdateStoryCall"] | components["schemas"]["CodexAddSceneCall"] | components["schemas"]["CodexUpdateSceneCall"] | components["schemas"]["CodexLockSubPromptCall"] | components["schemas"]["CodexUnlockCategoryCall"] | components["schemas"]["CodexMoveSceneCall"] | components["schemas"]["CodexDuplicateSceneCall"] | components["schemas"]["CodexDeleteSceneCall"] | components["schemas"]["CodexGenerateSceneCall"] | components["schemas"]["CodexGenerateMissingScenesCall"];
+            call: components["schemas"]["CodexListStoriesCall"] | components["schemas"]["CodexGetStoryCall"] | components["schemas"]["CodexListCharactersCall"] | components["schemas"]["CodexListCategoriesCall"] | components["schemas"]["CodexListLorasCall"] | components["schemas"]["CodexGetGenerationSetupCall"] | components["schemas"]["CodexPreviewScenesCall"] | components["schemas"]["CodexConsistencyReportCall"] | components["schemas"]["CodexViewImagesCall"] | components["schemas"]["CodexCreateStoryCall"] | components["schemas"]["CodexUpdateStoryCall"] | components["schemas"]["CodexDeleteStoryCall"] | components["schemas"]["CodexAddScenesCall"] | components["schemas"]["CodexUpdateScenesCall"] | components["schemas"]["CodexReorderScenesCall"] | components["schemas"]["CodexDuplicateSceneCall"] | components["schemas"]["CodexDeleteScenesCall"] | components["schemas"]["CodexGenerateScenesCall"] | components["schemas"]["CodexEditVariantsCall"] | components["schemas"]["CodexCreateCharacterCall"] | components["schemas"]["CodexUpdateCharacterCall"] | components["schemas"]["CodexDeleteCharacterCall"] | components["schemas"]["CodexInstallIpAdapterCall"];
             /**
              * @description discriminator enum property added by openapi-typescript
              * @enum {string}
@@ -1958,10 +2499,41 @@ export interface components {
             type: "codex";
         };
         /**
+         * CodexToolImage
+         * @description A picture a tool shows Codex (view_images): an output's image, or a character's reference image. The backend
+         *     reads it, downscales it (services/codex/images.py) and sends it to Codex as MCP image content after its label.
+         */
+        CodexToolImage: {
+            /** Character Id */
+            character_id?: string | null;
+            /**
+             * Image Id
+             * @description With character_id: one of its images.
+             */
+            image_id?: string | null;
+            /**
+             * Label
+             * @description What the picture is ('Scene 2 · The storm, output #0000000004').
+             */
+            label: string;
+            /** Output Id */
+            output_id?: string | null;
+        };
+        /**
          * CodexToolResult
          * @description Body of POST /api/codex/tool-calls/{call_id}/result: what the frontend did.
          */
         CodexToolResult: {
+            /**
+             * Character Id
+             * @description The character it acted on (the conversation links to it).
+             */
+            character_id?: string | null;
+            /**
+             * Images
+             * @description Pictures shown to Codex with the text.
+             */
+            images?: components["schemas"]["CodexToolImage"][];
             /** Ok */
             ok: boolean;
             /** Scene Id */
@@ -1996,61 +2568,80 @@ export interface components {
             /** Text */
             text: string;
         };
-        /** CodexUnlockArgs */
-        CodexUnlockArgs: {
-            /** Category */
-            category: string;
-            /** Scene Id */
-            scene_id: string;
-            /** Story Id */
-            story_id: string;
-        };
-        /** CodexUnlockCategoryCall */
-        CodexUnlockCategoryCall: {
-            arguments: components["schemas"]["CodexUnlockArgs"];
-            /** Call Id */
-            call_id: string;
-            /** Client Id */
-            client_id: string;
-            /** Conversation Id */
-            conversation_id: string;
-            /**
-             * @description discriminator enum property added by openapi-typescript
-             * @enum {string}
-             */
-            tool: "unlock_category";
-        };
         /**
-         * CodexUpdateSceneArgs
+         * CodexUpdateCharacterArgs
          * @description Only the fields given change (null: unchanged).
+         * @example {
+         *       "character_id": "chr-0123456789ab",
+         *       "outfit_tags": [
+         *         "raincoat",
+         *         "rubber boots"
+         *       ],
+         *       "seed": 777,
+         *       "seed_locked": true
+         *     }
+         * @example {
+         *       "add_reference_scenes": [
+         *         {
+         *           "scene_id": "scn-0123456789ab",
+         *           "story_id": "sty-0123456789ab"
+         *         }
+         *       ],
+         *       "character_id": "chr-0123456789ab",
+         *       "reference_strength": 0.7
+         *     }
          */
-        CodexUpdateSceneArgs: {
+        CodexUpdateCharacterArgs: {
             /**
-             * Characters
-             * @description "story": the story's characters; []: none.
+             * Active In Create
+             * @description Activate (or deactivate) it for Create's generations.
              */
-            characters: "story" | string[] | null;
-            /** Extra Tags */
-            extra_tags: string[] | null;
+            active_in_create: boolean | null;
+            /**
+             * Add Reference Output Ids
+             * @description Outputs added as reference images.
+             */
+            add_reference_output_ids: string[];
+            /**
+             * Add Reference Scenes
+             * @description Scene pictures added as reference images.
+             */
+            add_reference_scenes: components["schemas"]["CodexSceneRef"][];
+            /** Character Id */
+            character_id: string;
+            /** Identity Tags */
+            identity_tags: string[] | null;
+            /**
+             * Loras
+             * @description Replaces the character's LoRAs ([]: none).
+             */
+            loras: components["schemas"]["CodexLoraSpec"][] | null;
+            /** Name */
+            name: string | null;
             /** Negative Tags */
             negative_tags: string[] | null;
-            /** Scene Id */
-            scene_id: string;
+            /** Outfit Tags */
+            outfit_tags: string[] | null;
+            /** Reference Focus */
+            reference_focus: ("face" | "general") | null;
+            /** Reference Strength */
+            reference_strength: number | null;
+            /**
+             * Remove Reference Image Ids
+             * @description Reference images removed.
+             */
+            remove_reference_image_ids: string[];
             /**
              * Seed
-             * @description A fixed seed, or "random".
+             * @description A seed, or "none" (no seed, unlocked).
              */
-            seed: number | "random" | null;
-            /** Story Id */
-            story_id: string;
-            /** Text */
-            text: string | null;
-            /** Title */
-            title: string | null;
+            seed: number | "none" | null;
+            /** Seed Locked */
+            seed_locked: boolean | null;
         };
-        /** CodexUpdateSceneCall */
-        CodexUpdateSceneCall: {
-            arguments: components["schemas"]["CodexUpdateSceneArgs"];
+        /** CodexUpdateCharacterCall */
+        CodexUpdateCharacterCall: {
+            arguments: components["schemas"]["CodexUpdateCharacterArgs"];
             /** Call Id */
             call_id: string;
             /** Client Id */
@@ -2061,21 +2652,86 @@ export interface components {
              * @description discriminator enum property added by openapi-typescript
              * @enum {string}
              */
-            tool: "update_scene";
+            tool: "update_character";
         };
-        /** CodexUpdateStoryArgs */
+        /**
+         * CodexUpdateScenesArgs
+         * @example {
+         *       "changes": [
+         *         {
+         *           "add_negative_tags": [
+         *             "lowres",
+         *             "text"
+         *           ],
+         *           "scene_ids": "all",
+         *           "set_loras": [
+         *             {
+         *               "lora": "Watercolor Wash",
+         *               "weight": 0.6
+         *             }
+         *           ]
+         *         },
+         *         {
+         *           "add_tags": [
+         *             "lightning"
+         *           ],
+         *           "lock": [
+         *             {
+         *               "category": "Mood",
+         *               "sub_prompt": "serious expression"
+         *             }
+         *           ],
+         *           "scene_id": "scn-0123456789ab",
+         *           "seed": 1234,
+         *           "text": "The storm breaks against the windows."
+         *         }
+         *       ],
+         *       "story_id": "sty-0123456789ab"
+         *     }
+         */
+        CodexUpdateScenesArgs: {
+            /**
+             * Changes
+             * @description Applied in order (all checked first: all or nothing).
+             */
+            changes: components["schemas"]["CodexSceneChange"][];
+            /** Story Id */
+            story_id: string;
+        };
+        /** CodexUpdateScenesCall */
+        CodexUpdateScenesCall: {
+            arguments: components["schemas"]["CodexUpdateScenesArgs"];
+            /** Call Id */
+            call_id: string;
+            /** Client Id */
+            client_id: string;
+            /** Conversation Id */
+            conversation_id: string;
+            /**
+             * @description discriminator enum property added by openapi-typescript
+             * @enum {string}
+             */
+            tool: "update_scenes";
+        };
+        /**
+         * CodexUpdateStoryArgs
+         * @description Only the fields given change (null: unchanged).
+         */
         CodexUpdateStoryArgs: {
             /**
              * Character Ids
-             * @description null: unchanged.
+             * @description The story's characters ([]: none).
              */
             character_ids: string[] | null;
+            /** Logline */
+            logline: string | null;
             /** Story Id */
             story_id: string;
-            /**
-             * Title
-             * @description null: unchanged.
-             */
+            /** Style Notes */
+            style_notes: string | null;
+            /** Synopsis */
+            synopsis: string | null;
+            /** Title */
             title: string | null;
         };
         /** CodexUpdateStoryCall */
@@ -2092,6 +2748,57 @@ export interface components {
              * @enum {string}
              */
             tool: "update_story";
+        };
+        /**
+         * CodexViewImagesArgs
+         * @example {
+         *       "scene_ids": [
+         *         "scn-0123456789ab"
+         *       ],
+         *       "story_id": "sty-0123456789ab"
+         *     }
+         * @example {
+         *       "character_ids": [
+         *         "chr-0123456789ab"
+         *       ]
+         *     }
+         */
+        CodexViewImagesArgs: {
+            /**
+             * Character Ids
+             * @description Characters: their reference images.
+             */
+            character_ids: string[];
+            /**
+             * Output Ids
+             * @description Outputs (e.g. the variants of a scene).
+             */
+            output_ids: string[];
+            /**
+             * Scene Ids
+             * @description With story_id: these scenes; null: every scene with a picture.
+             */
+            scene_ids: string[] | null;
+            /**
+             * Story Id
+             * @description A story: the pictures of its scenes.
+             */
+            story_id: string | null;
+        };
+        /** CodexViewImagesCall */
+        CodexViewImagesCall: {
+            arguments: components["schemas"]["CodexViewImagesArgs"];
+            /** Call Id */
+            call_id: string;
+            /** Client Id */
+            client_id: string;
+            /** Conversation Id */
+            conversation_id: string;
+            /**
+             * @description discriminator enum property added by openapi-typescript
+             * @enum {string}
+             */
+            tool: "view_images";
         };
         /**
          * DownloadTaskEvent
@@ -3488,6 +4195,12 @@ export interface components {
          */
         Scene: {
             /**
+             * Beat
+             * @description Flow: the scene's beat, what happens and why it matters to the story (one line).
+             * @default
+             */
+            beat: string;
+            /**
              * Character Ids
              * @description The characters of this scene, in order; null: the story's characters; []: no character.
              */
@@ -3515,6 +4228,17 @@ export interface components {
              */
             locks: components["schemas"]["SceneLock"][];
             /**
+             * Loras
+             * @description LoRAs of this scene's generations with their weights (library entry ids), after the characters' LoRAs and before the selected ones; a LoRA listed here uses this weight whatever the characters or the selection say (weight 0: off for this scene).
+             */
+            loras: components["schemas"]["LoraWeight-Output"][];
+            /**
+             * Mood
+             * @description Flow: its mood and emotional tone.
+             * @default
+             */
+            mood: string;
+            /**
              * Negative Tags
              * @description Appended to the negative prompt of the scene's generations.
              */
@@ -3524,6 +4248,18 @@ export interface components {
              * @description Fixed image seed of the scene's generations (reproducible); null: a new seed each time.
              */
             seed: number | null;
+            /**
+             * Setting
+             * @description Flow: where and when it takes place (place, time of day, weather).
+             * @default
+             */
+            setting: string;
+            /**
+             * Shot
+             * @description Flow: the framing and camera of its picture (e.g. 'wide shot, low angle').
+             * @default
+             */
+            shot: string;
             /**
              * Text
              * @description The narrative text of the scene.
@@ -3549,6 +4285,12 @@ export interface components {
          */
         SceneCreateRequest: {
             /**
+             * Beat
+             * @description Flow: the scene's beat, what happens and why it matters to the story (one line).
+             * @default
+             */
+            beat: string;
+            /**
              * Character Ids
              * @description The characters of this scene, in order; null: the story's characters; []: no character.
              */
@@ -3569,6 +4311,17 @@ export interface components {
              */
             locks?: components["schemas"]["SceneLock"][];
             /**
+             * Loras
+             * @description LoRAs of this scene's generations with their weights (library entry ids), after the characters' LoRAs and before the selected ones; a LoRA listed here uses this weight whatever the characters or the selection say (weight 0: off for this scene).
+             */
+            loras?: components["schemas"]["LoraWeight-Input"][];
+            /**
+             * Mood
+             * @description Flow: its mood and emotional tone.
+             * @default
+             */
+            mood: string;
+            /**
              * Negative Tags
              * @description Appended to the negative prompt of the scene's generations.
              */
@@ -3583,6 +4336,18 @@ export interface components {
              * @description Fixed image seed of the scene's generations (reproducible); null: a new seed each time.
              */
             seed?: number | null;
+            /**
+             * Setting
+             * @description Flow: where and when it takes place (place, time of day, weather).
+             * @default
+             */
+            setting: string;
+            /**
+             * Shot
+             * @description Flow: the framing and camera of its picture (e.g. 'wide shot, low angle').
+             * @default
+             */
+            shot: string;
             /**
              * Text
              * @description The narrative text of the scene.
@@ -3620,16 +4385,26 @@ export interface components {
          *     accept null; the other fields do not).
          */
         ScenePatch: {
+            /** Beat */
+            beat?: string | null;
             /** Character Ids */
             character_ids?: string[] | null;
             /** Extra Tags */
             extra_tags?: string[] | null;
             /** Locks */
             locks?: components["schemas"]["SceneLock"][] | null;
+            /** Loras */
+            loras?: components["schemas"]["LoraWeight-Input"][] | null;
+            /** Mood */
+            mood?: string | null;
             /** Negative Tags */
             negative_tags?: string[] | null;
             /** Seed */
             seed?: number | null;
+            /** Setting */
+            setting?: string | null;
+            /** Shot */
+            shot?: string | null;
             /** Text */
             text?: string | null;
             /** Title */
@@ -3673,8 +4448,26 @@ export interface components {
             created_at: string;
             /** Id */
             id: string;
+            /**
+             * Logline
+             * @description Flow: the story in one sentence (who wants what, and what is at stake).
+             * @default
+             */
+            logline: string;
             /** Scenes */
             scenes: components["schemas"]["Scene"][];
+            /**
+             * Style Notes
+             * @description Flow: the style and tone of the story and its pictures (art style, palette, lighting, audience).
+             * @default
+             */
+            style_notes: string;
+            /**
+             * Synopsis
+             * @description Flow: the whole story in a few paragraphs, beginning to end (the scenes' beats follow it).
+             * @default
+             */
+            synopsis: string;
             /** Title */
             title: string;
             /**
@@ -3693,7 +4486,7 @@ export interface components {
         };
         /**
          * StoryCreateRequest
-         * @description Body of POST /api/stories.
+         * @description Body of POST /api/stories. Stories saved before a field existed read it as its default.
          */
         StoryCreateRequest: {
             /**
@@ -3701,6 +4494,24 @@ export interface components {
              * @description The story's characters (Character.id), applied to every scene that does not name its own.
              */
             character_ids?: string[];
+            /**
+             * Logline
+             * @description Flow: the story in one sentence (who wants what, and what is at stake).
+             * @default
+             */
+            logline: string;
+            /**
+             * Style Notes
+             * @description Flow: the style and tone of the story and its pictures (art style, palette, lighting, audience).
+             * @default
+             */
+            style_notes: string;
+            /**
+             * Synopsis
+             * @description Flow: the whole story in a few paragraphs, beginning to end (the scenes' beats follow it).
+             * @default
+             */
+            synopsis: string;
             /** Title */
             title: string;
         };
@@ -3716,11 +4527,17 @@ export interface components {
         };
         /**
          * StoryPatch
-         * @description Body of PATCH /api/stories/{story_id}: only the fields sent change (neither accepts null).
+         * @description Body of PATCH /api/stories/{story_id}: only the fields sent change (none accepts null).
          */
         StoryPatch: {
             /** Character Ids */
             character_ids?: string[] | null;
+            /** Logline */
+            logline?: string | null;
+            /** Style Notes */
+            style_notes?: string | null;
+            /** Synopsis */
+            synopsis?: string | null;
             /** Title */
             title?: string | null;
         };

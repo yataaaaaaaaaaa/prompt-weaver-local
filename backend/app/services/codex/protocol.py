@@ -37,7 +37,7 @@ def user_message_text(content: Any) -> str:
 
 
 def activity_of(result: Any) -> dict[str, Any] | None:
-    """The frontend's report of a tool call ({ok, summary, story_id, scene_id}) carried by its result."""
+    """The frontend's report of a tool call ({ok, summary, story_id, scene_id, character_id}) carried by its result."""
     meta = result.get("_meta") if isinstance(result, dict) else None
     activity = meta.get(ACTIVITY_META_KEY) if isinstance(meta, dict) else None
     return activity if isinstance(activity, dict) else None
@@ -51,6 +51,11 @@ def result_text(result: Any) -> str:
 
 def _ref(value: Any, prefix: str) -> str | None:
     return value if isinstance(value, str) and value.startswith(prefix) else None
+
+
+def _only_scene(scene_ids: Any) -> str | None:
+    """The scene of a call naming exactly one scene in its scene_ids (generate_scenes of one scene...)."""
+    return _ref(scene_ids[0], "scn-") if isinstance(scene_ids, list) and len(scene_ids) == 1 else None
 
 
 def tool_entry(item: dict[str, Any], fallback: dict[str, Any] | None = None) -> CodexEntry | None:
@@ -85,7 +90,8 @@ def tool_entry(item: dict[str, Any], fallback: dict[str, Any] | None = None) -> 
         status=status,
         tool=_text(item.get("tool")) or None,
         story_id=_ref(source.get("story_id"), "sty-") or _ref(arguments.get("story_id"), "sty-"),
-        scene_id=_ref(source.get("scene_id"), "scn-") or _ref(arguments.get("scene_id"), "scn-"),
+        scene_id=_ref(source.get("scene_id"), "scn-") or _ref(arguments.get("scene_id"), "scn-") or _only_scene(arguments.get("scene_ids")),
+        character_id=_ref(source.get("character_id"), "chr-") or _ref(arguments.get("character_id"), "chr-"),
     )
 
 

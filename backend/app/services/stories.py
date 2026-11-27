@@ -165,23 +165,16 @@ class StoryStore:
             return self._loaded().find(story_id)
 
     def create(self, request: StoryCreateRequest) -> Story:
-        """A new story without scenes (id, created_at = updated_at = now UTC)."""
+        """A new story without scenes, with every field of the request (id, created_at = updated_at = now UTC)."""
         now = utc_now()
-        story = Story(
-            title=request.title,
-            character_ids=request.character_ids,
-            id=new_id(STORY_ID_PREFIX),
-            scenes=[],
-            created_at=now,
-            updated_at=now,
-        )
+        story = Story(**request.model_dump(), id=new_id(STORY_ID_PREFIX), scenes=[], created_at=now, updated_at=now)
         with self._lock:
             state = self._loaded()
             self._save(_Collection(items=(*state.items, story)))
         return story
 
     def update(self, story_id: str, patch: StoryPatch) -> Story:
-        """Changes the fields sent (title, characters)."""
+        """Changes the fields sent (title, characters, flow notes)."""
         return self._change_story(story_id, lambda story: story.model_copy(update={**_sent(patch), "updated_at": utc_now()}))
 
     def delete(self, story_id: str) -> None:
@@ -212,7 +205,7 @@ class StoryStore:
         return self._change_story(story_id, change)
 
     def update_scene(self, story_id: str, scene_id: str, patch: ScenePatch) -> Story:
-        """Changes the fields sent (title, text, tags, locks, characters, seed)."""
+        """Changes the fields sent (title, text, flow notes, tags, locks, characters, seed, LoRAs)."""
         update = {**_sent(patch), "updated_at": utc_now()}
         return self._change_scene(story_id, scene_id, lambda scene: scene.model_copy(update=update))
 

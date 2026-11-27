@@ -163,19 +163,24 @@ def test_stop_releases_the_port(handler: Handler) -> None:
 def test_every_tool_name_has_its_arguments_and_its_description() -> None:
     assert list(TOOLS_BY_NAME) == list(get_args(CodexToolName)) == list(CODEX_TOOL_ARGUMENTS)
     assert all(tool.description and tool.title for tool in CODEX_TOOLS)
-    assert [tool.name for tool in CODEX_TOOLS if tool.read_only] == ["list_stories", "get_story", "list_characters", "list_categories"]
-    assert [tool.name for tool in CODEX_TOOLS if tool.destructive] == ["delete_scene"]
-    assert [tool.name for tool in CODEX_TOOLS if tool.timeout_s == GENERATION_TOOL_TIMEOUT_S] == ["generate_scene", "generate_missing_scenes"]
+    assert [tool.name for tool in CODEX_TOOLS if tool.read_only] == [
+        "list_stories", "get_story", "list_characters", "list_categories", "list_loras", "get_generation_setup", "preview_scenes",
+        "consistency_report", "view_images",
+    ]  # fmt: skip
+    assert [tool.name for tool in CODEX_TOOLS if tool.destructive] == ["delete_story", "delete_scenes", "delete_character"]
+    assert [tool.name for tool in CODEX_TOOLS if tool.timeout_s == GENERATION_TOOL_TIMEOUT_S] == ["generate_scenes"]
 
 
 def test_tool_schemas_are_self_contained_and_strict() -> None:
-    schema = TOOLS_BY_NAME["update_scene"].input_schema()
+    schema = TOOLS_BY_NAME["update_scenes"].input_schema()
 
     assert schema["additionalProperties"] is False
-    assert schema["required"] == ["story_id", "scene_id"]
-    assert schema["properties"]["characters"]["anyOf"][0] == {"const": "story", "type": "string"}
-    assert TOOLS_BY_NAME["delete_scene"].input_schema()["required"] == ["story_id", "scene_id", "user_confirmed"]
-    assert TOOLS_BY_NAME["delete_scene"].descriptor()["annotations"]["destructiveHint"] is True
+    assert schema["required"] == ["story_id", "changes"]
+    change = schema["properties"]["changes"]["items"]
+    assert change["additionalProperties"] is False
+    assert change["properties"]["characters"]["anyOf"][0] == {"const": "story", "type": "string"}
+    assert TOOLS_BY_NAME["delete_scenes"].input_schema()["required"] == ["story_id", "scene_ids", "user_confirmed"]
+    assert TOOLS_BY_NAME["delete_scenes"].descriptor()["annotations"]["destructiveHint"] is True
 
 
 def test_inline_refs() -> None:

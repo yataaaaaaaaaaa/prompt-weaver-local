@@ -7,6 +7,7 @@ from dataclasses import dataclass
 from ..settings import AppPaths
 from .backend_settings import BackendSettingsStore
 from .characters import CharacterStore
+from .codex.images import ToolImageReader
 from .codex.service import CodexRuntime, CodexService
 from .downloads import DownloadManager
 from .file_hashes import FileHashCache
@@ -96,5 +97,12 @@ def build_services(
         characters=characters,
         ip_adapters=ip_adapters,
         stories=stories,
-        codex=CodexService(paths=paths, settings=settings, stories=stories, tasks=tasks, runtime=codex_runtime or CodexRuntime()),
+        codex=CodexService(
+            paths=paths,
+            settings=settings,
+            stories=stories,
+            tasks=tasks,
+            runtime=codex_runtime or CodexRuntime(),
+            images=ToolImageReader(outputs=outputs, characters=characters),
+        ),
     )

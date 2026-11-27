@@ -12,7 +12,7 @@ declined), no web search, the shell and the other feature tools that exist in th
 user's other MCP servers disabled, in an empty working directory (<data dir>/codex/workspace), and the developer
 instructions of instructions.py. Its only way to act is the app's MCP server (mcp_server.py, 127.0.0.1, a random
 token): every tool call goes through broker.py to the frontend window that sent the message, which runs it with the
-story store's actions.
+stores' actions; the pictures a result names reach Codex as MCP image content (images.py).
 
 A conversation's entries are built from Codex's notifications (protocol.py) and streamed to every window over
 /ws/tasks (CodexEvent); one turn runs at a time (the tool calls belong to it). Conversations: conversations.py.
@@ -55,6 +55,7 @@ from ..task_hub import TaskHub
 from .broker import ToolBroker, ToolOutcome, ToolTurn, activity
 from .conversations import Conversation, ConversationRegistry
 from .discovery import CodexDiscovery, CodexInstall
+from .images import ToolImageReader
 from .instructions import DEVELOPER_INSTRUCTIONS, app_context
 from .mcp_server import McpServer
 from .protocol import APP_MCP_SERVER, STOPPED_NOTICE, entries_of_turns, entry_of, is_unauthorized, turn_error_message
@@ -184,7 +185,14 @@ def _canonical(arguments: Any) -> str:
 
 class CodexService:
     def __init__(
-        self, *, paths: AppPaths, settings: BackendSettingsStore, stories: StoryStore, tasks: TaskHub, runtime: CodexRuntime
+        self,
+        *,
+        paths: AppPaths,
+        settings: BackendSettingsStore,
+        stories: StoryStore,
+        tasks: TaskHub,
+        runtime: CodexRuntime,
+        images: ToolImageReader | None = None,
     ) -> None:
         self._paths = paths
         self._settings = settings
@@ -198,6 +206,7 @@ class CodexService:
             is_connected=tasks.is_client_connected,
             current_turn=self._tool_turn,
             on_outcome=self._on_tool_outcome,
+            image_content=images.content if images is not None else None,
         )
         tasks.add_client_listener(self._broker.cancel_client)
         self._token = secrets.token_urlsafe(32)

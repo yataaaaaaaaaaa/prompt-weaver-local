@@ -272,7 +272,7 @@ def test_a_call_waits_for_the_frontend() -> None:
     assert box[0].call_tool_result() == {
         "content": [{"type": "text", "text": "{}"}],
         "isError": False,
-        "_meta": {"prompt_weaver/activity": {"ok": True, "summary": "Read Rain", "story_id": STORY, "scene_id": None}},
+        "_meta": {"prompt_weaver/activity": {"ok": True, "summary": "Read Rain", "story_id": STORY, "scene_id": None, "character_id": None}},
     }
     assert broker.resolve(call.call_id, CodexToolResult(ok=True, text="", summary="")) is False
     assert broker.pending() == 0

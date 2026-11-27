@@ -12,7 +12,7 @@ import pytest
 from PIL import Image
 from pydantic import ValidationError
 
-from app.schemas import SceneCreateRequest, SceneLock, ScenePatch, StoryCreateRequest, StoryPatch
+from app.schemas import LoraWeight, SceneCreateRequest, SceneLock, ScenePatch, StoryCreateRequest, StoryPatch
 from app.services.outputs import OutputRepository
 from app.services.stories import (
     STORIES_FORMAT_VERSION,
@@ -359,3 +359,59 @@ def test_reading_a_sidecar_recovers_the_newest_copy(app_paths: AppPaths, store: 
 
     assert [story.id for story in reopened.collection().items] == [created.id]
     assert app_paths.stories_file.is_file()
+
+
+def test_flow_fields_and_scene_loras_are_saved_patched_and_duplicated(store: StoryStore, app_paths: AppPaths) -> None:
+    story = store.create(
+        StoryCreateRequest(title="The lighthouse", logline="A keeper guides a boat home.", synopsis="Act one...", style_notes="watercolor")
+    )
+    store.add_scene(
+        story.id,
+        SceneCreateRequest(
+            title="Arrival", beat="Mira arrives", shot="wide shot", setting="island, dusk", mood="lonely",
+            loras=[LoraWeight(id="watercolor", weight=0.6)],
+        ),
+    )  # fmt: skip
+    (arrival,) = scene_ids(store, story.id)
+
+    patched = store.update_scene(story.id, arrival, ScenePatch(mood="hopeful", loras=[LoraWeight(id="ink", weight=0)]))
+    (scene,) = patched.scenes
+    assert (scene.beat, scene.shot, scene.setting, scene.mood) == ("Mira arrives", "wide shot", "island, dusk", "hopeful")
+    assert scene.loras == [LoraWeight(id="ink", weight=0)]
+    updated = store.update(story.id, StoryPatch(synopsis="Act one, act two."))
+    assert (updated.logline, updated.synopsis, updated.style_notes) == ("A keeper guides a boat home.", "Act one, act two.", "watercolor")
+    copy = store.duplicate_scene(story.id, arrival).scenes[1]
+    assert (copy.beat, copy.mood, copy.loras) == ("Mira arrives", "hopeful", [LoraWeight(id="ink", weight=0)])
+
+    reloaded = StoryStore(paths=app_paths, outputs=OutputRepository(app_paths)).get(story.id)
+    assert reloaded == store.get(story.id)
+    for field in ("beat", "loras", "mood"):
+        with pytest.raises(ValidationError, match="cannot be null"):
+            ScenePatch.model_validate({field: None})
+    with pytest.raises(ValidationError, match="cannot be null"):
+        StoryPatch.model_validate({"logline": None})
+    with pytest.raises(ValidationError):
+        SceneCreateRequest(loras=[LoraWeight(id="x", weight=12)])
+
+
+def test_stories_saved_before_the_flow_fields_load_with_their_defaults(app_paths: AppPaths, store: StoryStore) -> None:
+    app_paths.stories_file.parent.mkdir(parents=True, exist_ok=True)
+    scene = {
+        "id": "scn-aaaaaaaaaaa1", "title": "Arrival", "text": "Hello", "extra_tags": ["dawn"], "negative_tags": [], "locks": [],
+        "character_ids": None, "seed": 3, "variants": [], "chosen_output_id": None,
+        "created_at": "2026-01-01T00:00:00Z", "updated_at": "2026-01-01T00:00:00Z",
+    }  # fmt: skip
+    story = {
+        "id": "sty-aaaaaaaaaaa1", "title": "Old", "character_ids": [], "scenes": [scene],
+        "created_at": "2026-01-01T00:00:00Z", "updated_at": "2026-01-01T00:00:00Z",
+    }  # fmt: skip
+    app_paths.stories_file.write_text(json.dumps({"version": STORIES_FORMAT_VERSION, "items": [story]}), encoding="utf-8")
+
+    (loaded,) = store.collection().items
+    assert (loaded.logline, loaded.synopsis, loaded.style_notes) == ("", "", "")
+    (old,) = loaded.scenes
+    assert (old.text, old.seed, old.beat, old.shot, old.setting, old.mood, old.loras) == ("Hello", 3, "", "", "", "", [])
+    # A change keeps everything else and writes the new fields with their defaults.
+    store.update_scene(loaded.id, old.id, ScenePatch(beat="She arrives"))
+    saved = json.loads(app_paths.stories_file.read_text(encoding="utf-8"))["items"][0]
+    assert (saved["logline"], saved["scenes"][0]["beat"], saved["scenes"][0]["loras"], saved["scenes"][0]["extra_tags"]) == ("", "She arrives", [], ["dawn"])

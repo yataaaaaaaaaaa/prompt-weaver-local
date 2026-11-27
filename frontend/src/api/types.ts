@@ -137,6 +137,7 @@ export type CodexEntryKind = CodexEntry['kind'];
 export type CodexEntryStatus = CodexEntry['status'];
 export type CodexTurnRequest = Schemas['CodexTurnRequest'];
 export type CodexToolResult = Schemas['CodexToolResult'];
+export type CodexToolImage = Schemas['CodexToolImage'];
 /** A WebSocket message of the co-writer (discriminated by `kind`). */
 export type CodexEvent = Schemas['CodexEvent'];
 export type CodexEventKind = CodexEvent['kind'];

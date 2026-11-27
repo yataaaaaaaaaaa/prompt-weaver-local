@@ -834,42 +834,26 @@
         "title": "CharacterImageRequest",
         "type": "object"
       },
-      "CodexAddSceneArgs": {
+      "CodexAddScenesArgs": {
         "additionalProperties": false,
-        "properties": {
-          "characters": {
-            "anyOf": [
+        "examples": [
+          {
+            "position": 2,
+            "scenes": [
               {
-                "const": "story",
-                "type": "string"
-              },
-              {
-                "items": {
-                  "pattern": "^chr-[0-9a-f]{12}$",
-                  "type": "string"
-                },
-                "type": "array"
+                "beat": "The boat reaches the harbor",
+                "extra_tags": [
+                  "harbor",
+                  "fishing boats",
+                  "morning"
+                ],
+                "title": "The harbor"
               }
             ],
-            "default": "story",
-            "description": "\"story\": the story's characters; a list: its own.",
-            "title": "Characters"
-          },
-          "extra_tags": {
-            "description": "Danbooru-style tags of the scene's picture.",
-            "items": {
-              "type": "string"
-            },
-            "title": "Extra Tags",
-            "type": "array"
-          },
-          "negative_tags": {
-            "items": {
-              "type": "string"
-            },
-            "title": "Negative Tags",
-            "type": "array"
-          },
+            "story_id": "sty-0123456789ab"
+          }
+        ],
+        "properties": {
           "position": {
             "anyOf": [
               {
@@ -880,52 +864,36 @@
                 "type": "null"
               }
             ],
-            "description": "1-based position; null: at the end.",
+            "description": "1-based position of the first new scene (the others follow it); null: at the end.",
             "title": "Position"
+          },
+          "scenes": {
+            "items": {
+              "$ref": "#/components/schemas/CodexSceneSpec"
+            },
+            "maxItems": 60,
+            "minItems": 1,
+            "title": "Scenes",
+            "type": "array"
           },
           "story_id": {
             "pattern": "^sty-[0-9a-f]{12}$",
             "title": "Story Id",
             "type": "string"
-          },
-          "text": {
-            "default": "",
-            "description": "The narrative text of the scene.",
-            "maxLength": 50000,
-            "title": "Text",
-            "type": "string"
-          },
-          "title": {
-            "anyOf": [
-              {
-                "maxLength": 200,
-                "minLength": 1,
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "description": "null: 'Scene <n>'.",
-            "title": "Title"
           }
         },
         "required": [
           "story_id",
-          "title",
-          "text",
-          "extra_tags",
-          "negative_tags",
-          "characters",
+          "scenes",
           "position"
         ],
-        "title": "CodexAddSceneArgs",
+        "title": "CodexAddScenesArgs",
         "type": "object"
       },
-      "CodexAddSceneCall": {
+      "CodexAddScenesCall": {
         "properties": {
           "arguments": {
-            "$ref": "#/components/schemas/CodexAddSceneArgs"
+            "$ref": "#/components/schemas/CodexAddScenesArgs"
           },
           "call_id": {
             "title": "Call Id",
@@ -940,7 +908,7 @@
             "type": "string"
           },
           "tool": {
-            "const": "add_scene",
+            "const": "add_scenes",
             "title": "Tool",
             "type": "string"
           }
@@ -952,7 +920,40 @@
           "tool",
           "arguments"
         ],
-        "title": "CodexAddSceneCall",
+        "title": "CodexAddScenesCall",
+        "type": "object"
+      },
+      "CodexConsistencyReportCall": {
+        "properties": {
+          "arguments": {
+            "$ref": "#/components/schemas/CodexScenesArgs"
+          },
+          "call_id": {
+            "title": "Call Id",
+            "type": "string"
+          },
+          "client_id": {
+            "title": "Client Id",
+            "type": "string"
+          },
+          "conversation_id": {
+            "title": "Conversation Id",
+            "type": "string"
+          },
+          "tool": {
+            "const": "consistency_report",
+            "title": "Tool",
+            "type": "string"
+          }
+        },
+        "required": [
+          "call_id",
+          "client_id",
+          "conversation_id",
+          "tool",
+          "arguments"
+        ],
+        "title": "CodexConsistencyReportCall",
         "type": "object"
       },
       "CodexConversation": {
@@ -1053,17 +1054,326 @@
         "title": "CodexConversationReset",
         "type": "object"
       },
+      "CodexCreateCharacterArgs": {
+        "additionalProperties": false,
+        "description": "A new character. From a picture (from_output_id or from_scene) it is prefilled like the app's \"Create character\":\nthe tags of the picture's prompt as identity tags (its 'Character outfit' as outfit tags), its LoRAs with their\nweights, its seed (not locked), and the picture as the first reference image. The fields given replace the\nprefilled ones.",
+        "examples": [
+          {
+            "identity_tags": [
+              "1girl",
+              "short red hair",
+              "green eyes",
+              "freckles"
+            ],
+            "loras": [
+              {
+                "lora": "Watercolor Wash",
+                "weight": 0.5
+              }
+            ],
+            "name": "Mira",
+            "outfit_tags": [
+              "leather jacket",
+              "white scarf"
+            ]
+          },
+          {
+            "from_scene": {
+              "scene_id": "scn-0123456789ab",
+              "story_id": "sty-0123456789ab"
+            },
+            "name": "Mira",
+            "seed_locked": true
+          }
+        ],
+        "properties": {
+          "from_output_id": {
+            "anyOf": [
+              {
+                "pattern": "^\\d{10}$",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Prefill from this output (see above).",
+            "title": "From Output Id"
+          },
+          "from_scene": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/CodexSceneRef"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Or prefill from a scene's picture."
+          },
+          "identity_tags": {
+            "anyOf": [
+              {
+                "items": {
+                  "type": "string"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Appearance: face, hair, eyes, body (never clothes).",
+            "title": "Identity Tags"
+          },
+          "loras": {
+            "anyOf": [
+              {
+                "items": {
+                  "$ref": "#/components/schemas/CodexLoraSpec"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Character LoRAs with their weights.",
+            "title": "Loras"
+          },
+          "name": {
+            "anyOf": [
+              {
+                "maxLength": 120,
+                "minLength": 1,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "null: 'New character' or 'Character from #<output>'.",
+            "title": "Name"
+          },
+          "negative_tags": {
+            "anyOf": [
+              {
+                "items": {
+                  "type": "string"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Negative Tags"
+          },
+          "outfit_tags": {
+            "anyOf": [
+              {
+                "items": {
+                  "type": "string"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Default outfit, kept apart from the identity.",
+            "title": "Outfit Tags"
+          },
+          "reference_focus": {
+            "anyOf": [
+              {
+                "enum": [
+                  "face",
+                  "general"
+                ],
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "'face': keep the face; 'general': the whole look.",
+            "title": "Reference Focus"
+          },
+          "reference_output_ids": {
+            "description": "More reference images (outputs).",
+            "items": {
+              "pattern": "^\\d{10}$",
+              "type": "string"
+            },
+            "maxItems": 4,
+            "title": "Reference Output Ids",
+            "type": "array"
+          },
+          "reference_strength": {
+            "anyOf": [
+              {
+                "maximum": 1.0,
+                "minimum": 0.0,
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "IP-Adapter strength of the reference images (0 to 1).",
+            "title": "Reference Strength"
+          },
+          "seed": {
+            "anyOf": [
+              {
+                "minimum": 0,
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "The character's image seed.",
+            "title": "Seed"
+          },
+          "seed_locked": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Generate every picture of the character with its seed.",
+            "title": "Seed Locked"
+          }
+        },
+        "required": [
+          "name",
+          "from_output_id",
+          "from_scene",
+          "identity_tags",
+          "outfit_tags",
+          "negative_tags",
+          "loras",
+          "seed",
+          "seed_locked",
+          "reference_strength",
+          "reference_focus",
+          "reference_output_ids"
+        ],
+        "title": "CodexCreateCharacterArgs",
+        "type": "object"
+      },
+      "CodexCreateCharacterCall": {
+        "properties": {
+          "arguments": {
+            "$ref": "#/components/schemas/CodexCreateCharacterArgs"
+          },
+          "call_id": {
+            "title": "Call Id",
+            "type": "string"
+          },
+          "client_id": {
+            "title": "Client Id",
+            "type": "string"
+          },
+          "conversation_id": {
+            "title": "Conversation Id",
+            "type": "string"
+          },
+          "tool": {
+            "const": "create_character",
+            "title": "Tool",
+            "type": "string"
+          }
+        },
+        "required": [
+          "call_id",
+          "client_id",
+          "conversation_id",
+          "tool",
+          "arguments"
+        ],
+        "title": "CodexCreateCharacterCall",
+        "type": "object"
+      },
       "CodexCreateStoryArgs": {
         "additionalProperties": false,
+        "examples": [
+          {
+            "character_ids": [
+              "chr-0123456789ab"
+            ],
+            "logline": "A lonely keeper must guide a lost boat home through the storm of the century.",
+            "scenes": [
+              {
+                "beat": "Mira takes over the lighthouse",
+                "extra_tags": [
+                  "lighthouse",
+                  "spiral stairs",
+                  "looking up"
+                ],
+                "setting": "rocky island, evening",
+                "shot": "wide shot",
+                "text": "Mira climbs the spiral stairs for the first time.",
+                "title": "Arrival"
+              },
+              {
+                "beat": "The storm hits",
+                "extra_tags": [
+                  "storm",
+                  "night",
+                  "crashing waves"
+                ],
+                "title": "The storm"
+              }
+            ],
+            "style_notes": "soft watercolor, muted blues, warm lamp light, children's picture book",
+            "title": "The lighthouse keeper"
+          }
+        ],
         "properties": {
           "character_ids": {
-            "description": "The story's characters (list_characters).",
+            "description": "The story's characters (list_characters), in every scene without its own.",
             "items": {
               "pattern": "^chr-[0-9a-f]{12}$",
               "type": "string"
             },
             "title": "Character Ids",
             "type": "array"
+          },
+          "logline": {
+            "default": "",
+            "description": "The story in one sentence.",
+            "maxLength": 5000,
+            "title": "Logline",
+            "type": "string"
+          },
+          "scenes": {
+            "description": "The outline: its scenes in reading order (one per beat).",
+            "items": {
+              "$ref": "#/components/schemas/CodexSceneSpec"
+            },
+            "maxItems": 60,
+            "title": "Scenes",
+            "type": "array"
+          },
+          "style_notes": {
+            "default": "",
+            "description": "Style and tone of the story and its pictures.",
+            "maxLength": 5000,
+            "title": "Style Notes",
+            "type": "string"
+          },
+          "synopsis": {
+            "default": "",
+            "description": "The whole story in a few paragraphs, beginning to end.",
+            "maxLength": 20000,
+            "title": "Synopsis",
+            "type": "string"
           },
           "title": {
             "maxLength": 200,
@@ -1074,7 +1384,11 @@
         },
         "required": [
           "title",
-          "character_ids"
+          "character_ids",
+          "logline",
+          "synopsis",
+          "style_notes",
+          "scenes"
         ],
         "title": "CodexCreateStoryArgs",
         "type": "object"
@@ -1112,17 +1426,12 @@
         "title": "CodexCreateStoryCall",
         "type": "object"
       },
-      "CodexDeleteSceneArgs": {
+      "CodexDeleteCharacterArgs": {
         "additionalProperties": false,
         "properties": {
-          "scene_id": {
-            "pattern": "^scn-[0-9a-f]{12}$",
-            "title": "Scene Id",
-            "type": "string"
-          },
-          "story_id": {
-            "pattern": "^sty-[0-9a-f]{12}$",
-            "title": "Story Id",
+          "character_id": {
+            "pattern": "^chr-[0-9a-f]{12}$",
+            "title": "Character Id",
             "type": "string"
           },
           "user_confirmed": {
@@ -1132,17 +1441,16 @@
           }
         },
         "required": [
-          "story_id",
-          "scene_id",
+          "character_id",
           "user_confirmed"
         ],
-        "title": "CodexDeleteSceneArgs",
+        "title": "CodexDeleteCharacterArgs",
         "type": "object"
       },
-      "CodexDeleteSceneCall": {
+      "CodexDeleteCharacterCall": {
         "properties": {
           "arguments": {
-            "$ref": "#/components/schemas/CodexDeleteSceneArgs"
+            "$ref": "#/components/schemas/CodexDeleteCharacterArgs"
           },
           "call_id": {
             "title": "Call Id",
@@ -1157,7 +1465,7 @@
             "type": "string"
           },
           "tool": {
-            "const": "delete_scene",
+            "const": "delete_character",
             "title": "Tool",
             "type": "string"
           }
@@ -1169,7 +1477,126 @@
           "tool",
           "arguments"
         ],
-        "title": "CodexDeleteSceneCall",
+        "title": "CodexDeleteCharacterCall",
+        "type": "object"
+      },
+      "CodexDeleteScenesArgs": {
+        "additionalProperties": false,
+        "properties": {
+          "scene_ids": {
+            "items": {
+              "pattern": "^scn-[0-9a-f]{12}$",
+              "type": "string"
+            },
+            "maxItems": 60,
+            "minItems": 1,
+            "title": "Scene Ids",
+            "type": "array"
+          },
+          "story_id": {
+            "pattern": "^sty-[0-9a-f]{12}$",
+            "title": "Story Id",
+            "type": "string"
+          },
+          "user_confirmed": {
+            "description": "True only when the user confirmed this deletion in the conversation.",
+            "title": "User Confirmed",
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "story_id",
+          "scene_ids",
+          "user_confirmed"
+        ],
+        "title": "CodexDeleteScenesArgs",
+        "type": "object"
+      },
+      "CodexDeleteScenesCall": {
+        "properties": {
+          "arguments": {
+            "$ref": "#/components/schemas/CodexDeleteScenesArgs"
+          },
+          "call_id": {
+            "title": "Call Id",
+            "type": "string"
+          },
+          "client_id": {
+            "title": "Client Id",
+            "type": "string"
+          },
+          "conversation_id": {
+            "title": "Conversation Id",
+            "type": "string"
+          },
+          "tool": {
+            "const": "delete_scenes",
+            "title": "Tool",
+            "type": "string"
+          }
+        },
+        "required": [
+          "call_id",
+          "client_id",
+          "conversation_id",
+          "tool",
+          "arguments"
+        ],
+        "title": "CodexDeleteScenesCall",
+        "type": "object"
+      },
+      "CodexDeleteStoryArgs": {
+        "additionalProperties": false,
+        "properties": {
+          "story_id": {
+            "pattern": "^sty-[0-9a-f]{12}$",
+            "title": "Story Id",
+            "type": "string"
+          },
+          "user_confirmed": {
+            "description": "True only when the user confirmed this deletion in the conversation.",
+            "title": "User Confirmed",
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "story_id",
+          "user_confirmed"
+        ],
+        "title": "CodexDeleteStoryArgs",
+        "type": "object"
+      },
+      "CodexDeleteStoryCall": {
+        "properties": {
+          "arguments": {
+            "$ref": "#/components/schemas/CodexDeleteStoryArgs"
+          },
+          "call_id": {
+            "title": "Call Id",
+            "type": "string"
+          },
+          "client_id": {
+            "title": "Client Id",
+            "type": "string"
+          },
+          "conversation_id": {
+            "title": "Conversation Id",
+            "type": "string"
+          },
+          "tool": {
+            "const": "delete_story",
+            "title": "Tool",
+            "type": "string"
+          }
+        },
+        "required": [
+          "call_id",
+          "client_id",
+          "conversation_id",
+          "tool",
+          "arguments"
+        ],
+        "title": "CodexDeleteStoryCall",
         "type": "object"
       },
       "CodexDeltaEvent": {
@@ -1249,9 +1676,110 @@
         "title": "CodexDuplicateSceneCall",
         "type": "object"
       },
+      "CodexEditVariantsArgs": {
+        "additionalProperties": false,
+        "description": "A scene's pictures (variants): every picture made for it or added to it; one of them is its picture.",
+        "properties": {
+          "add": {
+            "description": "Existing outputs added as variants (the last one becomes the picture).",
+            "items": {
+              "pattern": "^\\d{10}$",
+              "type": "string"
+            },
+            "title": "Add",
+            "type": "array"
+          },
+          "choose": {
+            "anyOf": [
+              {
+                "pattern": "^\\d{10}$",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "The variant that becomes the scene's picture.",
+            "title": "Choose"
+          },
+          "remove": {
+            "description": "Variants removed from the scene (the outputs are kept).",
+            "items": {
+              "pattern": "^\\d{10}$",
+              "type": "string"
+            },
+            "title": "Remove",
+            "type": "array"
+          },
+          "scene_id": {
+            "pattern": "^scn-[0-9a-f]{12}$",
+            "title": "Scene Id",
+            "type": "string"
+          },
+          "story_id": {
+            "pattern": "^sty-[0-9a-f]{12}$",
+            "title": "Story Id",
+            "type": "string"
+          }
+        },
+        "required": [
+          "story_id",
+          "scene_id",
+          "add",
+          "choose",
+          "remove"
+        ],
+        "title": "CodexEditVariantsArgs",
+        "type": "object"
+      },
+      "CodexEditVariantsCall": {
+        "properties": {
+          "arguments": {
+            "$ref": "#/components/schemas/CodexEditVariantsArgs"
+          },
+          "call_id": {
+            "title": "Call Id",
+            "type": "string"
+          },
+          "client_id": {
+            "title": "Client Id",
+            "type": "string"
+          },
+          "conversation_id": {
+            "title": "Conversation Id",
+            "type": "string"
+          },
+          "tool": {
+            "const": "edit_variants",
+            "title": "Tool",
+            "type": "string"
+          }
+        },
+        "required": [
+          "call_id",
+          "client_id",
+          "conversation_id",
+          "tool",
+          "arguments"
+        ],
+        "title": "CodexEditVariantsCall",
+        "type": "object"
+      },
       "CodexEntry": {
         "description": "One entry of a conversation: a message, a tool activity, an error or a notice ('Stopped.').",
         "properties": {
+          "character_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "The character a tool entry acted on.",
+            "title": "Character Id"
+          },
           "id": {
             "title": "Id",
             "type": "string"
@@ -1326,7 +1854,8 @@
           "status",
           "tool",
           "story_id",
-          "scene_id"
+          "scene_id",
+          "character_id"
         ],
         "title": "CodexEntry",
         "type": "object"
@@ -1402,43 +1931,42 @@
           }
         ]
       },
-      "CodexGenerateMissingScenesCall": {
+      "CodexGenerateScenesArgs": {
+        "additionalProperties": false,
         "properties": {
-          "arguments": {
-            "$ref": "#/components/schemas/CodexStoryArgs"
+          "scene_ids": {
+            "anyOf": [
+              {
+                "items": {
+                  "pattern": "^scn-[0-9a-f]{12}$",
+                  "type": "string"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "The scenes to illustrate, in this order; null: every scene without a picture.",
+            "title": "Scene Ids"
           },
-          "call_id": {
-            "title": "Call Id",
-            "type": "string"
-          },
-          "client_id": {
-            "title": "Client Id",
-            "type": "string"
-          },
-          "conversation_id": {
-            "title": "Conversation Id",
-            "type": "string"
-          },
-          "tool": {
-            "const": "generate_missing_scenes",
-            "title": "Tool",
+          "story_id": {
+            "pattern": "^sty-[0-9a-f]{12}$",
+            "title": "Story Id",
             "type": "string"
           }
         },
         "required": [
-          "call_id",
-          "client_id",
-          "conversation_id",
-          "tool",
-          "arguments"
+          "story_id",
+          "scene_ids"
         ],
-        "title": "CodexGenerateMissingScenesCall",
+        "title": "CodexGenerateScenesArgs",
         "type": "object"
       },
-      "CodexGenerateSceneCall": {
+      "CodexGenerateScenesCall": {
         "properties": {
           "arguments": {
-            "$ref": "#/components/schemas/CodexSceneArgs"
+            "$ref": "#/components/schemas/CodexGenerateScenesArgs"
           },
           "call_id": {
             "title": "Call Id",
@@ -1453,7 +1981,7 @@
             "type": "string"
           },
           "tool": {
-            "const": "generate_scene",
+            "const": "generate_scenes",
             "title": "Tool",
             "type": "string"
           }
@@ -1465,7 +1993,40 @@
           "tool",
           "arguments"
         ],
-        "title": "CodexGenerateSceneCall",
+        "title": "CodexGenerateScenesCall",
+        "type": "object"
+      },
+      "CodexGetGenerationSetupCall": {
+        "properties": {
+          "arguments": {
+            "$ref": "#/components/schemas/CodexNoArgs"
+          },
+          "call_id": {
+            "title": "Call Id",
+            "type": "string"
+          },
+          "client_id": {
+            "title": "Client Id",
+            "type": "string"
+          },
+          "conversation_id": {
+            "title": "Conversation Id",
+            "type": "string"
+          },
+          "tool": {
+            "const": "get_generation_setup",
+            "title": "Tool",
+            "type": "string"
+          }
+        },
+        "required": [
+          "call_id",
+          "client_id",
+          "conversation_id",
+          "tool",
+          "arguments"
+        ],
+        "title": "CodexGetGenerationSetupCall",
         "type": "object"
       },
       "CodexGetStoryCall": {
@@ -1501,33 +2062,69 @@
         "title": "CodexGetStoryCall",
         "type": "object"
       },
-      "CodexListCategoriesArgs": {
+      "CodexInstallIpAdapterArgs": {
         "additionalProperties": false,
         "properties": {
-          "query": {
-            "anyOf": [
-              {
-                "maxLength": 200,
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
+          "focus": {
+            "default": "face",
+            "description": "The reference focus to install for the current model.",
+            "enum": [
+              "face",
+              "general"
             ],
-            "description": "Only the categories whose name contains it.",
-            "title": "Query"
+            "title": "Focus",
+            "type": "string"
+          },
+          "user_confirmed": {
+            "description": "True only when the user agreed to the download (it can be several GB).",
+            "title": "User Confirmed",
+            "type": "boolean"
           }
         },
         "required": [
-          "query"
+          "focus",
+          "user_confirmed"
         ],
-        "title": "CodexListCategoriesArgs",
+        "title": "CodexInstallIpAdapterArgs",
+        "type": "object"
+      },
+      "CodexInstallIpAdapterCall": {
+        "properties": {
+          "arguments": {
+            "$ref": "#/components/schemas/CodexInstallIpAdapterArgs"
+          },
+          "call_id": {
+            "title": "Call Id",
+            "type": "string"
+          },
+          "client_id": {
+            "title": "Client Id",
+            "type": "string"
+          },
+          "conversation_id": {
+            "title": "Conversation Id",
+            "type": "string"
+          },
+          "tool": {
+            "const": "install_ip_adapter",
+            "title": "Tool",
+            "type": "string"
+          }
+        },
+        "required": [
+          "call_id",
+          "client_id",
+          "conversation_id",
+          "tool",
+          "arguments"
+        ],
+        "title": "CodexInstallIpAdapterCall",
         "type": "object"
       },
       "CodexListCategoriesCall": {
         "properties": {
           "arguments": {
-            "$ref": "#/components/schemas/CodexListCategoriesArgs"
+            "$ref": "#/components/schemas/CodexQueryArgs"
           },
           "call_id": {
             "title": "Call Id",
@@ -1590,6 +2187,39 @@
         "title": "CodexListCharactersCall",
         "type": "object"
       },
+      "CodexListLorasCall": {
+        "properties": {
+          "arguments": {
+            "$ref": "#/components/schemas/CodexQueryArgs"
+          },
+          "call_id": {
+            "title": "Call Id",
+            "type": "string"
+          },
+          "client_id": {
+            "title": "Client Id",
+            "type": "string"
+          },
+          "conversation_id": {
+            "title": "Conversation Id",
+            "type": "string"
+          },
+          "tool": {
+            "const": "list_loras",
+            "title": "Tool",
+            "type": "string"
+          }
+        },
+        "required": [
+          "call_id",
+          "client_id",
+          "conversation_id",
+          "tool",
+          "arguments"
+        ],
+        "title": "CodexListLorasCall",
+        "type": "object"
+      },
       "CodexListStoriesCall": {
         "properties": {
           "arguments": {
@@ -1623,28 +2253,19 @@
         "title": "CodexListStoriesCall",
         "type": "object"
       },
-      "CodexLockArgs": {
+      "CodexLockSpec": {
         "additionalProperties": false,
+        "description": "A sub-prompt of one of the user's prompt categories, locked for a scene (it replaces that category's pick).",
         "properties": {
           "category": {
-            "description": "A prompt category (list_categories).",
+            "description": "A prompt category (list_categories), e.g. 'Background'.",
             "maxLength": 200,
             "minLength": 1,
             "title": "Category",
             "type": "string"
           },
-          "scene_id": {
-            "pattern": "^scn-[0-9a-f]{12}$",
-            "title": "Scene Id",
-            "type": "string"
-          },
-          "story_id": {
-            "pattern": "^sty-[0-9a-f]{12}$",
-            "title": "Story Id",
-            "type": "string"
-          },
           "sub_prompt": {
-            "description": "One of that category's sub-prompts.",
+            "description": "One of that category's sub-prompts, as listed.",
             "maxLength": 5000,
             "minLength": 1,
             "title": "Sub Prompt",
@@ -1652,45 +2273,37 @@
           }
         },
         "required": [
-          "story_id",
-          "scene_id",
           "category",
           "sub_prompt"
         ],
-        "title": "CodexLockArgs",
+        "title": "CodexLockSpec",
         "type": "object"
       },
-      "CodexLockSubPromptCall": {
+      "CodexLoraSpec": {
+        "additionalProperties": false,
+        "description": "A LoRA of the user's library with its weight.",
         "properties": {
-          "arguments": {
-            "$ref": "#/components/schemas/CodexLockArgs"
-          },
-          "call_id": {
-            "title": "Call Id",
+          "lora": {
+            "description": "The LoRA's lora_id or its name (list_loras).",
+            "maxLength": 300,
+            "minLength": 1,
+            "title": "Lora",
             "type": "string"
           },
-          "client_id": {
-            "title": "Client Id",
-            "type": "string"
-          },
-          "conversation_id": {
-            "title": "Conversation Id",
-            "type": "string"
-          },
-          "tool": {
-            "const": "lock_sub_prompt",
-            "title": "Tool",
-            "type": "string"
+          "weight": {
+            "default": 1.0,
+            "description": "Its weight (usually 0.4 to 1; 0 turns it off for the scene).",
+            "maximum": 10.0,
+            "minimum": -10.0,
+            "title": "Weight",
+            "type": "number"
           }
         },
         "required": [
-          "call_id",
-          "client_id",
-          "conversation_id",
-          "tool",
-          "arguments"
+          "lora",
+          "weight"
         ],
-        "title": "CodexLockSubPromptCall",
+        "title": "CodexLoraSpec",
         "type": "object"
       },
       "CodexModelOption": {
@@ -1712,38 +2325,16 @@
         "title": "CodexModelOption",
         "type": "object"
       },
-      "CodexMoveSceneArgs": {
+      "CodexNoArgs": {
         "additionalProperties": false,
-        "properties": {
-          "position": {
-            "description": "The new 1-based position.",
-            "minimum": 1,
-            "title": "Position",
-            "type": "integer"
-          },
-          "scene_id": {
-            "pattern": "^scn-[0-9a-f]{12}$",
-            "title": "Scene Id",
-            "type": "string"
-          },
-          "story_id": {
-            "pattern": "^sty-[0-9a-f]{12}$",
-            "title": "Story Id",
-            "type": "string"
-          }
-        },
-        "required": [
-          "story_id",
-          "scene_id",
-          "position"
-        ],
-        "title": "CodexMoveSceneArgs",
+        "properties": {},
+        "title": "CodexNoArgs",
         "type": "object"
       },
-      "CodexMoveSceneCall": {
+      "CodexPreviewScenesCall": {
         "properties": {
           "arguments": {
-            "$ref": "#/components/schemas/CodexMoveSceneArgs"
+            "$ref": "#/components/schemas/CodexScenesArgs"
           },
           "call_id": {
             "title": "Call Id",
@@ -1758,7 +2349,7 @@
             "type": "string"
           },
           "tool": {
-            "const": "move_scene",
+            "const": "preview_scenes",
             "title": "Tool",
             "type": "string"
           }
@@ -1770,13 +2361,130 @@
           "tool",
           "arguments"
         ],
-        "title": "CodexMoveSceneCall",
+        "title": "CodexPreviewScenesCall",
         "type": "object"
       },
-      "CodexNoArgs": {
+      "CodexQueryArgs": {
         "additionalProperties": false,
-        "properties": {},
-        "title": "CodexNoArgs",
+        "properties": {
+          "query": {
+            "anyOf": [
+              {
+                "maxLength": 200,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Only the entries whose name contains it (case-insensitive); null: all.",
+            "title": "Query"
+          }
+        },
+        "required": [
+          "query"
+        ],
+        "title": "CodexQueryArgs",
+        "type": "object"
+      },
+      "CodexReorderScenesArgs": {
+        "additionalProperties": false,
+        "examples": [
+          {
+            "position": 1,
+            "scene_id": "scn-0123456789ab",
+            "story_id": "sty-0123456789ab"
+          }
+        ],
+        "properties": {
+          "order": {
+            "anyOf": [
+              {
+                "items": {
+                  "pattern": "^scn-[0-9a-f]{12}$",
+                  "type": "string"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Every scene_id of the story once, in the new order.",
+            "title": "Order"
+          },
+          "position": {
+            "anyOf": [
+              {
+                "minimum": 1,
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Its new 1-based position.",
+            "title": "Position"
+          },
+          "scene_id": {
+            "anyOf": [
+              {
+                "pattern": "^scn-[0-9a-f]{12}$",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Or one scene to move (with position).",
+            "title": "Scene Id"
+          },
+          "story_id": {
+            "pattern": "^sty-[0-9a-f]{12}$",
+            "title": "Story Id",
+            "type": "string"
+          }
+        },
+        "required": [
+          "story_id",
+          "order",
+          "scene_id",
+          "position"
+        ],
+        "title": "CodexReorderScenesArgs",
+        "type": "object"
+      },
+      "CodexReorderScenesCall": {
+        "properties": {
+          "arguments": {
+            "$ref": "#/components/schemas/CodexReorderScenesArgs"
+          },
+          "call_id": {
+            "title": "Call Id",
+            "type": "string"
+          },
+          "client_id": {
+            "title": "Client Id",
+            "type": "string"
+          },
+          "conversation_id": {
+            "title": "Conversation Id",
+            "type": "string"
+          },
+          "tool": {
+            "const": "reorder_scenes",
+            "title": "Tool",
+            "type": "string"
+          }
+        },
+        "required": [
+          "call_id",
+          "client_id",
+          "conversation_id",
+          "tool",
+          "arguments"
+        ],
+        "title": "CodexReorderScenesCall",
         "type": "object"
       },
       "CodexSceneArgs": {
@@ -1798,6 +2506,496 @@
           "scene_id"
         ],
         "title": "CodexSceneArgs",
+        "type": "object"
+      },
+      "CodexSceneChange": {
+        "additionalProperties": false,
+        "description": "One change of update_scenes: its target (scene_id, or scene_ids for the same change to several scenes) and the\nfields to change. Replacing fields (null: unchanged) and edits of the current values ([]: none) can be mixed.",
+        "properties": {
+          "add_negative_tags": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Add Negative Tags",
+            "type": "array"
+          },
+          "add_tags": {
+            "description": "Scene tags added (one that is there already stays once).",
+            "items": {
+              "type": "string"
+            },
+            "title": "Add Tags",
+            "type": "array"
+          },
+          "beat": {
+            "anyOf": [
+              {
+                "maxLength": 1000,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Beat"
+          },
+          "characters": {
+            "anyOf": [
+              {
+                "const": "story",
+                "type": "string"
+              },
+              {
+                "items": {
+                  "pattern": "^chr-[0-9a-f]{12}$",
+                  "type": "string"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "\"story\": the story's characters; a list of character_id: its own ([]: none).",
+            "title": "Characters"
+          },
+          "extra_tags": {
+            "anyOf": [
+              {
+                "items": {
+                  "type": "string"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Replaces the scene tags.",
+            "title": "Extra Tags"
+          },
+          "lock": {
+            "description": "Locks these (each replaces its category's lock).",
+            "items": {
+              "$ref": "#/components/schemas/CodexLockSpec"
+            },
+            "title": "Lock",
+            "type": "array"
+          },
+          "locks": {
+            "anyOf": [
+              {
+                "items": {
+                  "$ref": "#/components/schemas/CodexLockSpec"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Replaces every locked sub-prompt ([]: none).",
+            "title": "Locks"
+          },
+          "loras": {
+            "anyOf": [
+              {
+                "items": {
+                  "$ref": "#/components/schemas/CodexLoraSpec"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Replaces the scene's LoRAs ([]: none).",
+            "title": "Loras"
+          },
+          "mood": {
+            "anyOf": [
+              {
+                "maxLength": 1000,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Mood"
+          },
+          "negative_tags": {
+            "anyOf": [
+              {
+                "items": {
+                  "type": "string"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Replaces the negative tags.",
+            "title": "Negative Tags"
+          },
+          "remove_loras": {
+            "description": "LoRAs (lora_id or name) removed from the scene.",
+            "items": {
+              "maxLength": 300,
+              "minLength": 1,
+              "type": "string"
+            },
+            "title": "Remove Loras",
+            "type": "array"
+          },
+          "remove_negative_tags": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Remove Negative Tags",
+            "type": "array"
+          },
+          "remove_tags": {
+            "description": "Scene tags removed.",
+            "items": {
+              "type": "string"
+            },
+            "title": "Remove Tags",
+            "type": "array"
+          },
+          "scene_id": {
+            "anyOf": [
+              {
+                "pattern": "^scn-[0-9a-f]{12}$",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "The scene to change.",
+            "title": "Scene Id"
+          },
+          "scene_ids": {
+            "anyOf": [
+              {
+                "const": "all",
+                "type": "string"
+              },
+              {
+                "items": {
+                  "pattern": "^scn-[0-9a-f]{12}$",
+                  "type": "string"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Or several scenes ([ids] or \"all\").",
+            "title": "Scene Ids"
+          },
+          "seed": {
+            "anyOf": [
+              {
+                "minimum": 0,
+                "type": "integer"
+              },
+              {
+                "const": "random",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "A fixed seed, or \"random\".",
+            "title": "Seed"
+          },
+          "set_loras": {
+            "description": "Adds these LoRAs, or changes their weight.",
+            "items": {
+              "$ref": "#/components/schemas/CodexLoraSpec"
+            },
+            "title": "Set Loras",
+            "type": "array"
+          },
+          "setting": {
+            "anyOf": [
+              {
+                "maxLength": 1000,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Setting"
+          },
+          "shot": {
+            "anyOf": [
+              {
+                "maxLength": 1000,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Shot"
+          },
+          "text": {
+            "anyOf": [
+              {
+                "maxLength": 50000,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Text"
+          },
+          "title": {
+            "anyOf": [
+              {
+                "maxLength": 200,
+                "minLength": 1,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Only with scene_id.",
+            "title": "Title"
+          },
+          "unlock": {
+            "description": "Categories whose lock is removed.",
+            "items": {
+              "maxLength": 200,
+              "minLength": 1,
+              "type": "string"
+            },
+            "title": "Unlock",
+            "type": "array"
+          }
+        },
+        "required": [
+          "scene_id",
+          "scene_ids",
+          "title",
+          "text",
+          "beat",
+          "shot",
+          "setting",
+          "mood",
+          "extra_tags",
+          "add_tags",
+          "remove_tags",
+          "negative_tags",
+          "add_negative_tags",
+          "remove_negative_tags",
+          "locks",
+          "lock",
+          "unlock",
+          "loras",
+          "set_loras",
+          "remove_loras",
+          "characters",
+          "seed"
+        ],
+        "title": "CodexSceneChange",
+        "type": "object"
+      },
+      "CodexSceneRef": {
+        "additionalProperties": false,
+        "description": "A scene: its picture (chosen variant) is used.",
+        "properties": {
+          "scene_id": {
+            "pattern": "^scn-[0-9a-f]{12}$",
+            "title": "Scene Id",
+            "type": "string"
+          },
+          "story_id": {
+            "pattern": "^sty-[0-9a-f]{12}$",
+            "title": "Story Id",
+            "type": "string"
+          }
+        },
+        "required": [
+          "story_id",
+          "scene_id"
+        ],
+        "title": "CodexSceneRef",
+        "type": "object"
+      },
+      "CodexSceneSpec": {
+        "additionalProperties": false,
+        "description": "A new scene. Its picture is made from its tags, locks, LoRAs, characters and seed; the flow notes (beat, shot,\nsetting, mood) plan it and are never added to the prompt.",
+        "properties": {
+          "beat": {
+            "default": "",
+            "description": "What happens and why it matters to the story (one line).",
+            "maxLength": 1000,
+            "title": "Beat",
+            "type": "string"
+          },
+          "characters": {
+            "anyOf": [
+              {
+                "const": "story",
+                "type": "string"
+              },
+              {
+                "items": {
+                  "pattern": "^chr-[0-9a-f]{12}$",
+                  "type": "string"
+                },
+                "type": "array"
+              }
+            ],
+            "default": "story",
+            "description": "\"story\": the story's characters; a list of character_id: its own ([]: none).",
+            "title": "Characters"
+          },
+          "extra_tags": {
+            "description": "Danbooru-style tags of the picture: action, expression, pose, setting, composition, light (never the characters' appearance).",
+            "items": {
+              "type": "string"
+            },
+            "title": "Extra Tags",
+            "type": "array"
+          },
+          "locks": {
+            "description": "Sub-prompts of the user's categories to use.",
+            "items": {
+              "$ref": "#/components/schemas/CodexLockSpec"
+            },
+            "title": "Locks",
+            "type": "array"
+          },
+          "loras": {
+            "description": "LoRAs of this scene only, with their weights.",
+            "items": {
+              "$ref": "#/components/schemas/CodexLoraSpec"
+            },
+            "title": "Loras",
+            "type": "array"
+          },
+          "mood": {
+            "default": "",
+            "description": "Mood and emotional tone, e.g. 'quiet hope'.",
+            "maxLength": 1000,
+            "title": "Mood",
+            "type": "string"
+          },
+          "negative_tags": {
+            "description": "Added to the negative prompt of this scene.",
+            "items": {
+              "type": "string"
+            },
+            "title": "Negative Tags",
+            "type": "array"
+          },
+          "seed": {
+            "anyOf": [
+              {
+                "minimum": 0,
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "A fixed image seed (the same picture again); null: random.",
+            "title": "Seed"
+          },
+          "setting": {
+            "default": "",
+            "description": "Place and time, e.g. 'harbor at dawn, light fog'.",
+            "maxLength": 1000,
+            "title": "Setting",
+            "type": "string"
+          },
+          "shot": {
+            "default": "",
+            "description": "Framing and camera, e.g. 'wide shot, low angle'.",
+            "maxLength": 1000,
+            "title": "Shot",
+            "type": "string"
+          },
+          "text": {
+            "default": "",
+            "description": "The narrative text read under the picture (prose).",
+            "maxLength": 50000,
+            "title": "Text",
+            "type": "string"
+          },
+          "title": {
+            "anyOf": [
+              {
+                "maxLength": 200,
+                "minLength": 1,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Short title; null: 'Scene <n>'.",
+            "title": "Title"
+          }
+        },
+        "required": [
+          "title",
+          "beat",
+          "text",
+          "shot",
+          "setting",
+          "mood",
+          "extra_tags",
+          "negative_tags",
+          "locks",
+          "loras",
+          "characters",
+          "seed"
+        ],
+        "title": "CodexSceneSpec",
+        "type": "object"
+      },
+      "CodexScenesArgs": {
+        "additionalProperties": false,
+        "properties": {
+          "scene_ids": {
+            "anyOf": [
+              {
+                "items": {
+                  "pattern": "^scn-[0-9a-f]{12}$",
+                  "type": "string"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "The scenes; null: every scene.",
+            "title": "Scene Ids"
+          },
+          "story_id": {
+            "pattern": "^sty-[0-9a-f]{12}$",
+            "title": "Story Id",
+            "type": "string"
+          }
+        },
+        "required": [
+          "story_id",
+          "scene_ids"
+        ],
+        "title": "CodexScenesArgs",
         "type": "object"
       },
       "CodexSettingsUpdate": {
@@ -2028,21 +3226,29 @@
           "call": {
             "discriminator": {
               "mapping": {
-                "add_scene": "#/components/schemas/CodexAddSceneCall",
+                "add_scenes": "#/components/schemas/CodexAddScenesCall",
+                "consistency_report": "#/components/schemas/CodexConsistencyReportCall",
+                "create_character": "#/components/schemas/CodexCreateCharacterCall",
                 "create_story": "#/components/schemas/CodexCreateStoryCall",
-                "delete_scene": "#/components/schemas/CodexDeleteSceneCall",
+                "delete_character": "#/components/schemas/CodexDeleteCharacterCall",
+                "delete_scenes": "#/components/schemas/CodexDeleteScenesCall",
+                "delete_story": "#/components/schemas/CodexDeleteStoryCall",
                 "duplicate_scene": "#/components/schemas/CodexDuplicateSceneCall",
-                "generate_missing_scenes": "#/components/schemas/CodexGenerateMissingScenesCall",
-                "generate_scene": "#/components/schemas/CodexGenerateSceneCall",
+                "edit_variants": "#/components/schemas/CodexEditVariantsCall",
+                "generate_scenes": "#/components/schemas/CodexGenerateScenesCall",
+                "get_generation_setup": "#/components/schemas/CodexGetGenerationSetupCall",
                 "get_story": "#/components/schemas/CodexGetStoryCall",
+                "install_ip_adapter": "#/components/schemas/CodexInstallIpAdapterCall",
                 "list_categories": "#/components/schemas/CodexListCategoriesCall",
                 "list_characters": "#/components/schemas/CodexListCharactersCall",
+                "list_loras": "#/components/schemas/CodexListLorasCall",
                 "list_stories": "#/components/schemas/CodexListStoriesCall",
-                "lock_sub_prompt": "#/components/schemas/CodexLockSubPromptCall",
-                "move_scene": "#/components/schemas/CodexMoveSceneCall",
-                "unlock_category": "#/components/schemas/CodexUnlockCategoryCall",
-                "update_scene": "#/components/schemas/CodexUpdateSceneCall",
-                "update_story": "#/components/schemas/CodexUpdateStoryCall"
+                "preview_scenes": "#/components/schemas/CodexPreviewScenesCall",
+                "reorder_scenes": "#/components/schemas/CodexReorderScenesCall",
+                "update_character": "#/components/schemas/CodexUpdateCharacterCall",
+                "update_scenes": "#/components/schemas/CodexUpdateScenesCall",
+                "update_story": "#/components/schemas/CodexUpdateStoryCall",
+                "view_images": "#/components/schemas/CodexViewImagesCall"
               },
               "propertyName": "tool"
             },
@@ -2060,37 +3266,61 @@
                 "$ref": "#/components/schemas/CodexListCategoriesCall"
               },
               {
+                "$ref": "#/components/schemas/CodexListLorasCall"
+              },
+              {
+                "$ref": "#/components/schemas/CodexGetGenerationSetupCall"
+              },
+              {
+                "$ref": "#/components/schemas/CodexPreviewScenesCall"
+              },
+              {
+                "$ref": "#/components/schemas/CodexConsistencyReportCall"
+              },
+              {
+                "$ref": "#/components/schemas/CodexViewImagesCall"
+              },
+              {
                 "$ref": "#/components/schemas/CodexCreateStoryCall"
               },
               {
                 "$ref": "#/components/schemas/CodexUpdateStoryCall"
               },
               {
-                "$ref": "#/components/schemas/CodexAddSceneCall"
+                "$ref": "#/components/schemas/CodexDeleteStoryCall"
               },
               {
-                "$ref": "#/components/schemas/CodexUpdateSceneCall"
+                "$ref": "#/components/schemas/CodexAddScenesCall"
               },
               {
-                "$ref": "#/components/schemas/CodexLockSubPromptCall"
+                "$ref": "#/components/schemas/CodexUpdateScenesCall"
               },
               {
-                "$ref": "#/components/schemas/CodexUnlockCategoryCall"
-              },
-              {
-                "$ref": "#/components/schemas/CodexMoveSceneCall"
+                "$ref": "#/components/schemas/CodexReorderScenesCall"
               },
               {
                 "$ref": "#/components/schemas/CodexDuplicateSceneCall"
               },
               {
-                "$ref": "#/components/schemas/CodexDeleteSceneCall"
+                "$ref": "#/components/schemas/CodexDeleteScenesCall"
               },
               {
-                "$ref": "#/components/schemas/CodexGenerateSceneCall"
+                "$ref": "#/components/schemas/CodexGenerateScenesCall"
               },
               {
-                "$ref": "#/components/schemas/CodexGenerateMissingScenesCall"
+                "$ref": "#/components/schemas/CodexEditVariantsCall"
+              },
+              {
+                "$ref": "#/components/schemas/CodexCreateCharacterCall"
+              },
+              {
+                "$ref": "#/components/schemas/CodexUpdateCharacterCall"
+              },
+              {
+                "$ref": "#/components/schemas/CodexDeleteCharacterCall"
+              },
+              {
+                "$ref": "#/components/schemas/CodexInstallIpAdapterCall"
               }
             ],
             "title": "Call"
@@ -2149,9 +3379,84 @@
         "title": "CodexToolCancelEvent",
         "type": "object"
       },
+      "CodexToolImage": {
+        "description": "A picture a tool shows Codex (view_images): an output's image, or a character's reference image. The backend\nreads it, downscales it (services/codex/images.py) and sends it to Codex as MCP image content after its label.",
+        "properties": {
+          "character_id": {
+            "anyOf": [
+              {
+                "pattern": "^chr-[0-9a-f]{12}$",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Character Id"
+          },
+          "image_id": {
+            "anyOf": [
+              {
+                "pattern": "^img-[0-9a-f]{12}$",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "With character_id: one of its images.",
+            "title": "Image Id"
+          },
+          "label": {
+            "description": "What the picture is ('Scene 2 · The storm, output #0000000004').",
+            "maxLength": 300,
+            "title": "Label",
+            "type": "string"
+          },
+          "output_id": {
+            "anyOf": [
+              {
+                "pattern": "^\\d{10}$",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Output Id"
+          }
+        },
+        "required": [
+          "label"
+        ],
+        "title": "CodexToolImage",
+        "type": "object"
+      },
       "CodexToolResult": {
         "description": "Body of POST /api/codex/tool-calls/{call_id}/result: what the frontend did.",
         "properties": {
+          "character_id": {
+            "anyOf": [
+              {
+                "pattern": "^chr-[0-9a-f]{12}$",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "The character it acted on (the conversation links to it).",
+            "title": "Character Id"
+          },
+          "images": {
+            "description": "Pictures shown to Codex with the text.",
+            "items": {
+              "$ref": "#/components/schemas/CodexToolImage"
+            },
+            "maxItems": 8,
+            "title": "Images",
+            "type": "array"
+          },
           "ok": {
             "title": "Ok",
             "type": "boolean"
@@ -2248,104 +3553,106 @@
         "title": "CodexTurnRequest",
         "type": "object"
       },
-      "CodexUnlockArgs": {
-        "additionalProperties": false,
-        "properties": {
-          "category": {
-            "maxLength": 200,
-            "minLength": 1,
-            "title": "Category",
-            "type": "string"
-          },
-          "scene_id": {
-            "pattern": "^scn-[0-9a-f]{12}$",
-            "title": "Scene Id",
-            "type": "string"
-          },
-          "story_id": {
-            "pattern": "^sty-[0-9a-f]{12}$",
-            "title": "Story Id",
-            "type": "string"
-          }
-        },
-        "required": [
-          "story_id",
-          "scene_id",
-          "category"
-        ],
-        "title": "CodexUnlockArgs",
-        "type": "object"
-      },
-      "CodexUnlockCategoryCall": {
-        "properties": {
-          "arguments": {
-            "$ref": "#/components/schemas/CodexUnlockArgs"
-          },
-          "call_id": {
-            "title": "Call Id",
-            "type": "string"
-          },
-          "client_id": {
-            "title": "Client Id",
-            "type": "string"
-          },
-          "conversation_id": {
-            "title": "Conversation Id",
-            "type": "string"
-          },
-          "tool": {
-            "const": "unlock_category",
-            "title": "Tool",
-            "type": "string"
-          }
-        },
-        "required": [
-          "call_id",
-          "client_id",
-          "conversation_id",
-          "tool",
-          "arguments"
-        ],
-        "title": "CodexUnlockCategoryCall",
-        "type": "object"
-      },
-      "CodexUpdateSceneArgs": {
+      "CodexUpdateCharacterArgs": {
         "additionalProperties": false,
         "description": "Only the fields given change (null: unchanged).",
+        "examples": [
+          {
+            "character_id": "chr-0123456789ab",
+            "outfit_tags": [
+              "raincoat",
+              "rubber boots"
+            ],
+            "seed": 777,
+            "seed_locked": true
+          },
+          {
+            "add_reference_scenes": [
+              {
+                "scene_id": "scn-0123456789ab",
+                "story_id": "sty-0123456789ab"
+              }
+            ],
+            "character_id": "chr-0123456789ab",
+            "reference_strength": 0.7
+          }
+        ],
         "properties": {
-          "characters": {
+          "active_in_create": {
             "anyOf": [
               {
-                "const": "story",
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Activate (or deactivate) it for Create's generations.",
+            "title": "Active In Create"
+          },
+          "add_reference_output_ids": {
+            "description": "Outputs added as reference images.",
+            "items": {
+              "pattern": "^\\d{10}$",
+              "type": "string"
+            },
+            "title": "Add Reference Output Ids",
+            "type": "array"
+          },
+          "add_reference_scenes": {
+            "description": "Scene pictures added as reference images.",
+            "items": {
+              "$ref": "#/components/schemas/CodexSceneRef"
+            },
+            "title": "Add Reference Scenes",
+            "type": "array"
+          },
+          "character_id": {
+            "pattern": "^chr-[0-9a-f]{12}$",
+            "title": "Character Id",
+            "type": "string"
+          },
+          "identity_tags": {
+            "anyOf": [
+              {
+                "items": {
+                  "type": "string"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Identity Tags"
+          },
+          "loras": {
+            "anyOf": [
+              {
+                "items": {
+                  "$ref": "#/components/schemas/CodexLoraSpec"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Replaces the character's LoRAs ([]: none).",
+            "title": "Loras"
+          },
+          "name": {
+            "anyOf": [
+              {
+                "maxLength": 120,
+                "minLength": 1,
                 "type": "string"
               },
               {
-                "items": {
-                  "pattern": "^chr-[0-9a-f]{12}$",
-                  "type": "string"
-                },
-                "type": "array"
-              },
-              {
                 "type": "null"
               }
             ],
-            "description": "\"story\": the story's characters; []: none.",
-            "title": "Characters"
-          },
-          "extra_tags": {
-            "anyOf": [
-              {
-                "items": {
-                  "type": "string"
-                },
-                "type": "array"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Extra Tags"
+            "title": "Name"
           },
           "negative_tags": {
             "anyOf": [
@@ -2361,10 +3668,56 @@
             ],
             "title": "Negative Tags"
           },
-          "scene_id": {
-            "pattern": "^scn-[0-9a-f]{12}$",
-            "title": "Scene Id",
-            "type": "string"
+          "outfit_tags": {
+            "anyOf": [
+              {
+                "items": {
+                  "type": "string"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Outfit Tags"
+          },
+          "reference_focus": {
+            "anyOf": [
+              {
+                "enum": [
+                  "face",
+                  "general"
+                ],
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Reference Focus"
+          },
+          "reference_strength": {
+            "anyOf": [
+              {
+                "maximum": 1.0,
+                "minimum": 0.0,
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Reference Strength"
+          },
+          "remove_reference_image_ids": {
+            "description": "Reference images removed.",
+            "items": {
+              "pattern": "^img-[0-9a-f]{12}$",
+              "type": "string"
+            },
+            "title": "Remove Reference Image Ids",
+            "type": "array"
           },
           "seed": {
             "anyOf": [
@@ -2373,64 +3726,51 @@
                 "type": "integer"
               },
               {
-                "const": "random",
+                "const": "none",
                 "type": "string"
               },
               {
                 "type": "null"
               }
             ],
-            "description": "A fixed seed, or \"random\".",
+            "description": "A seed, or \"none\" (no seed, unlocked).",
             "title": "Seed"
           },
-          "story_id": {
-            "pattern": "^sty-[0-9a-f]{12}$",
-            "title": "Story Id",
-            "type": "string"
-          },
-          "text": {
+          "seed_locked": {
             "anyOf": [
               {
-                "maxLength": 50000,
-                "type": "string"
+                "type": "boolean"
               },
               {
                 "type": "null"
               }
             ],
-            "title": "Text"
-          },
-          "title": {
-            "anyOf": [
-              {
-                "maxLength": 200,
-                "minLength": 1,
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Title"
+            "title": "Seed Locked"
           }
         },
         "required": [
-          "story_id",
-          "scene_id",
-          "title",
-          "text",
-          "extra_tags",
+          "character_id",
+          "name",
+          "identity_tags",
+          "outfit_tags",
           "negative_tags",
-          "characters",
-          "seed"
+          "loras",
+          "seed",
+          "seed_locked",
+          "reference_strength",
+          "reference_focus",
+          "add_reference_output_ids",
+          "add_reference_scenes",
+          "remove_reference_image_ids",
+          "active_in_create"
         ],
-        "title": "CodexUpdateSceneArgs",
+        "title": "CodexUpdateCharacterArgs",
         "type": "object"
       },
-      "CodexUpdateSceneCall": {
+      "CodexUpdateCharacterCall": {
         "properties": {
           "arguments": {
-            "$ref": "#/components/schemas/CodexUpdateSceneArgs"
+            "$ref": "#/components/schemas/CodexUpdateCharacterArgs"
           },
           "call_id": {
             "title": "Call Id",
@@ -2445,7 +3785,7 @@
             "type": "string"
           },
           "tool": {
-            "const": "update_scene",
+            "const": "update_character",
             "title": "Tool",
             "type": "string"
           }
@@ -2457,11 +3797,105 @@
           "tool",
           "arguments"
         ],
-        "title": "CodexUpdateSceneCall",
+        "title": "CodexUpdateCharacterCall",
+        "type": "object"
+      },
+      "CodexUpdateScenesArgs": {
+        "additionalProperties": false,
+        "examples": [
+          {
+            "changes": [
+              {
+                "add_negative_tags": [
+                  "lowres",
+                  "text"
+                ],
+                "scene_ids": "all",
+                "set_loras": [
+                  {
+                    "lora": "Watercolor Wash",
+                    "weight": 0.6
+                  }
+                ]
+              },
+              {
+                "add_tags": [
+                  "lightning"
+                ],
+                "lock": [
+                  {
+                    "category": "Mood",
+                    "sub_prompt": "serious expression"
+                  }
+                ],
+                "scene_id": "scn-0123456789ab",
+                "seed": 1234,
+                "text": "The storm breaks against the windows."
+              }
+            ],
+            "story_id": "sty-0123456789ab"
+          }
+        ],
+        "properties": {
+          "changes": {
+            "description": "Applied in order (all checked first: all or nothing).",
+            "items": {
+              "$ref": "#/components/schemas/CodexSceneChange"
+            },
+            "maxItems": 100,
+            "minItems": 1,
+            "title": "Changes",
+            "type": "array"
+          },
+          "story_id": {
+            "pattern": "^sty-[0-9a-f]{12}$",
+            "title": "Story Id",
+            "type": "string"
+          }
+        },
+        "required": [
+          "story_id",
+          "changes"
+        ],
+        "title": "CodexUpdateScenesArgs",
+        "type": "object"
+      },
+      "CodexUpdateScenesCall": {
+        "properties": {
+          "arguments": {
+            "$ref": "#/components/schemas/CodexUpdateScenesArgs"
+          },
+          "call_id": {
+            "title": "Call Id",
+            "type": "string"
+          },
+          "client_id": {
+            "title": "Client Id",
+            "type": "string"
+          },
+          "conversation_id": {
+            "title": "Conversation Id",
+            "type": "string"
+          },
+          "tool": {
+            "const": "update_scenes",
+            "title": "Tool",
+            "type": "string"
+          }
+        },
+        "required": [
+          "call_id",
+          "client_id",
+          "conversation_id",
+          "tool",
+          "arguments"
+        ],
+        "title": "CodexUpdateScenesCall",
         "type": "object"
       },
       "CodexUpdateStoryArgs": {
         "additionalProperties": false,
+        "description": "Only the fields given change (null: unchanged).",
         "properties": {
           "character_ids": {
             "anyOf": [
@@ -2476,13 +3910,49 @@
                 "type": "null"
               }
             ],
-            "description": "null: unchanged.",
+            "description": "The story's characters ([]: none).",
             "title": "Character Ids"
+          },
+          "logline": {
+            "anyOf": [
+              {
+                "maxLength": 5000,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Logline"
           },
           "story_id": {
             "pattern": "^sty-[0-9a-f]{12}$",
             "title": "Story Id",
             "type": "string"
+          },
+          "style_notes": {
+            "anyOf": [
+              {
+                "maxLength": 5000,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Style Notes"
+          },
+          "synopsis": {
+            "anyOf": [
+              {
+                "maxLength": 20000,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Synopsis"
           },
           "title": {
             "anyOf": [
@@ -2495,14 +3965,16 @@
                 "type": "null"
               }
             ],
-            "description": "null: unchanged.",
             "title": "Title"
           }
         },
         "required": [
           "story_id",
           "title",
-          "character_ids"
+          "character_ids",
+          "logline",
+          "synopsis",
+          "style_notes"
         ],
         "title": "CodexUpdateStoryArgs",
         "type": "object"
@@ -2538,6 +4010,112 @@
           "arguments"
         ],
         "title": "CodexUpdateStoryCall",
+        "type": "object"
+      },
+      "CodexViewImagesArgs": {
+        "additionalProperties": false,
+        "examples": [
+          {
+            "scene_ids": [
+              "scn-0123456789ab"
+            ],
+            "story_id": "sty-0123456789ab"
+          },
+          {
+            "character_ids": [
+              "chr-0123456789ab"
+            ]
+          }
+        ],
+        "properties": {
+          "character_ids": {
+            "description": "Characters: their reference images.",
+            "items": {
+              "pattern": "^chr-[0-9a-f]{12}$",
+              "type": "string"
+            },
+            "title": "Character Ids",
+            "type": "array"
+          },
+          "output_ids": {
+            "description": "Outputs (e.g. the variants of a scene).",
+            "items": {
+              "pattern": "^\\d{10}$",
+              "type": "string"
+            },
+            "title": "Output Ids",
+            "type": "array"
+          },
+          "scene_ids": {
+            "anyOf": [
+              {
+                "items": {
+                  "pattern": "^scn-[0-9a-f]{12}$",
+                  "type": "string"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "With story_id: these scenes; null: every scene with a picture.",
+            "title": "Scene Ids"
+          },
+          "story_id": {
+            "anyOf": [
+              {
+                "pattern": "^sty-[0-9a-f]{12}$",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "A story: the pictures of its scenes.",
+            "title": "Story Id"
+          }
+        },
+        "required": [
+          "story_id",
+          "scene_ids",
+          "output_ids",
+          "character_ids"
+        ],
+        "title": "CodexViewImagesArgs",
+        "type": "object"
+      },
+      "CodexViewImagesCall": {
+        "properties": {
+          "arguments": {
+            "$ref": "#/components/schemas/CodexViewImagesArgs"
+          },
+          "call_id": {
+            "title": "Call Id",
+            "type": "string"
+          },
+          "client_id": {
+            "title": "Client Id",
+            "type": "string"
+          },
+          "conversation_id": {
+            "title": "Conversation Id",
+            "type": "string"
+          },
+          "tool": {
+            "const": "view_images",
+            "title": "Tool",
+            "type": "string"
+          }
+        },
+        "required": [
+          "call_id",
+          "client_id",
+          "conversation_id",
+          "tool",
+          "arguments"
+        ],
+        "title": "CodexViewImagesCall",
         "type": "object"
       },
       "DownloadTaskEvent": {
@@ -5680,6 +7258,13 @@
       "Scene": {
         "description": "One scene of a story.",
         "properties": {
+          "beat": {
+            "default": "",
+            "description": "Flow: the scene's beat, what happens and why it matters to the story (one line).",
+            "maxLength": 1000,
+            "title": "Beat",
+            "type": "string"
+          },
           "character_ids": {
             "anyOf": [
               {
@@ -5734,6 +7319,21 @@
             "title": "Locks",
             "type": "array"
           },
+          "loras": {
+            "description": "LoRAs of this scene's generations with their weights (library entry ids), after the characters' LoRAs and before the selected ones; a LoRA listed here uses this weight whatever the characters or the selection say (weight 0: off for this scene).",
+            "items": {
+              "$ref": "#/components/schemas/LoraWeight-Output"
+            },
+            "title": "Loras",
+            "type": "array"
+          },
+          "mood": {
+            "default": "",
+            "description": "Flow: its mood and emotional tone.",
+            "maxLength": 1000,
+            "title": "Mood",
+            "type": "string"
+          },
           "negative_tags": {
             "description": "Appended to the negative prompt of the scene's generations.",
             "items": {
@@ -5754,6 +7354,20 @@
             ],
             "description": "Fixed image seed of the scene's generations (reproducible); null: a new seed each time.",
             "title": "Seed"
+          },
+          "setting": {
+            "default": "",
+            "description": "Flow: where and when it takes place (place, time of day, weather).",
+            "maxLength": 1000,
+            "title": "Setting",
+            "type": "string"
+          },
+          "shot": {
+            "default": "",
+            "description": "Flow: the framing and camera of its picture (e.g. 'wide shot, low angle').",
+            "maxLength": 1000,
+            "title": "Shot",
+            "type": "string"
           },
           "text": {
             "default": "",
@@ -5784,11 +7398,16 @@
         },
         "required": [
           "text",
+          "beat",
+          "shot",
+          "setting",
+          "mood",
           "extra_tags",
           "negative_tags",
           "locks",
           "character_ids",
           "seed",
+          "loras",
           "id",
           "title",
           "variants",
@@ -5802,6 +7421,13 @@
       "SceneCreateRequest": {
         "description": "Body of POST /api/stories/{story_id}/scenes.",
         "properties": {
+          "beat": {
+            "default": "",
+            "description": "Flow: the scene's beat, what happens and why it matters to the story (one line).",
+            "maxLength": 1000,
+            "title": "Beat",
+            "type": "string"
+          },
           "character_ids": {
             "anyOf": [
               {
@@ -5847,6 +7473,21 @@
             "title": "Locks",
             "type": "array"
           },
+          "loras": {
+            "description": "LoRAs of this scene's generations with their weights (library entry ids), after the characters' LoRAs and before the selected ones; a LoRA listed here uses this weight whatever the characters or the selection say (weight 0: off for this scene).",
+            "items": {
+              "$ref": "#/components/schemas/LoraWeight-Input"
+            },
+            "title": "Loras",
+            "type": "array"
+          },
+          "mood": {
+            "default": "",
+            "description": "Flow: its mood and emotional tone.",
+            "maxLength": 1000,
+            "title": "Mood",
+            "type": "string"
+          },
           "negative_tags": {
             "description": "Appended to the negative prompt of the scene's generations.",
             "items": {
@@ -5880,6 +7521,20 @@
             ],
             "description": "Fixed image seed of the scene's generations (reproducible); null: a new seed each time.",
             "title": "Seed"
+          },
+          "setting": {
+            "default": "",
+            "description": "Flow: where and when it takes place (place, time of day, weather).",
+            "maxLength": 1000,
+            "title": "Setting",
+            "type": "string"
+          },
+          "shot": {
+            "default": "",
+            "description": "Flow: the framing and camera of its picture (e.g. 'wide shot, low angle').",
+            "maxLength": 1000,
+            "title": "Shot",
+            "type": "string"
           },
           "text": {
             "default": "",
@@ -5949,6 +7604,18 @@
       "ScenePatch": {
         "description": "Body of PATCH /api/stories/{story_id}/scenes/{scene_id}: only the fields sent change (character_ids and seed\naccept null; the other fields do not).",
         "properties": {
+          "beat": {
+            "anyOf": [
+              {
+                "maxLength": 1000,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Beat"
+          },
           "character_ids": {
             "anyOf": [
               {
@@ -5992,6 +7659,32 @@
             ],
             "title": "Locks"
           },
+          "loras": {
+            "anyOf": [
+              {
+                "items": {
+                  "$ref": "#/components/schemas/LoraWeight-Input"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Loras"
+          },
+          "mood": {
+            "anyOf": [
+              {
+                "maxLength": 1000,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Mood"
+          },
           "negative_tags": {
             "anyOf": [
               {
@@ -6017,6 +7710,30 @@
               }
             ],
             "title": "Seed"
+          },
+          "setting": {
+            "anyOf": [
+              {
+                "maxLength": 1000,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Setting"
+          },
+          "shot": {
+            "anyOf": [
+              {
+                "maxLength": 1000,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Shot"
           },
           "text": {
             "anyOf": [
@@ -6105,12 +7822,33 @@
             "title": "Id",
             "type": "string"
           },
+          "logline": {
+            "default": "",
+            "description": "Flow: the story in one sentence (who wants what, and what is at stake).",
+            "maxLength": 5000,
+            "title": "Logline",
+            "type": "string"
+          },
           "scenes": {
             "items": {
               "$ref": "#/components/schemas/Scene"
             },
             "title": "Scenes",
             "type": "array"
+          },
+          "style_notes": {
+            "default": "",
+            "description": "Flow: the style and tone of the story and its pictures (art style, palette, lighting, audience).",
+            "maxLength": 5000,
+            "title": "Style Notes",
+            "type": "string"
+          },
+          "synopsis": {
+            "default": "",
+            "description": "Flow: the whole story in a few paragraphs, beginning to end (the scenes' beats follow it).",
+            "maxLength": 20000,
+            "title": "Synopsis",
+            "type": "string"
           },
           "title": {
             "maxLength": 200,
@@ -6127,6 +7865,9 @@
         "required": [
           "title",
           "character_ids",
+          "logline",
+          "synopsis",
+          "style_notes",
           "id",
           "scenes",
           "created_at",
@@ -6153,7 +7894,7 @@
         "type": "object"
       },
       "StoryCreateRequest": {
-        "description": "Body of POST /api/stories.",
+        "description": "Body of POST /api/stories. Stories saved before a field existed read it as its default.",
         "properties": {
           "character_ids": {
             "description": "The story's characters (Character.id), applied to every scene that does not name its own.",
@@ -6163,6 +7904,27 @@
             },
             "title": "Character Ids",
             "type": "array"
+          },
+          "logline": {
+            "default": "",
+            "description": "Flow: the story in one sentence (who wants what, and what is at stake).",
+            "maxLength": 5000,
+            "title": "Logline",
+            "type": "string"
+          },
+          "style_notes": {
+            "default": "",
+            "description": "Flow: the style and tone of the story and its pictures (art style, palette, lighting, audience).",
+            "maxLength": 5000,
+            "title": "Style Notes",
+            "type": "string"
+          },
+          "synopsis": {
+            "default": "",
+            "description": "Flow: the whole story in a few paragraphs, beginning to end (the scenes' beats follow it).",
+            "maxLength": 20000,
+            "title": "Synopsis",
+            "type": "string"
           },
           "title": {
             "maxLength": 200,
@@ -6199,7 +7961,7 @@
         "type": "object"
       },
       "StoryPatch": {
-        "description": "Body of PATCH /api/stories/{story_id}: only the fields sent change (neither accepts null).",
+        "description": "Body of PATCH /api/stories/{story_id}: only the fields sent change (none accepts null).",
         "properties": {
           "character_ids": {
             "anyOf": [
@@ -6215,6 +7977,42 @@
               }
             ],
             "title": "Character Ids"
+          },
+          "logline": {
+            "anyOf": [
+              {
+                "maxLength": 5000,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Logline"
+          },
+          "style_notes": {
+            "anyOf": [
+              {
+                "maxLength": 5000,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Style Notes"
+          },
+          "synopsis": {
+            "anyOf": [
+              {
+                "maxLength": 20000,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Synopsis"
           },
           "title": {
             "anyOf": [
@@ -8730,7 +10528,7 @@
         ]
       },
       "patch": {
-        "description": "Changes the fields sent (title, characters).",
+        "description": "Changes the fields sent (title, characters, flow notes: logline, synopsis, style_notes).",
         "operationId": "update_story_api_stories__story_id__patch",
         "parameters": [
           {
@@ -9011,7 +10809,7 @@
         ]
       },
       "patch": {
-        "description": "Changes the fields sent (title, text, tags, locked sub-prompts, characters, seed).",
+        "description": "Changes the fields sent (title, text, flow notes, tags, locked sub-prompts, characters, seed, LoRAs).",
         "operationId": "update_scene_api_stories__story_id__scenes__scene_id__patch",
         "parameters": [
           {

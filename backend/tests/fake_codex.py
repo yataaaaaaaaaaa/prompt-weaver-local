@@ -17,11 +17,14 @@ Scenario (every key optional):
      "models": [{"id": "gpt-fake", "name": "GPT Fake"}], "mcp_servers": {"node_repl": {}}, "features":
      [{"name": "shell_tool", "enabled": true}], "fail_start": "<stderr line>", "delta_delay_ms": 10,
      "rules": [{"match": "<regex on the user's words>", "steps": [...]}], "default_steps": [...]}
-Steps: {"say": "text"} (streamed word by word), {"tool": "add_scene", "arguments": {...}} (an MCP tools/call),
-{"sleep_ms": 500}, {"crash": true} (exit 3), {"fail": "message", "info": "unauthorized"} (a failed turn),
-{"request_approval": "command"} (a server request; its decision is said). Strings in "say" and "arguments" may use
-{context.story_id}, {context.scene_id}, {last.story_id}, {last.scene_id}, {last.summary}, {last.text}, {turns}
-(earlier turns of the thread), {user}.
+Steps: {"say": "text"} (streamed word by word), {"tool": "add_scenes", "arguments": {...}, "as": "name"} (an MCP
+tools/call; "as" keeps its result under that name), {"sleep_ms": 500}, {"crash": true} (exit 3), {"fail": "message",
+"info": "unauthorized"} (a failed turn), {"request_approval": "command"} (a server request; its decision is said).
+Strings in "say" and "arguments" may use {context.story_id}, {context.scene_id}, {last.story_id}, {last.scene_id},
+{last.character_id}, {last.summary}, {last.text}, {last.images} (how many pictures the result showed), {turns} (earlier
+turns of the thread), {user}, the same fields of a named result ({name.story_id}, ...), and a value of the JSON text of
+the last or a named result by its path: {last.json.scenes.0.scene_id}, {cast.json.character_id}. A placeholder that is
+a whole argument and names a JSON value that is not a string (a list, a number) is replaced by that value.
 """
 
 from __future__ import annotations
@@ -328,8 +331,19 @@ class Fake:
             try:
                 result = self.mcp("tools/call", {"name": step["tool"], "arguments": arguments})
                 activity = (result.get("_meta") or {}).get("prompt_weaver/activity") or {}
-                text = "\n".join(part.get("text", "") for part in result.get("content", []))
-                values.update({"last.story_id": activity.get("story_id") or "", "last.scene_id": activity.get("scene_id") or "", "last.summary": activity.get("summary") or "", "last.text": text})
+                content = result.get("content", [])
+                text = content[0].get("text", "") if content and content[0].get("type") == "text" else ""
+                found = {
+                    "story_id": activity.get("story_id") or "",
+                    "scene_id": activity.get("scene_id") or "",
+                    "character_id": activity.get("character_id") or "",
+                    "summary": activity.get("summary") or "",
+                    "text": text,
+                    "images": str(sum(1 for part in content if part.get("type") == "image")),
+                }
+                for prefix in ("last", *([step["as"]] if step.get("as") else [])):
+                    values.update({f"{prefix}.{key}": value for key, value in found.items()})
+                self.log({"tool_result": step["tool"], "ok": not result.get("isError"), "content_types": [part.get("type") for part in content]})
                 item = {**item, "status": "failed" if result.get("isError") else "completed", "result": {"content": result.get("content", []), "structuredContent": None, "_meta": result.get("_meta")}}
             except (OSError, RuntimeError, urllib.error.URLError) as exc:
                 item = {**item, "status": "failed", "error": {"message": str(exc)}}
@@ -339,9 +353,46 @@ class Fake:
         return None
 
 
+_PLACEHOLDER = re.compile(r"\{([a-z_][a-z0-9_.]*)\}")
+
+
+def _lookup(key: str, values: dict[str, str]) -> Any:
+    """The value of a placeholder: a saved value, or a path into the JSON text of a saved result ('last.json.a.0.b');
+    None when there is none."""
+    if key in values:
+        return values[key]
+    name, marker, path = key.partition(".json.")
+    if not marker or f"{name}.text" not in values:
+        return None
+    try:
+        node: Any = json.loads(values[f"{name}.text"])
+    except ValueError:
+        return None
+    for part in path.split("."):
+        if isinstance(node, list) and part.isdigit() and int(part) < len(node):
+            node = node[int(part)]
+        elif isinstance(node, dict) and part in node:
+            node = node[part]
+        else:
+            return None
+    return node
+
+
 def _fill(value: Any, values: dict[str, str]) -> Any:
     if isinstance(value, str):
-        return re.sub(r"\{([a-z_.]+)\}", lambda match: values.get(match.group(1), match.group(0)), value)
+        whole = _PLACEHOLDER.fullmatch(value)
+        if whole is not None:
+            found = _lookup(whole.group(1), values)
+            if found is not None and not isinstance(found, str):
+                return found
+
+        def replace(match: re.Match[str]) -> str:
+            found = _lookup(match.group(1), values)
+            if found is None:
+                return match.group(0)
+            return found if isinstance(found, str) else json.dumps(found)
+
+        return _PLACEHOLDER.sub(replace, value)
     if isinstance(value, list):
         return [_fill(item, values) for item in value]
     if isinstance(value, dict):

@@ -84,7 +84,7 @@ def get_story(story_id: StoryId, services: ServicesDep) -> Story:
 
 @router.patch("/{story_id}", response_model=Story, responses=_ERRORS)
 def update_story(story_id: StoryId, patch: StoryPatch, services: ServicesDep) -> Story:
-    """Changes the fields sent (title, characters)."""
+    """Changes the fields sent (title, characters, flow notes: logline, synopsis, style_notes)."""
     with story_http_errors():
         return services.stories.update(story_id, patch)
 
@@ -128,7 +128,7 @@ def add_scene(story_id: StoryId, request: SceneCreateRequest, services: Services
 
 @router.patch("/{story_id}/scenes/{scene_id}", response_model=Story, responses=_ERRORS)
 def update_scene(story_id: StoryId, scene_id: SceneId, patch: ScenePatch, services: ServicesDep) -> Story:
-    """Changes the fields sent (title, text, tags, locked sub-prompts, characters, seed)."""
+    """Changes the fields sent (title, text, flow notes, tags, locked sub-prompts, characters, seed, LoRAs)."""
     with story_http_errors():
         return services.stories.update_scene(story_id, scene_id, patch)
 

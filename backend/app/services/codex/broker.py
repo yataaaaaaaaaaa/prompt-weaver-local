@@ -1,8 +1,9 @@
 """The way of a co-writer tool call: Codex calls a tool of the MCP server (mcp_server.py) -> the broker validates its
 arguments and sends it to the frontend window that sent the message (a CodexToolCallEvent over /ws/tasks) -> that
 window runs it with the story store's actions (src/stores/coWriterTools.ts) and posts the result
-(POST /api/codex/tool-calls/{call_id}/result) -> the broker answers Codex. One path per action: the backend never
-changes a story itself, and the UI shows every change because it made it.
+(POST /api/codex/tool-calls/{call_id}/result) -> the broker answers Codex: the result's text, then the pictures it
+names (view_images), read and downscaled by images.py. One path per action: the backend never changes a story or a
+character itself, and the UI shows every change because it made it.
 
 A call fails at once, with a message Codex can relay, when no turn runs, when that window is not connected (closed,
 reloaded) or when the arguments are invalid; it fails when its time runs out, when the window goes away and when the
@@ -25,6 +26,7 @@ from ...schemas import (
     CodexEventModel,
     CodexToolCallEvent,
     CodexToolCancelEvent,
+    CodexToolImage,
     CodexToolResult,
 )
 from .protocol import ACTIVITY_META_KEY
@@ -57,6 +59,10 @@ class _Call:
     result: CodexToolResult | None = None
 
 
+# The MCP content blocks of the pictures a result names (images.py ToolImageReader.content).
+ImageContent = Callable[[list[CodexToolImage]], list[dict[str, Any]]]
+
+
 @dataclass(frozen=True)
 class ToolOutcome:
     """A finished call: what Codex reads and what the conversation shows."""
@@ -65,18 +71,26 @@ class ToolOutcome:
     # The arguments as Codex sent them (they identify the call in Codex's item of it).
     arguments: dict[str, Any]
     result: CodexToolResult
+    # The content blocks of the result's pictures (after its text).
+    image_blocks: tuple[dict[str, Any], ...] = ()
 
     def call_tool_result(self) -> dict[str, Any]:
         """The MCP CallToolResult."""
         return {
-            "content": [{"type": "text", "text": self.result.text}],
+            "content": [{"type": "text", "text": self.result.text}, *self.image_blocks],
             "isError": not self.result.ok,
             "_meta": {ACTIVITY_META_KEY: activity(self.result)},
         }
 
 
 def activity(result: CodexToolResult) -> dict[str, Any]:
-    return {"ok": result.ok, "summary": result.summary, "story_id": result.story_id, "scene_id": result.scene_id}
+    return {
+        "ok": result.ok,
+        "summary": result.summary,
+        "story_id": result.story_id,
+        "scene_id": result.scene_id,
+        "character_id": result.character_id,
+    }
 
 
 def failure(text: str, summary: str | None = None) -> CodexToolResult:
@@ -91,11 +105,13 @@ class ToolBroker:
         is_connected: Callable[[str], bool],
         current_turn: Callable[[], ToolTurn | None],
         on_outcome: Callable[[ToolTurn, ToolOutcome], None],
+        image_content: ImageContent | None = None,
     ) -> None:
         self._publish = publish
         self._is_connected = is_connected
         self._current_turn = current_turn
         self._on_outcome = on_outcome
+        self._image_content = image_content
         self._lock = threading.Lock()
         self._calls: dict[str, _Call] = {}
 
@@ -137,7 +153,8 @@ class ToolBroker:
             with self._lock:
                 self._calls.pop(call.call_id, None)
         result = call.result or failure(f"{definition.title} did not finish.")
-        outcome = ToolOutcome(tool, raw_arguments, result)
+        images = tuple(self._image_content(result.images)) if result.images and self._image_content else ()
+        outcome = ToolOutcome(tool, raw_arguments, result, images)
         self._on_outcome(turn, outcome)
         return outcome
 

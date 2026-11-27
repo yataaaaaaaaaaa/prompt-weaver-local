@@ -229,3 +229,18 @@ def test_outputs_written_before_stories_load_without_a_story(fixture: str) -> No
     assert "story" not in payload
 
     assert OutputRecord.model_validate(payload).story is None
+
+
+def test_the_flow_fields_and_scene_loras_over_the_api(client: TestClient) -> None:
+    story = create_story(client, logline="A boat comes home.", style_notes="watercolor")
+    assert (story["logline"], story["synopsis"], story["style_notes"]) == ("A boat comes home.", "", "watercolor")
+
+    scene = add_scene(client, story["id"], beat="The storm hits", shot="close-up", loras=[{"id": "ink", "weight": 0.4}])["scenes"][0]
+    assert (scene["beat"], scene["shot"], scene["setting"], scene["mood"], scene["loras"]) == ("The storm hits", "close-up", "", "", [{"id": "ink", "weight": 0.4}])
+
+    patched = client.patch(f"/api/stories/{story['id']}/scenes/{scene['id']}", json={"mood": "fear", "loras": []})
+    assert (patched.json()["scenes"][0]["mood"], patched.json()["scenes"][0]["loras"]) == ("fear", [])
+    assert client.patch(f"/api/stories/{story['id']}/scenes/{scene['id']}", json={"loras": None}).status_code == 422
+    flow = client.patch(f"/api/stories/{story['id']}", json={"synopsis": "It ends well."})
+    assert (flow.json()["synopsis"], flow.json()["logline"]) == ("It ends well.", "A boat comes home.")
+    assert client.patch(f"/api/stories/{story['id']}", json={"style_notes": None}).status_code == 422

@@ -267,7 +267,7 @@ def test_codex_runs_restricted_to_the_apps_tools(client: TestClient, socket: Soc
     assert f'Scene selected: "Dock" (scene_id: {scene["id"]}), position 1.' in context
     assert words == "hello"
     tools = next(record["mcp_tools"] for record in fake_codex.records() if "mcp_tools" in record)
-    assert len(tools) == 15 and "add_scene" in tools and "generate_scene" in tools
+    assert len(tools) == 23 and "add_scenes" in tools and "generate_scenes" in tools and "view_images" in tools
 
 
 def test_commands_codex_asks_to_run_are_declined(client: TestClient, socket: Socket, fake_codex: FakeCodex) -> None:
@@ -297,7 +297,7 @@ def test_one_answer_at_a_time(client: TestClient, socket: Socket, fake_codex: Fa
 
 ADD_HARBOR = [
     {"say": "Adding it."},
-    {"tool": "add_scene", "arguments": {"story_id": "{context.story_id}", "title": "Harbor", "text": "Boats sway."}},
+    {"tool": "add_scenes", "arguments": {"story_id": "{context.story_id}", "scenes": [{"title": "Harbor", "text": "Boats sway."}]}},
     {"say": "Codex read: {last.text}"},
 ]
 
@@ -316,15 +316,20 @@ def test_a_tool_call_runs_in_the_window_that_sent_the_message(client: TestClient
     events = answer_tools(client, socket, frontend)
 
     (call,) = calls
-    assert (call["tool"], call["client_id"], call["conversation_id"]) == ("add_scene", CLIENT, events[-1]["conversation"]["id"])
+    assert (call["tool"], call["client_id"], call["conversation_id"]) == ("add_scenes", CLIENT, events[-1]["conversation"]["id"])
     # Validated arguments, with their defaults.
     assert call["arguments"] == {
-        "story_id": story["id"], "title": "Harbor", "text": "Boats sway.", "extra_tags": [], "negative_tags": [], "characters": "story", "position": None,
+        "story_id": story["id"],
+        "position": None,
+        "scenes": [{
+            "title": "Harbor", "beat": "", "text": "Boats sway.", "shot": "", "setting": "", "mood": "", "extra_tags": [], "negative_tags": [],
+            "locks": [], "loras": [], "characters": "story", "seed": None,
+        }],
     }  # fmt: skip
     tool_entries = [event["entry"] for event in events if event["kind"] == "entry" and event["entry"]["kind"] == "tool"]
     assert [(entry["status"], entry["text"], entry["tool"], entry["story_id"], entry["scene_id"]) for entry in tool_entries] == [
-        ("running", "", "add_scene", story["id"], None),
-        ("completed", "Added Scene 1 · Harbor", "add_scene", story["id"], "scn-00000000000a"),
+        ("running", "", "add_scenes", story["id"], None),
+        ("completed", "Added Scene 1 · Harbor", "add_scenes", story["id"], "scn-00000000000a"),
     ]
     assert entries(events[-1]["conversation"])[-1] == ("assistant", "completed", 'Codex read: {"scene_id": "scn-00000000000a", "position": 1}')
     # The other window sees the conversation, and the call (for another window).
@@ -348,16 +353,16 @@ def test_a_failed_tool_call_is_reported_to_codex_and_shown(client: TestClient, s
 
 
 def test_invalid_tool_arguments_never_reach_the_frontend(client: TestClient, socket: Socket, fake_codex: FakeCodex) -> None:
-    fake_codex.update_scenario(default_steps=[{"tool": "move_scene", "arguments": {"story_id": "nope", "scene_id": "scn-000000000001", "position": 0, "extra": 1}}, {"say": "{last.text}"}])
+    fake_codex.update_scenario(default_steps=[{"tool": "reorder_scenes", "arguments": {"story_id": "nope", "scene_id": "scn-000000000001", "position": 0, "extra": 1}}, {"say": "{last.text}"}])
 
     send(client, "move it")
     events = socket.codex_events(turn_ended)
 
     assert not [event for event in events if event["kind"] == "tool_call"]
     final = events[-1]["conversation"]
-    assert entries(final)[1] == ("tool", "failed", "Move a scene: invalid arguments")
+    assert entries(final)[1] == ("tool", "failed", "Reorder scenes: invalid arguments")
     said = entries(final)[2][2]
-    assert said.startswith("Invalid arguments for move_scene: story_id: String should match pattern")
+    assert said.startswith("Invalid arguments for reorder_scenes: story_id: String should match pattern")
     assert "position: Input should be greater than or equal to 1" in said
     assert "extra: Extra inputs are not permitted" in said
 
@@ -439,7 +444,7 @@ def test_stop_interrupts_the_answer(client: TestClient, socket: Socket, fake_cod
 
 
 def test_stop_abandons_a_running_tool_call(client: TestClient, socket: Socket, fake_codex: FakeCodex) -> None:
-    fake_codex.update_scenario(default_steps=[{"tool": "generate_scene", "arguments": {"story_id": "{context.story_id}", "scene_id": "scn-000000000001"}}, {"say": "after"}])
+    fake_codex.update_scenario(default_steps=[{"tool": "generate_scenes", "arguments": {"story_id": "{context.story_id}", "scene_ids": ["scn-000000000001"]}}, {"say": "after"}])
     story = create_story(client)
     sent = send(client, "illustrate", story["id"])
     call = next(event for event in socket.codex_events(lambda event: event["kind"] == "tool_call") if event["kind"] == "tool_call")["call"]
@@ -539,3 +544,35 @@ def test_shutdown_stops_codex(app_paths: AppPaths, fake_codex: FakeCodex) -> Non
         assert process is not None and process.alive
         window.close()
     assert not process.alive
+
+
+def test_a_tool_shows_codex_pictures_and_links_a_character(client: TestClient, socket: Socket, fake_codex: FakeCodex, make_output: Any) -> None:
+    make_output("0000000001")
+    fake_codex.update_scenario(
+        default_steps=[
+            {"tool": "view_images", "arguments": {"story_id": "{context.story_id}"}, "as": "seen"},
+            {"tool": "update_character", "arguments": {"character_id": "chr-000000000001", "outfit_tags": ["raincoat"]}},
+            {"say": "Saw {seen.images}: {seen.json.shown.0}. {last.summary} ({last.character_id})."},
+        ]
+    )
+    story = create_story(client)
+
+    def frontend(call: Message) -> Message:
+        if call["tool"] == "view_images":
+            image = {"label": "Scene 1 · Dock, its picture", "output_id": "0000000001"}
+            return {"ok": True, "text": '{"shown": ["Scene 1 · Dock, its picture"]}', "summary": "Looked at 1 picture", "story_id": story["id"], "images": [image]}
+        return {"ok": True, "text": "{}", "summary": "Edited Mira (outfit tags)", "character_id": "chr-000000000001"}
+
+    send(client, "look", story["id"])
+    events = answer_tools(client, socket, frontend)
+
+    final = events[-1]["conversation"]
+    assert entries(final)[-1] == ("assistant", "completed", "Saw 1: Scene 1 · Dock, its picture. Edited Mira (outfit tags) (chr-000000000001).")
+    tool_entries = [entry for entry in final["entries"] if entry["kind"] == "tool"]
+    assert [(entry["tool"], entry["character_id"], entry["story_id"]) for entry in tool_entries] == [
+        ("view_images", None, story["id"]),
+        ("update_character", "chr-000000000001", None),
+    ]
+    # Codex received the picture as MCP image content, after its label.
+    (seen,) = [record for record in fake_codex.records() if record.get("tool_result") == "view_images"]
+    assert seen["content_types"] == ["text", "text", "image"]

@@ -1019,6 +1019,11 @@ class IpAdapterInstallResponse(ApiModel):
 StoryTitle = Annotated[str, StringConstraints(strip_whitespace=True, min_length=1, max_length=200)]
 SceneTitle = Annotated[str, StringConstraints(strip_whitespace=True, min_length=1, max_length=200)]
 SceneText = Annotated[str, StringConstraints(max_length=50_000)]
+# The flow notes of a story (logline, style and tone) and of a scene (beat, shot, setting, mood): plain text that
+# plans the story and its pictures. They are never added to a prompt (the tags are).
+StoryNote = Annotated[str, StringConstraints(max_length=5_000)]
+StorySynopsis = Annotated[str, StringConstraints(max_length=20_000)]
+SceneNote = Annotated[str, StringConstraints(max_length=1_000)]
 CharacterRef = Annotated[str, Field(pattern=CHARACTER_ID_PATTERN)]
 SceneSeed = Annotated[int, Field(ge=0)]
 
@@ -1039,9 +1044,16 @@ class SceneVariant(ApiModel):
 
 
 class SceneFields(ApiModel):
-    """The editable fields of a scene, all with their defaults (base of the create request and of Scene)."""
+    """The editable fields of a scene, all with their defaults (base of the create request and of Scene). Scenes saved
+    before a field existed read it as its default."""
 
     text: SceneText = Field(default="", description="The narrative text of the scene.")
+    beat: SceneNote = Field(
+        default="", description="Flow: the scene's beat, what happens and why it matters to the story (one line)."
+    )
+    shot: SceneNote = Field(default="", description="Flow: the framing and camera of its picture (e.g. 'wide shot, low angle').")
+    setting: SceneNote = Field(default="", description="Flow: where and when it takes place (place, time of day, weather).")
+    mood: SceneNote = Field(default="", description="Flow: its mood and emotional tone.")
     extra_tags: PromptTags = Field(
         default_factory=list,
         description="Tags added to the prompt of the scene's generations (the locked sub-prompt of a pinned 'Scene' "
@@ -1061,6 +1073,12 @@ class SceneFields(ApiModel):
     )
     seed: SceneSeed | None = Field(
         default=None, description="Fixed image seed of the scene's generations (reproducible); null: a new seed each time."
+    )
+    loras: list[LoraWeight] = Field(
+        default_factory=list,
+        description="LoRAs of this scene's generations with their weights (library entry ids), after the characters' "
+        "LoRAs and before the selected ones; a LoRA listed here uses this weight whatever the characters or the "
+        "selection say (weight 0: off for this scene).",
     )
 
 
@@ -1082,11 +1100,16 @@ class ScenePatch(ApiModel):
 
     title: SceneTitle | None = None
     text: SceneText | None = None
+    beat: SceneNote | None = None
+    shot: SceneNote | None = None
+    setting: SceneNote | None = None
+    mood: SceneNote | None = None
     extra_tags: PromptTags | None = None
     negative_tags: PromptTags | None = None
     locks: list[SceneLock] | None = None
     character_ids: list[CharacterRef] | None = None
     seed: SceneSeed | None = None
+    loras: list[LoraWeight] | None = None
 
     @model_validator(mode="after")
     def _only_nullable_fields_cleared(self) -> "ScenePatch":
@@ -1113,20 +1136,31 @@ class Scene(SceneFields):
 
 
 class StoryCreateRequest(ApiModel):
-    """Body of POST /api/stories."""
+    """Body of POST /api/stories. Stories saved before a field existed read it as its default."""
 
     title: StoryTitle
     character_ids: list[CharacterRef] = Field(
         default_factory=list, description="The story's characters (Character.id), applied to every scene that does not "
         "name its own."
     )
+    logline: StoryNote = Field(default="", description="Flow: the story in one sentence (who wants what, and what is at stake).")
+    synopsis: StorySynopsis = Field(
+        default="", description="Flow: the whole story in a few paragraphs, beginning to end (the scenes' beats follow it)."
+    )
+    style_notes: StoryNote = Field(
+        default="",
+        description="Flow: the style and tone of the story and its pictures (art style, palette, lighting, audience).",
+    )
 
 
 class StoryPatch(ApiModel):
-    """Body of PATCH /api/stories/{story_id}: only the fields sent change (neither accepts null)."""
+    """Body of PATCH /api/stories/{story_id}: only the fields sent change (none accepts null)."""
 
     title: StoryTitle | None = None
     character_ids: list[CharacterRef] | None = None
+    logline: StoryNote | None = None
+    synopsis: StorySynopsis | None = None
+    style_notes: StoryNote | None = None
 
     @model_validator(mode="after")
     def _no_null_fields(self) -> "StoryPatch":
@@ -1216,32 +1250,67 @@ class CodexSettingsUpdate(ApiModel):
 
 # --- Tools (their names and arguments; the descriptions Codex reads are in services/codex/tools.py) ---
 
-# THE tool names: the MCP server lists them, the frontend executes them (an exhaustive record).
+# THE tool names: the MCP server lists them, the frontend executes them (an exhaustive record). Grouped: reading,
+# stories and scenes, pictures, characters.
 CodexToolName = Literal[
     "list_stories",
     "get_story",
     "list_characters",
     "list_categories",
+    "list_loras",
+    "get_generation_setup",
+    "preview_scenes",
+    "consistency_report",
+    "view_images",
     "create_story",
     "update_story",
-    "add_scene",
-    "update_scene",
-    "lock_sub_prompt",
-    "unlock_category",
-    "move_scene",
+    "delete_story",
+    "add_scenes",
+    "update_scenes",
+    "reorder_scenes",
     "duplicate_scene",
-    "delete_scene",
-    "generate_scene",
-    "generate_missing_scenes",
+    "delete_scenes",
+    "generate_scenes",
+    "edit_variants",
+    "create_character",
+    "update_character",
+    "delete_character",
+    "install_ip_adapter",
 ]
 # "story": the story's characters (a scene that names none of its own); a list: the scene's own ([]: none).
 SceneCast = Literal["story"] | list[CharacterRef]
+OutputRef = Annotated[str, Field(pattern=OUTPUT_ID_PATTERN)]
+CharacterImageRef = Annotated[str, Field(pattern=CHARACTER_IMAGE_ID_PATTERN)]
+# Several scenes of one story: their ids, or "all" (every scene, in reading order).
+SceneSelection = Literal["all"] | list[SceneRef]
+# At most this many scenes per call (create_story, add_scenes) and changes per update_scenes call.
+CODEX_MAX_SCENES_PER_CALL = 60
+CODEX_MAX_CHANGES_PER_CALL = 100
+# At most this many pictures per view_images call (each costs Codex tokens).
+CODEX_MAX_IMAGES_PER_CALL = 8
 
 
 class CodexToolArgs(ApiModel):
     """Base of the tool arguments: unknown fields are refused, so Codex learns about a typo."""
 
     model_config = ConfigDict(extra="forbid", json_schema_serialization_defaults_required=True)
+
+
+def _examples(*examples: dict[str, Any]) -> ConfigDict:
+    """Example arguments shown to Codex in the tool's input schema (the tests validate each one)."""
+    return ConfigDict(json_schema_extra={"examples": list(examples)})
+
+
+def _require_a_change(model: BaseModel, ignored: set[str]) -> None:
+    """Raises when no field other than `ignored` was sent with a value (null and [] count as not sent)."""
+    sent = [name for name in model.model_fields_set - ignored if getattr(model, name) not in (None, [])]
+    if not sent:
+        raise ValueError("Give at least one change.")
+
+
+_STORY_EXAMPLE = "sty-0123456789ab"
+_SCENE_EXAMPLE = "scn-0123456789ab"
+_CHARACTER_EXAMPLE = "chr-0123456789ab"
 
 
 class CodexNoArgs(CodexToolArgs):
@@ -1256,55 +1325,337 @@ class CodexSceneArgs(CodexStoryArgs):
     scene_id: SceneRef
 
 
-class CodexListCategoriesArgs(CodexToolArgs):
-    query: str | None = Field(default=None, max_length=200, description="Only the categories whose name contains it.")
+class CodexQueryArgs(CodexToolArgs):
+    query: str | None = Field(
+        default=None, max_length=200, description="Only the entries whose name contains it (case-insensitive); null: all."
+    )
+
+
+class CodexLockSpec(CodexToolArgs):
+    """A sub-prompt of one of the user's prompt categories, locked for a scene (it replaces that category's pick)."""
+
+    category: str = Field(min_length=1, max_length=200, description="A prompt category (list_categories), e.g. 'Background'.")
+    sub_prompt: str = Field(min_length=1, max_length=5_000, description="One of that category's sub-prompts, as listed.")
+
+
+class CodexLoraSpec(CodexToolArgs):
+    """A LoRA of the user's library with its weight."""
+
+    lora: str = Field(min_length=1, max_length=300, description="The LoRA's lora_id or its name (list_loras).")
+    weight: LoraWeightValue = Field(
+        default=LORA_WEIGHT_DEFAULTS.weight, description="Its weight (usually 0.4 to 1; 0 turns it off for the scene)."
+    )
+
+
+class CodexSceneSpec(CodexToolArgs):
+    """A new scene. Its picture is made from its tags, locks, LoRAs, characters and seed; the flow notes (beat, shot,
+    setting, mood) plan it and are never added to the prompt."""
+
+    title: SceneTitle | None = Field(default=None, description="Short title; null: 'Scene <n>'.")
+    beat: SceneNote = Field(default="", description="What happens and why it matters to the story (one line).")
+    text: SceneText = Field(default="", description="The narrative text read under the picture (prose).")
+    shot: SceneNote = Field(default="", description="Framing and camera, e.g. 'wide shot, low angle'.")
+    setting: SceneNote = Field(default="", description="Place and time, e.g. 'harbor at dawn, light fog'.")
+    mood: SceneNote = Field(default="", description="Mood and emotional tone, e.g. 'quiet hope'.")
+    extra_tags: PromptTags = Field(
+        default_factory=list,
+        description="Danbooru-style tags of the picture: action, expression, pose, setting, composition, light (never "
+        "the characters' appearance).",
+    )
+    negative_tags: PromptTags = Field(default_factory=list, description="Added to the negative prompt of this scene.")
+    locks: list[CodexLockSpec] = Field(default_factory=list, description="Sub-prompts of the user's categories to use.")
+    loras: list[CodexLoraSpec] = Field(default_factory=list, description="LoRAs of this scene only, with their weights.")
+    characters: SceneCast = Field(
+        default="story", description="\"story\": the story's characters; a list of character_id: its own ([]: none)."
+    )
+    seed: SceneSeed | None = Field(default=None, description="A fixed image seed (the same picture again); null: random.")
 
 
 class CodexCreateStoryArgs(CodexToolArgs):
+    model_config = _examples(
+        {
+            "title": "The lighthouse keeper",
+            "character_ids": [_CHARACTER_EXAMPLE],
+            "logline": "A lonely keeper must guide a lost boat home through the storm of the century.",
+            "style_notes": "soft watercolor, muted blues, warm lamp light, children's picture book",
+            "scenes": [
+                {
+                    "title": "Arrival",
+                    "beat": "Mira takes over the lighthouse",
+                    "text": "Mira climbs the spiral stairs for the first time.",
+                    "shot": "wide shot",
+                    "setting": "rocky island, evening",
+                    "extra_tags": ["lighthouse", "spiral stairs", "looking up"],
+                },
+                {"title": "The storm", "beat": "The storm hits", "extra_tags": ["storm", "night", "crashing waves"]},
+            ],
+        }
+    )
+
     title: StoryTitle
-    character_ids: list[CharacterRef] = Field(default_factory=list, description="The story's characters (list_characters).")
+    character_ids: list[CharacterRef] = Field(
+        default_factory=list, description="The story's characters (list_characters), in every scene without its own."
+    )
+    logline: StoryNote = Field(default="", description="The story in one sentence.")
+    synopsis: StorySynopsis = Field(default="", description="The whole story in a few paragraphs, beginning to end.")
+    style_notes: StoryNote = Field(default="", description="Style and tone of the story and its pictures.")
+    scenes: list[CodexSceneSpec] = Field(
+        default_factory=list,
+        max_length=CODEX_MAX_SCENES_PER_CALL,
+        description="The outline: its scenes in reading order (one per beat).",
+    )
 
 
 class CodexUpdateStoryArgs(CodexStoryArgs):
-    title: StoryTitle | None = Field(default=None, description="null: unchanged.")
-    character_ids: list[CharacterRef] | None = Field(default=None, description="null: unchanged.")
-
-
-class CodexAddSceneArgs(CodexStoryArgs):
-    title: SceneTitle | None = Field(default=None, description="null: 'Scene <n>'.")
-    text: SceneText = Field(default="", description="The narrative text of the scene.")
-    extra_tags: PromptTags = Field(default_factory=list, description="Danbooru-style tags of the scene's picture.")
-    negative_tags: PromptTags = Field(default_factory=list)
-    characters: SceneCast = Field(default="story", description="\"story\": the story's characters; a list: its own.")
-    position: int | None = Field(default=None, ge=1, description="1-based position; null: at the end.")
-
-
-class CodexUpdateSceneArgs(CodexSceneArgs):
     """Only the fields given change (null: unchanged)."""
 
-    title: SceneTitle | None = None
+    title: StoryTitle | None = None
+    character_ids: list[CharacterRef] | None = Field(default=None, description="The story's characters ([]: none).")
+    logline: StoryNote | None = None
+    synopsis: StorySynopsis | None = None
+    style_notes: StoryNote | None = None
+
+    @model_validator(mode="after")
+    def _a_change(self) -> "CodexUpdateStoryArgs":
+        if all(getattr(self, name) is None for name in ("title", "character_ids", "logline", "synopsis", "style_notes")):
+            raise ValueError("Give at least one change.")
+        return self
+
+
+class CodexDeleteStoryArgs(CodexStoryArgs):
+    user_confirmed: bool = Field(description="True only when the user confirmed this deletion in the conversation.")
+
+
+class CodexAddScenesArgs(CodexStoryArgs):
+    model_config = _examples(
+        {
+            "story_id": _STORY_EXAMPLE,
+            "position": 2,
+            "scenes": [
+                {"title": "The harbor", "beat": "The boat reaches the harbor", "extra_tags": ["harbor", "fishing boats", "morning"]}
+            ],
+        }
+    )
+
+    scenes: list[CodexSceneSpec] = Field(min_length=1, max_length=CODEX_MAX_SCENES_PER_CALL)
+    position: int | None = Field(
+        default=None, ge=1, description="1-based position of the first new scene (the others follow it); null: at the end."
+    )
+
+
+class CodexSceneChange(CodexToolArgs):
+    """One change of update_scenes: its target (scene_id, or scene_ids for the same change to several scenes) and the
+    fields to change. Replacing fields (null: unchanged) and edits of the current values ([]: none) can be mixed."""
+
+    scene_id: SceneRef | None = Field(default=None, description="The scene to change.")
+    scene_ids: SceneSelection | None = Field(default=None, description="Or several scenes ([ids] or \"all\").")
+    title: SceneTitle | None = Field(default=None, description="Only with scene_id.")
     text: SceneText | None = None
-    extra_tags: PromptTags | None = None
-    negative_tags: PromptTags | None = None
-    characters: SceneCast | None = Field(default=None, description="\"story\": the story's characters; []: none.")
+    beat: SceneNote | None = None
+    shot: SceneNote | None = None
+    setting: SceneNote | None = None
+    mood: SceneNote | None = None
+    extra_tags: PromptTags | None = Field(default=None, description="Replaces the scene tags.")
+    add_tags: PromptTags = Field(default_factory=list, description="Scene tags added (one that is there already stays once).")
+    remove_tags: PromptTags = Field(default_factory=list, description="Scene tags removed.")
+    negative_tags: PromptTags | None = Field(default=None, description="Replaces the negative tags.")
+    add_negative_tags: PromptTags = Field(default_factory=list)
+    remove_negative_tags: PromptTags = Field(default_factory=list)
+    locks: list[CodexLockSpec] | None = Field(default=None, description="Replaces every locked sub-prompt ([]: none).")
+    lock: list[CodexLockSpec] = Field(default_factory=list, description="Locks these (each replaces its category's lock).")
+    unlock: list[Annotated[str, StringConstraints(min_length=1, max_length=200)]] = Field(
+        default_factory=list, description="Categories whose lock is removed."
+    )
+    loras: list[CodexLoraSpec] | None = Field(default=None, description="Replaces the scene's LoRAs ([]: none).")
+    set_loras: list[CodexLoraSpec] = Field(default_factory=list, description="Adds these LoRAs, or changes their weight.")
+    remove_loras: list[Annotated[str, StringConstraints(min_length=1, max_length=300)]] = Field(
+        default_factory=list, description="LoRAs (lora_id or name) removed from the scene."
+    )
+    characters: SceneCast | None = Field(
+        default=None, description="\"story\": the story's characters; a list of character_id: its own ([]: none)."
+    )
     seed: SceneSeed | Literal["random"] | None = Field(default=None, description="A fixed seed, or \"random\".")
 
-
-class CodexLockArgs(CodexSceneArgs):
-    category: str = Field(min_length=1, max_length=200, description="A prompt category (list_categories).")
-    sub_prompt: str = Field(min_length=1, max_length=5_000, description="One of that category's sub-prompts.")
-
-
-class CodexUnlockArgs(CodexSceneArgs):
-    category: str = Field(min_length=1, max_length=200)
-
-
-class CodexMoveSceneArgs(CodexSceneArgs):
-    position: int = Field(ge=1, description="The new 1-based position.")
+    @model_validator(mode="after")
+    def _target_and_change(self) -> "CodexSceneChange":
+        if (self.scene_id is None) == (self.scene_ids is None):
+            raise ValueError("Give scene_id or scene_ids (not both).")
+        if self.title is not None and self.scene_id is None:
+            raise ValueError("title changes one scene: give scene_id.")
+        _require_a_change(self, {"scene_id", "scene_ids"})
+        return self
 
 
-class CodexDeleteSceneArgs(CodexSceneArgs):
+class CodexUpdateScenesArgs(CodexStoryArgs):
+    model_config = _examples(
+        {
+            "story_id": _STORY_EXAMPLE,
+            "changes": [
+                {"scene_ids": "all", "add_negative_tags": ["lowres", "text"], "set_loras": [{"lora": "Watercolor Wash", "weight": 0.6}]},
+                {
+                    "scene_id": _SCENE_EXAMPLE,
+                    "text": "The storm breaks against the windows.",
+                    "add_tags": ["lightning"],
+                    "lock": [{"category": "Mood", "sub_prompt": "serious expression"}],
+                    "seed": 1234,
+                },
+            ],
+        }
+    )
+
+    changes: list[CodexSceneChange] = Field(
+        min_length=1, max_length=CODEX_MAX_CHANGES_PER_CALL, description="Applied in order (all checked first: all or nothing)."
+    )
+
+
+class CodexReorderScenesArgs(CodexStoryArgs):
+    model_config = _examples({"story_id": _STORY_EXAMPLE, "scene_id": _SCENE_EXAMPLE, "position": 1})
+
+    order: list[SceneRef] | None = Field(default=None, description="Every scene_id of the story once, in the new order.")
+    scene_id: SceneRef | None = Field(default=None, description="Or one scene to move (with position).")
+    position: int | None = Field(default=None, ge=1, description="Its new 1-based position.")
+
+    @model_validator(mode="after")
+    def _order_or_move(self) -> "CodexReorderScenesArgs":
+        move = self.scene_id is not None or self.position is not None
+        if (self.order is not None) == move or (move and (self.scene_id is None or self.position is None)):
+            raise ValueError("Give order, or scene_id with position.")
+        return self
+
+
+class CodexDeleteScenesArgs(CodexStoryArgs):
+    scene_ids: list[SceneRef] = Field(min_length=1, max_length=CODEX_MAX_SCENES_PER_CALL)
     user_confirmed: bool = Field(description="True only when the user confirmed this deletion in the conversation.")
+
+
+class CodexScenesArgs(CodexStoryArgs):
+    scene_ids: list[SceneRef] | None = Field(default=None, description="The scenes; null: every scene.")
+
+
+class CodexGenerateScenesArgs(CodexStoryArgs):
+    scene_ids: list[SceneRef] | None = Field(
+        default=None, description="The scenes to illustrate, in this order; null: every scene without a picture."
+    )
+
+
+class CodexEditVariantsArgs(CodexSceneArgs):
+    """A scene's pictures (variants): every picture made for it or added to it; one of them is its picture."""
+
+    add: list[OutputRef] = Field(default_factory=list, description="Existing outputs added as variants (the last one becomes the picture).")
+    choose: OutputRef | None = Field(default=None, description="The variant that becomes the scene's picture.")
+    remove: list[OutputRef] = Field(default_factory=list, description="Variants removed from the scene (the outputs are kept).")
+
+    @model_validator(mode="after")
+    def _a_change(self) -> "CodexEditVariantsArgs":
+        _require_a_change(self, {"story_id", "scene_id"})
+        return self
+
+
+class CodexViewImagesArgs(CodexToolArgs):
+    model_config = _examples({"story_id": _STORY_EXAMPLE, "scene_ids": [_SCENE_EXAMPLE]}, {"character_ids": [_CHARACTER_EXAMPLE]})
+
+    story_id: StoryRef | None = Field(default=None, description="A story: the pictures of its scenes.")
+    scene_ids: list[SceneRef] | None = Field(default=None, description="With story_id: these scenes; null: every scene with a picture.")
+    output_ids: list[OutputRef] = Field(default_factory=list, description="Outputs (e.g. the variants of a scene).")
+    character_ids: list[CharacterRef] = Field(default_factory=list, description="Characters: their reference images.")
+
+    @model_validator(mode="after")
+    def _something(self) -> "CodexViewImagesArgs":
+        if self.scene_ids is not None and self.story_id is None:
+            raise ValueError("scene_ids needs story_id.")
+        if self.story_id is None and not self.output_ids and not self.character_ids:
+            raise ValueError("Give story_id, output_ids or character_ids.")
+        return self
+
+
+class CodexSceneRef(CodexToolArgs):
+    """A scene: its picture (chosen variant) is used."""
+
+    story_id: StoryRef
+    scene_id: SceneRef
+
+
+class CodexCreateCharacterArgs(CodexToolArgs):
+    """A new character. From a picture (from_output_id or from_scene) it is prefilled like the app's "Create character":
+    the tags of the picture's prompt as identity tags (its 'Character outfit' as outfit tags), its LoRAs with their
+    weights, its seed (not locked), and the picture as the first reference image. The fields given replace the
+    prefilled ones."""
+
+    model_config = _examples(
+        {
+            "name": "Mira",
+            "identity_tags": ["1girl", "short red hair", "green eyes", "freckles"],
+            "outfit_tags": ["leather jacket", "white scarf"],
+            "loras": [{"lora": "Watercolor Wash", "weight": 0.5}],
+        },
+        {"name": "Mira", "from_scene": {"story_id": _STORY_EXAMPLE, "scene_id": _SCENE_EXAMPLE}, "seed_locked": True},
+    )
+
+    name: CharacterName | None = Field(default=None, description="null: 'New character' or 'Character from #<output>'.")
+    from_output_id: OutputRef | None = Field(default=None, description="Prefill from this output (see above).")
+    from_scene: CodexSceneRef | None = Field(default=None, description="Or prefill from a scene's picture.")
+    identity_tags: PromptTags | None = Field(default=None, description="Appearance: face, hair, eyes, body (never clothes).")
+    outfit_tags: PromptTags | None = Field(default=None, description="Default outfit, kept apart from the identity.")
+    negative_tags: PromptTags | None = None
+    loras: list[CodexLoraSpec] | None = Field(default=None, description="Character LoRAs with their weights.")
+    seed: SceneSeed | None = Field(default=None, description="The character's image seed.")
+    seed_locked: bool | None = Field(default=None, description="Generate every picture of the character with its seed.")
+    reference_strength: ReferenceStrength | None = Field(default=None, description="IP-Adapter strength of the reference images (0 to 1).")
+    reference_focus: ReferenceFocus | None = Field(default=None, description="'face': keep the face; 'general': the whole look.")
+    reference_output_ids: list[OutputRef] = Field(
+        default_factory=list, max_length=REFERENCE_DEFAULTS.max_images, description="More reference images (outputs)."
+    )
+
+    @model_validator(mode="after")
+    def _one_source(self) -> "CodexCreateCharacterArgs":
+        if self.from_output_id is not None and self.from_scene is not None:
+            raise ValueError("Give from_output_id or from_scene, not both.")
+        if self.seed_locked and self.seed is None and self.from_output_id is None and self.from_scene is None:
+            raise ValueError("seed_locked needs a seed.")
+        return self
+
+
+class CodexUpdateCharacterArgs(CodexToolArgs):
+    """Only the fields given change (null: unchanged)."""
+
+    model_config = _examples(
+        {"character_id": _CHARACTER_EXAMPLE, "outfit_tags": ["raincoat", "rubber boots"], "seed": 777, "seed_locked": True},
+        {
+            "character_id": _CHARACTER_EXAMPLE,
+            "add_reference_scenes": [{"story_id": _STORY_EXAMPLE, "scene_id": _SCENE_EXAMPLE}],
+            "reference_strength": 0.7,
+        },
+    )
+
+    character_id: CharacterRef
+    name: CharacterName | None = None
+    identity_tags: PromptTags | None = None
+    outfit_tags: PromptTags | None = None
+    negative_tags: PromptTags | None = None
+    loras: list[CodexLoraSpec] | None = Field(default=None, description="Replaces the character's LoRAs ([]: none).")
+    seed: SceneSeed | Literal["none"] | None = Field(default=None, description="A seed, or \"none\" (no seed, unlocked).")
+    seed_locked: bool | None = None
+    reference_strength: ReferenceStrength | None = None
+    reference_focus: ReferenceFocus | None = None
+    add_reference_output_ids: list[OutputRef] = Field(default_factory=list, description="Outputs added as reference images.")
+    add_reference_scenes: list[CodexSceneRef] = Field(default_factory=list, description="Scene pictures added as reference images.")
+    remove_reference_image_ids: list[CharacterImageRef] = Field(default_factory=list, description="Reference images removed.")
+    active_in_create: bool | None = Field(default=None, description="Activate (or deactivate) it for Create's generations.")
+
+    @model_validator(mode="after")
+    def _a_change(self) -> "CodexUpdateCharacterArgs":
+        _require_a_change(self, {"character_id"})
+        return self
+
+
+class CodexDeleteCharacterArgs(CodexToolArgs):
+    character_id: CharacterRef
+    user_confirmed: bool = Field(description="True only when the user confirmed this deletion in the conversation.")
+
+
+class CodexInstallIpAdapterArgs(CodexToolArgs):
+    focus: ReferenceFocus = Field(default=REFERENCE_DEFAULTS.focus, description="The reference focus to install for the current model.")
+    user_confirmed: bool = Field(description="True only when the user agreed to the download (it can be several GB).")
 
 
 # THE arguments of each tool (validated by the backend before the frontend executes the call).
@@ -1312,18 +1663,26 @@ CODEX_TOOL_ARGUMENTS: dict[str, type[CodexToolArgs]] = {
     "list_stories": CodexNoArgs,
     "get_story": CodexStoryArgs,
     "list_characters": CodexNoArgs,
-    "list_categories": CodexListCategoriesArgs,
+    "list_categories": CodexQueryArgs,
+    "list_loras": CodexQueryArgs,
+    "get_generation_setup": CodexNoArgs,
+    "preview_scenes": CodexScenesArgs,
+    "consistency_report": CodexScenesArgs,
+    "view_images": CodexViewImagesArgs,
     "create_story": CodexCreateStoryArgs,
     "update_story": CodexUpdateStoryArgs,
-    "add_scene": CodexAddSceneArgs,
-    "update_scene": CodexUpdateSceneArgs,
-    "lock_sub_prompt": CodexLockArgs,
-    "unlock_category": CodexUnlockArgs,
-    "move_scene": CodexMoveSceneArgs,
+    "delete_story": CodexDeleteStoryArgs,
+    "add_scenes": CodexAddScenesArgs,
+    "update_scenes": CodexUpdateScenesArgs,
+    "reorder_scenes": CodexReorderScenesArgs,
     "duplicate_scene": CodexSceneArgs,
-    "delete_scene": CodexDeleteSceneArgs,
-    "generate_scene": CodexSceneArgs,
-    "generate_missing_scenes": CodexStoryArgs,
+    "delete_scenes": CodexDeleteScenesArgs,
+    "generate_scenes": CodexGenerateScenesArgs,
+    "edit_variants": CodexEditVariantsArgs,
+    "create_character": CodexCreateCharacterArgs,
+    "update_character": CodexUpdateCharacterArgs,
+    "delete_character": CodexDeleteCharacterArgs,
+    "install_ip_adapter": CodexInstallIpAdapterArgs,
 }
 
 
@@ -1346,11 +1705,28 @@ def _tool_call_model(tool: str, arguments: type[CodexToolArgs]) -> type[CodexToo
     return model
 
 
-# One call model per tool ("CodexAddSceneCall": tool + its arguments), discriminated by `tool`.
+# One call model per tool ("CodexAddScenesCall": tool + its arguments), discriminated by `tool`.
 CODEX_TOOL_CALL_MODELS: dict[str, type[CodexToolCallBase]] = {
     tool: _tool_call_model(tool, arguments) for tool, arguments in CODEX_TOOL_ARGUMENTS.items()
 }
 CodexToolCall = Annotated[Union[tuple(CODEX_TOOL_CALL_MODELS.values())], Field(discriminator="tool")]  # type: ignore[valid-type]
+
+
+class CodexToolImage(ApiModel):
+    """A picture a tool shows Codex (view_images): an output's image, or a character's reference image. The backend
+    reads it, downscales it (services/codex/images.py) and sends it to Codex as MCP image content after its label."""
+
+    label: str = Field(max_length=300, description="What the picture is ('Scene 2 · The storm, output #0000000004').")
+    output_id: OutputRef | None = None
+    character_id: CharacterRef | None = None
+    image_id: CharacterImageRef | None = Field(default=None, description="With character_id: one of its images.")
+
+    @model_validator(mode="after")
+    def _one_picture(self) -> "CodexToolImage":
+        character_image = self.character_id is not None and self.image_id is not None
+        if (self.output_id is not None) == character_image or (self.character_id is None) != (self.image_id is None):
+            raise ValueError("Give output_id, or character_id with image_id.")
+        return self
 
 
 class CodexToolResult(ApiModel):
@@ -1361,6 +1737,10 @@ class CodexToolResult(ApiModel):
     summary: str = Field(max_length=500, description="What people read in the conversation ('Added Scene 3 · The storm').")
     story_id: StoryRef | None = Field(default=None, description="The story it acted on (the conversation links to it).")
     scene_id: SceneRef | None = None
+    character_id: CharacterRef | None = Field(default=None, description="The character it acted on (the conversation links to it).")
+    images: list[CodexToolImage] = Field(
+        default_factory=list, max_length=CODEX_MAX_IMAGES_PER_CALL, description="Pictures shown to Codex with the text."
+    )
 
 
 # --- Conversations ---
@@ -1379,6 +1759,7 @@ class CodexEntry(ApiModel):
     tool: str | None = Field(default=None, description="The tool of a tool entry (a CodexToolName for the app's tools).")
     story_id: str | None = Field(default=None, description="What a tool entry acted on (its arguments or its result).")
     scene_id: str | None = None
+    character_id: str | None = Field(default=None, description="The character a tool entry acted on.")
 
 
 class CodexConversation(ApiModel):
