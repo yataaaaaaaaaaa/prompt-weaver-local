@@ -5,7 +5,7 @@ A local, Windows-first desktop tool for prompt-combinator diffusion generation.
 ## What it does
 
 - Runs fully locally: a FastAPI backend drives the shared `diffusion-lora-runtime` package, and an Electron + React desktop UI built with Fluent UI 2 talks to it.
-- Organizes the work in four docked task sections on a navigation rail: **Create** (prompt board, current image, generation panel), **Models**, **Images** and **Characters**, with one-click hand-offs between them.
+- Organizes the work in five docked task sections on a navigation rail: **Create** (prompt board, current image, generation panel), **Models**, **Images**, **Characters** and **Story**, with one-click hand-offs between them.
 - Keeps the current diffusion model and its loaded LoRAs in memory between generations.
 - Lets you pick:
   - one diffusion model
@@ -18,8 +18,9 @@ A local, Windows-first desktop tool for prompt-combinator diffusion generation.
 - Has an online model library: search Civitai for checkpoints, LoRAs and embeddings, and pick one to use it. If the file is not on disk yet it is downloaded into the ComfyUI model folders, verified, added to the local library and selected for generation.
 - Has an online image library: search Civitai images by keyword, see each image's tags, LoRAs (with their weights), checkpoint and generation parameters, and in one click use the same LoRAs with the same weights (missing ones are downloaded first), switch to the same checkpoint, or add the tags to a prompt category.
 - Has characters, for character consistency: a character bundles identity tags (appearance), outfit tags (kept separate), negative tags, optional LoRAs with weights, an optional locked seed and up to 4 reference images. Activate one in one click and every generation keeps that person: its tags go through the prompt engine as pinned categories, and its reference images steer the image through an IP-Adapter when one is available for the model. Create one by hand, or from an output or an online image, prefilled.
+- Has story mode, an illustrated storyboard: a story is an ordered list of scenes, each with a title, its text and a picture generated through the same prompt engine and generation path (the prompt board, the story's characters, the LoRAs with their weights, the current model and settings) plus per-scene overrides (extra tags, locked sub-prompts, its own characters, a fixed seed, negative tags). Keep every variant of a scene and pick its picture, generate every missing scene in one click, read the story as a picture book and export it as one HTML file.
 - Saves every generation as an image plus an adjacent JSON metadata file in `<data dir>/output`.
-- Keeps everything else in the data directory too: frontend state (`<data dir>/stores`), the app-managed trash (`<data dir>/trash`), backend settings such as the optional Civitai API token (`<data dir>/backend_settings.json`), the file hash cache (`<data dir>/cache/file_hashes.json`), the favorite online images (`<data dir>/image_favorites.json`), the characters and their images (`<data dir>/characters`) and the legacy `app_state.json` / `library.json`.
+- Keeps everything else in the data directory too: frontend state (`<data dir>/stores`), the app-managed trash (`<data dir>/trash`), backend settings such as the optional Civitai API token (`<data dir>/backend_settings.json`), the file hash cache (`<data dir>/cache/file_hashes.json`), the favorite online images (`<data dir>/image_favorites.json`), the characters and their images (`<data dir>/characters`), the stories (`<data dir>/stories`) and the legacy `app_state.json` / `library.json`.
 
 The data directory is `D:\Anything\storage\prompt-weaver-local-storage` on Windows, or `<repo>/.prompt_weaver_local_data` on other systems. Set the `PROMPT_WEAVER_DATA_DIR` environment variable to use a different one. The backend owns this layout in `backend/app/settings.py`.
 
@@ -29,9 +30,9 @@ Model files live in the ComfyUI models folder, `D:\Anything\ComfyUI\ComfyUI\mode
 
 ### Sections and layout
 
-The app follows the journey Discover -> Collect -> Compose -> Generate -> Review -> Reuse in four task sections, all docked (nothing floats or overlaps):
+The app follows the journey Discover -> Collect -> Compose -> Generate -> Review -> Reuse -> Tell in five task sections, all docked (nothing floats or overlaps):
 
-- **Navigation rail** on the left: **Create** (compose prompts, generate and review outputs), **Models** (find, download and pick checkpoints, LoRAs and embeddings), **Images** (find online images and reuse their LoRAs, tags and checkpoint) and **Characters** (keep the same character across generations). `Ctrl+1`..`Ctrl+4` show them; each item's tooltip says what the section is for, with its shortcut. The Models item has a badge with the number of running downloads. A section loads on its first visit and keeps its state when you switch away.
+- **Navigation rail** on the left: **Create** (compose prompts, generate and review outputs), **Models** (find, download and pick checkpoints, LoRAs and embeddings), **Images** (find online images and reuse their LoRAs, tags and checkpoint) **Characters** (keep the same character across generations) and **Story** (illustrate a story scene by scene and read it as a picture book). `Ctrl+1`..`Ctrl+5` show them; each item's tooltip says what the section is for, with its shortcut. The Models item has a badge with the number of running downloads. A section loads on its first visit and keeps its state when you switch away.
 - **Bottom of the rail:**
   - **Downloads**: the overall progress while files download. Its popover lists every running download, whatever started it (Models installs, "Use these LoRAs", IP-Adapter files), with its progress, and offers "Show in Models"; when idle it says "No downloads running."
   - **About**: the data directory ("Data directory: ...") and the backend address.
@@ -42,8 +43,8 @@ The app follows the journey Discover -> Collect -> Compose -> Generate -> Review
   - **Splitters**: drag the boundary on the left of the image or of the generation panel to resize it (the board gives or takes the room). With the keyboard, focus the splitter ("Resize Current image", "Resize Generation"): `←` / `→` 16 px, with `Shift` 64 px, `Home` / `End` the minimum / maximum, `Enter` collapses that region.
   - **Collapse**: a collapsed region becomes a 56 px strip with an Expand button and its vertical name. The collapsed generation strip keeps Generate, Continuous and Cancel (icon-only, with tooltips) and a small progress bar. At least one region always stays expanded.
   - `Ctrl+H` (and "Cycle the Create layout") cycles: everything -> the board alone -> image + generation panel -> everything. From another section it shows Create.
-- **Models**, **Images** and **Characters** are full pages built the same way (`src/ui/SectionLayout.tsx`): a header with the section title and its toolbar (search, filters, commands), the results grid, and a detail panel next to it for the selected item. Opening an item moves the focus to its heading; `Escape` or Close (X, "Close details") clears the selection and returns the focus to the card or thumbnail that opened it.
-- **Keyboard**: `F6` / `Shift+F6` move the focus between regions: the rail, the Create header, the board, the image and the generation panel in Create; the toolbar, the results and the detail panel in the other sections. Each region shows a focus ring. `F6` works from any control, text fields included. `Ctrl+F` focuses the search box of the shown section (in Create, the board's search; a collapsed board is expanded first). Every icon button has a name and a tooltip, and every control a visible focus ring.
+- **Models**, **Images**, **Characters** and **Story** are full pages built the same way (`src/ui/SectionLayout.tsx`): a header with the section title and its toolbar (search, filters, commands), the results grid, and a detail panel next to it for the selected item. The layout can also dock a navigation pane before the results (Story: the list of stories) and a side panel after the detail panel (Story: the dock for a plugged-in panel, see Story). Opening an item moves the focus to its heading; `Escape` or Close (X, "Close details") clears the selection and returns the focus to the card or thumbnail that opened it.
+- **Keyboard**: `F6` / `Shift+F6` move the focus between regions: the rail, the Create header, the board, the image and the generation panel in Create; the toolbar, the results and the detail panel in the other sections (in Story: the toolbar, the stories, the scenes, the scene details and the dock when a panel is plugged in). Each region shows a focus ring. `F6` works from any control, text fields included. `Ctrl+F` focuses the search box of the shown section (in Create, the board's search; a collapsed board is expanded first). Every icon button has a name and a tooltip, and every control a visible focus ring.
 - **Toasts** appear at the bottom-end corner, above the app; while Create is shown they sit left of the generation panel, so they never cover Generate. Errors and warnings stay until dismissed; information and confirmations close after 4 s. A hand-off toast (see below) has a "Go to <section>" button, offered only while another section is shown.
 - Startup shows the app name and a spinner; if the backend cannot be reached, an error card explains why and offers Retry. Delete confirmations have a red Delete button; Cancel has the initial focus, and the focus returns to the button that opened the dialog.
 - The UI follows Microsoft Fluent 2 (Fluent UI React v9) and switches between light and dark to match the OS setting, live. The desktop window is at least 1280 x 720.
@@ -58,6 +59,7 @@ Each hand-off is one click and lands in context; nothing navigates by itself:
 - In Models, "Download and use" or "Use" makes a checkpoint the current model, or adds a LoRA to the selection, and announces it with "Go to Create" (the local library's "Use" too). Download progress shows on the card, in the detail panel, on the Models rail badge and in the rail's Downloads indicator, from any section.
 - "Create character" on the current output (Create) or on an image's details (Images) opens the Characters editor prefilled; Cancel goes back to where it was opened, and saving offers "Go to <that section>". Activating a character outside Create offers "Go to Create".
 - New character (Character section of the generation panel, command bar menu) and Edit open the editor in Characters; "Manage characters" shows the section.
+- "Add to story" in the viewer's output actions (Create) adds the output shown as a new scene of the story you pick (or of a new story); the toast offers "Go to Story", which lands on the new scene. A run of "Generate missing" that completes while another section is shown offers "Go to Story" too.
 
 ### First run and empty states
 
@@ -197,6 +199,40 @@ IP-Adapters:
 
 Storage: `<data dir>/characters/characters.json` (`{"version": 1, "active_id", "items"}`) and one PNG per image in `<data dir>/characters/images` (reference images at most 1024 px on the long side, thumbnails at most 384 px, EXIF orientation applied). Invalid entries are skipped. A characters file that cannot be read, or has another version, is reported as an error (HTTP 503) and never overwritten.
 
+### Story
+
+Story mode is an illustrated storyboard. A **story** has a title, its characters and an ordered list of **scenes**; a scene has a title, its narrative text, its prompt overrides and its pictures (variants), one of which is its picture.
+
+The **Story section** (rail item Story, `Ctrl+5`) is a full page:
+
+- **Commands** ("Story commands" toolbar): New story (primary), Add scene, **Generate missing (N)** (the scenes without a picture, one after the other), **Read** (a toggle: the reader) and **Export**. While scenes are generated, the run's progress ("Scene 2 of 5 · The storm" and a bar) and Cancel (amber) replace Generate missing; Cancel stops the scene being generated and drops the others.
+- **Stories** (the navigation pane): every story with its cover (the picture of its first illustrated scene), its title and how far it is illustrated ("3 scenes · 2 illustrated"); the selected one is current. The first story is selected at startup.
+- **Scenes** (the results): the story's settings (its title, saved when the edit is done; its characters, picked among the Characters section's characters; Delete story, red, after a confirmation: its outputs are kept), then the scene cards in reading order and an "Add scene" tile. A card shows its position, title, picture (or "No picture yet"), its status (Illustrated, Not illustrated, Generating with the step progress, Queued), the start of its text, and Generate / Regenerate, Duplicate and Delete (red, after a confirmation; its outputs are kept). **Reorder** like the prompt board's cards (the same reorder kit): drag a card's handle (a brand bar shows where it lands), or focus the handle and use `←` / `↑`, `→` / `↓`, `Home` and `End`; moves are announced ("The storm moved to position 1 of 3") and the focus stays on the handle.
+- **Scene details** (the detail panel; `Escape` or Close returns to the card): the picture with its status, **Generate / Regenerate** (primary; Cancel while it runs), "Use the current output" (the output shown in Create becomes a variant and the picture), the **variants** (every picture made for or added to the scene; pick one to make it the picture); the title and the text (saved when you leave the field, `Ctrl+Enter` too, `Escape` puts it back); the **prompt**: scene tags, locked sub-prompts (pick any sub-prompt of any category; each one replaces what its category would pick; one per category), negative tags, characters ("Same characters as the story", or the scene's own, none allowed) and a fixed seed (empty: a new seed for every picture; the shuffle button clears it); then Duplicate scene and Delete scene.
+- **Read** shows the selected story as a picture book, one scene per page: the picture on the left, the title and text on the right. `←` / `↑` / `Page Up` and `→` / `↓` / `Page Down` / `Space` turn the pages, `Home` / `End` go to the first / last page, `Escape` closes it (the page read last becomes the selected scene); Previous page, Next page and Close reader do the same.
+- **Export** saves the story as one self-contained HTML file: every scene's picture embedded (JPEG, at most 1600 px), its title and text, light and dark color schemes, one scene per printed page. In the desktop app a save dialog picks the file; in the browser it is downloaded.
+- **Empty states**: no story yet ("Tell a story, picture by picture" with New story), a story without scenes (Add scene, or Go to Create to add an output), no scene selected.
+- At 1280 x 720 the stories pane, two card columns and the scene details fit side by side.
+
+How a scene's picture is made, documented once at the top of `frontend/src/domain/stories.ts` (the generation goes through the same `buildGenerationRequest`, generation store and backend generation service as Create; nothing is built twice):
+
+1. **Characters**: the scene's characters when it names its own, else the story's, else the active character (like Create). They take part like the active character (see Characters); with several, each further one gets 'Character 2' / 'Character outfit 2' categories, their LoRAs and negative tags follow in order, the first locked seed wins, and only the first one's reference images apply.
+2. **Pinned categories**, selected before every user category: the characters', then one per locked sub-prompt (named after its category, which it replaces for that picture; its prompt-linked LoRAs come along), then 'Scene' (the scene tags). A lock of a category the characters pin is ignored (shown as replaced).
+3. **Negative tags**: the characters', then the scene's, each appended once.
+4. **LoRAs**: the characters', the selected LoRAs with their weights, the prompt-linked ones.
+5. **Seeds**: the scene's fixed seed, else the characters' locked seed, else a new random seed (every Regenerate is a new variant). The prompt seed follows Create's prompt seed field (the per-category cycle draws a random one instead and its counters are left alone). Scene pictures never change Create's seed fields, the output shown in Create or the undo history; they are listed in the filmstrip like every output.
+6. The request names the scene (`story`): the backend records `OutputRecord.story` and makes the new output the scene's picture.
+
+Variants (THE rules, `backend/app/services/stories.py`): a picture made for a scene, or an output added to it, becomes a variant and its picture; adding an output that is already a variant only picks it; removing a variant keeps the output, and when it was the picture the latest remaining variant becomes the picture. A scene whose picture was deleted from the outputs counts as not illustrated.
+
+**Add to story** (Create, viewer output actions): the scene reproduces the output: its picture (the first variant), its sub-prompts as locked sub-prompts (except the categories of the scene's characters), its image seed as the fixed seed; its characters are the story's when they are exactly the output's character, else the output's character (or none). "New story" starts a story whose character is the output's.
+
+**The story action API** (`src/stores/storyStore.ts`): every story rule is behind the story store's actions, which the views call and which a tool layer (e.g. a co-writer chat panel) can call the same way: `load`, `createStory`, `updateStory` (title, characters), `deleteStory`, `selectStory`; `addScene`, `updateScene` (title, text, extra / negative tags, locks, characters, seed), `lockSubPrompt`, `unlockCategory`, `duplicateScene`, `deleteScene`, `moveScene` / `moveSceneNextTo` / `setSceneOrder`, `selectScene`; `generateScene`, `generateScenes`, `generateMissing`, `cancelGeneration`, `chooseVariant`, `addVariant`, `removeVariant`, `addSceneFromOutput`; `openReader`, `closeReader`, `setReaderPage`, `exportStory`. Every action resolves (failures are notified; it answers null / false / []). Writes of one story are serialized; a scene change shows at once.
+
+**The dock**: a panel plugs into the Story section by its entry in `STORY_DOCK_PANELS` (`src/features/story/storyDock.ts`): it is shown after the scene details (and in the reader) as a complementary landmark named after it, an F6 region; it reads and changes the stories through the story store's actions only.
+
+Storage: `<data dir>/stories/stories.json` (`{"version": 1, "items": [...]}`, creation order, each story's scenes in reading order). Invalid stories and scenes are skipped; a file that cannot be read, or has another version, is reported (HTTP 503) and never overwritten.
+
 ### Prompt board
 
 The Create section's **Prompt board** region holds the prompt categories as cards in a responsive grid (columns of at least 280 px, cards top-aligned, no free positions). It stays usable with 40+ categories.
@@ -263,7 +299,7 @@ State colors (Fluent 2 tokens, light and dark themes; one table, `frontend/src/u
 - Every generation is saved in `<data dir>/output` under a fixed-width 10-digit number: `0000000001.png` + `0000000001.json`.
 - After a generation, the UI jumps to the newest output.
 - The Create section's **Current image** region (the viewer) shows, top to bottom: the output actions toolbar, the current picture, the filmstrip and the details panel. It works at its 320 px minimum width.
-- **Output actions** ("Output actions" toolbar): "#<id>" and "n / N", then icon buttons with tooltips: First / Previous / Next / Last output (their arrow keys in the tooltips), Copy prompt (the full prompt), Create character (prefilled from the output; see Characters), Undo (`Ctrl+Z`; disabled when there is nothing to undo), Delete (the red danger action; "Move to the app trash (Undo restores it)") and the "Output details" toggle. In a narrow viewer the toolbar wraps to a second row; arrow keys move between its buttons.
+- **Output actions** ("Output actions" toolbar): "#<id>" and "n / N", then icon buttons with tooltips: First / Previous / Next / Last output (their arrow keys in the tooltips), Copy prompt (the full prompt), Create character (prefilled from the output; see Characters), Add to story (a menu: New story and every story; see Story), Undo (`Ctrl+Z`; disabled when there is nothing to undo), Delete (the red danger action; "Move to the app trash (Undo restores it)") and the "Output details" toggle. In a narrow viewer the toolbar wraps to a second row; arrow keys move between its buttons.
 - The **picture** fits the remaining space without distortion, centered on a darker canvas; it is the only picture named "Output <id>". The viewer says when there are no outputs yet ("No outputs yet": press Generate, `Ctrl+G`), when no output is selected, and when the picture of an output cannot be loaded (moved or deleted outside the app). At startup, an output whose picture is missing is not listed.
 - The **filmstrip** ("Outputs") is a horizontal list of thumbnails, oldest on the left, loaded lazily from `GET /api/outputs/{id}/thumbnail` (WebP, at most 256 px, cached in `<data dir>/cache/output_thumbnails`). It renders a window of 31 outputs around the current one (`FILMSTRIP_RADIUS`, `src/domain/outputs.ts`), so thousands of outputs stay fast. Click a thumbnail to show its output; inside the list, `←` / `↑` and `→` / `↓` show the previous / next output and `Home` / `End` the first / last, the focus following. The current thumbnail has the "current" frame and is scrolled into view. "Jump to latest" appears while an older output is shown; a thumbnail whose file is missing shows an icon.
 - The **details panel** (about 38% of the viewer's height, opened and closed with "Output details") has two tabs, both remembered in `layout-store`:
@@ -272,6 +308,7 @@ State colors (Fluent 2 tokens, light and dark themes; one table, `frontend/src/u
 - The arrow keys move through the output history while Create is shown: left/up goes to the previous output, right/down to the next. They are left to the focused control when it uses them itself (text fields, splitters, the rail, toolbars, reorder handles, menus, dropdowns); click elsewhere to browse again.
 - The metadata JSON lists the LoRAs used as `active_loras: [{"id", "weight"}]`. Files written before LoRA weights existed (`active_lora_ids`) still load, with weight 1; they are not rewritten.
 - An output made with an active character has a `character` key: `{"id", "name", "reference": {"applied", "variant_id", "strength", "image_ids", "reason"}}`, where `reason` says why the reference images were not applied. Outputs made without a character have no such key (the API answers `character: null`), so older outputs load unchanged. The Details tab shows it as a 'Character' row.
+- An output made for a story scene has a `story` key: `{"story_id", "scene_id", "story_title", "scene_title"}` (the titles when it was made). Other outputs have no such key (the API answers `story: null`). The Details tab shows it as a 'Story' row ("The lighthouse · The storm").
 - Output ids come from file names only, so the list stays fast with thousands of outputs. Metadata, images and thumbnails are loaded by id through the backend API.
 
 ### Delete and undo
@@ -299,7 +336,7 @@ All bindings are defined once, in `frontend/src/app/keymap.json`. The Electron "
 
 | Shortcut | Command |
 | --- | --- |
-| `Ctrl+1` .. `Ctrl+4` | Show Create, Models, Images, Characters (the focus moves to the section's first region) |
+| `Ctrl+1` .. `Ctrl+5` | Show Create, Models, Images, Characters, Story (the focus moves to the section's first region) |
 | `F6` / `Shift+F6` | Next / previous region (works from any control) |
 | `Ctrl+F` | Search in the shown section (in Create, the board's search) |
 | `Ctrl+G` | Generate |
@@ -307,7 +344,7 @@ All bindings are defined once, in `frontend/src/app/keymap.json`. The Electron "
 | `Ctrl+H` | Cycle the Create layout (everything / the board alone / image + generation panel); shows Create first |
 | `Ctrl+O` | Sort categories by priority |
 | `Ctrl+Z` | Undo |
-| `←` / `↑`, `→` / `↓` | Previous / next output (in Create, when the focused control does not use them) |
+| `←` / `↑`, `→` / `↓` | Previous / next output (in Create, when the focused control does not use them); previous / next page in the Story reader |
 
 ## Architecture
 
@@ -329,7 +366,7 @@ prompt-weaver-local/
       openapi_export.py    dumps the OpenAPI document without a server
       routers/             one APIRouter per area, registered in routers/__init__.py (ROUTERS)
         health, bootstrap, outputs, generation, tasks, stores,
-        models, model_installs, downloads, images, characters, ip_adapters,
+        models, model_installs, downloads, images, characters, ip_adapters, stories,
         provider_errors (provider error -> HTTP status)
       services/            domain logic and IO, constructed with injected paths
         container.py       build_services -> AppServices
@@ -348,6 +385,9 @@ prompt-weaver-local/
         local_models.py    download targets and "already on disk" detection (by path and by hash), per kind or folder
         characters.py      CharacterStore: characters.json, image imports (output, file, URL), active character
         ip_adapters.py     IP-Adapter catalog (h94, pinned), on-disk status, the support rule, installs
+        stories.py         StoryStore: stories.json, scenes, scene order, the variant rules, the scene link of generations
+        story_export.py    a story as one self-contained HTML picture book
+        ids.py             record ids ("chr-", "img-", "sty-", "scn-" + 12 hex) and UTC timestamps
         model_installs.py  install = find on disk or download; ModelSource provenance; display names
         legacy_state.py    app_state.json / library.json (read-only seeds)
         outputs.py         output ids, metadata, images, thumbnails (cache/output_thumbnails), trash/restore
@@ -369,12 +409,13 @@ prompt-weaver-local/
   frontend/
     electron/              main.cjs (backend start, window, dialogs), preload.cjs (bridge), ipcChannels.cjs,
                            shortcutMenu.cjs (menu from keymap.json), windowTheme.cjs (Fluent background),
-                           externalLinks.cjs (web links open in the system browser) + tests
+                           externalLinks.cjs (web links open in the system browser), saveTextFile.cjs (save
+                           dialog + write of an exported story) + tests
     scripts/               apiTypes.mjs + generate-api-types.mjs (npm run gen:api)
     e2e/                   Playwright suite (real Edge, dark + light): support/ (env, fixtures, app driver, backend
                            client and persisted stores, network, diagnostics, visibility and geometry checks, the docked
                            shell geometry, colors and contrast, screenshots, baselines, shared flows), smoke.spec.ts, one
-                           folder per area (shell, categories, generation, outputs, library, models, images, characters)
+                           folder per area (shell, categories, generation, outputs, library, models, images, characters, story)
                            with its specs and area helpers, journeys/ (task flows across sections), electron/ (Electron
                            smoke test), __screenshots__/ (committed baselines)
     src/
@@ -385,12 +426,13 @@ prompt-weaver-local/
                            seeds, library, loraSelection, generationRequest, outputs (filmstrip window), board (card
                            order, filters, moves, legacy order), layout (Create regions: fit, limits, collapse, Ctrl+H
                            cycle, legacy widths), legacyLayout (the floating-window stores, read only), legacyImport,
-                           paths, modelCatalog, imageLibrary, characters (prompt injection), characterDrafts (editor form)
+                           paths, modelCatalog, imageLibrary, characters (prompt injection, casts), characterDrafts (editor form),
+                           stories (scene prompt overrides, missing scenes, Add to story prefill, locks, moves, reader)
       stores/              one zustand store per domain (see "Frontend stores" below), pagedSearch.ts (the search
                            engine of the online catalogs), clipboardActions.ts, flags.ts (busy flag records)
       features/            thin Fluent views per feature: categories (the prompt board), forbidden (Used sub-prompts),
                            outputs (the viewer: toolbar, picture, filmstrip, details tabs), generation (generation panel,
-                           actions, command bar), library, models, images, characters (the section pages)
+                           actions, command bar), library, models, images, characters, story (the section pages; the dock registry)
       shell/               AppShell (rail + one lazily mounted <main> per section, F6 / Ctrl+F focus), NavRail
                            (Downloads indicator, About), CreateSection (command bar, Layout toolbar, regions, splitters,
                            collapsed strips), sectionViews.tsx (which view and icon each section has)
@@ -422,6 +464,7 @@ prompt-weaver-local/
 - **Model library rules** are backend-owned and only read by the frontend: which file of a version gets installed (`RemoteModelVersion.default_file_id`), whether it can be installed (`unavailable_reason`), the display name of an install (`InstalledModel.name`, the download task title), the base model -> architecture mapping and the NSFW level rule (`model_providers/civitai.py`), and file hash normalization (`services/file_hashes.py`: `normalize_sha256` for SHA-256, `normalize_file_hash` for the short Civitai hashes too).
 - **Downloads.** Every model file, including the LoRAs and checkpoints of "Use these LoRAs" / "Use this checkpoint", is installed through one flow: `modelCatalogStore.install` -> `POST /api/models/install` -> `DownloadManager`. IP-Adapter files go through the same `DownloadManager` (`ipAdapterStore.install` -> `POST /api/ip-adapters/{variant_id}/install`). "Already on disk" (by name and size, or by hash) has one owner, `services/local_models.py` `LocalModelFiles`, used per model kind and per IP-Adapter folder; in the UI, the label, color and icon of each file status ('On disk', 'Downloading', ...) have one owner, `features/models/VersionStatusBadge.tsx`.
 - **Characters.** The data shape is `schemas.py` (`Character`, `CharacterDraft`, image sources, `OutputCharacter`); storage, ids, image imports and the active character belong to `services/characters.py` (`CharacterStore`); the frontend mirrors them in one store, `charactersStore`. Their injection into prompt building and its precedence belong to `src/domain/characters.ts`; the editor form, its validation and the prefills from an output or an image to `src/domain/characterDrafts.ts`. An image's LoRAs as library entries with weights are collected once, by `imageLibraryStore.collectImageLoras`, for both "Use these LoRAs" and "Create character".
+- **Stories.** The data shape is `schemas.py` (`Story`, `Scene`, `SceneLock`, `SceneVariant`, the create / patch requests, `StoryLink` and `OutputStory`); storage, ids, the scene order and the variant rules belong to `services/stories.py` (`StoryStore`), the HTML export to `services/story_export.py`; the frontend mirrors them in one store, `storyStore`, which owns every story action. How a scene's picture is built (its prompt overrides as pinned categories, its characters, its seeds) belongs to `src/domain/stories.ts`, on top of the one prompt builder (`buildGenerationRequest`) and the one generate path (`generationStore`, `POST /api/generate`).
 - **IP-Adapters.** The catalog (Hugging Face repo, pinned revision, file names, sizes, SHA-256, variants per family and focus) and the rule "can reference images apply with this model and focus, and why not" belong to `services/ip_adapters.py`; both the UI (`GET /api/ip-adapters`) and generation use that one rule, and `ipAdapterStore` never computes support itself. Which pipeline family the runtime loads a model as belongs to `diffusion_lora_runtime.pipeline_architecture` (torch-free; the runtime's own loader uses it too). The runtime request is `IPAdapterSpec`, built only in `services/runtime_adapter.py`.
 - **Host and ports.** `config/defaults.json` is read by the launcher, `backend/run_backend.py` and `config/appConfig.cjs` (Vite and Electron). The frontend builds every backend URL in `src/api/config.ts`.
 - **Frontend state.** Each domain has exactly one zustand store that owns its state and actions (see below).
@@ -445,15 +488,16 @@ The frontend is organized around zustand stores, one per domain. Each store is t
 | `charactersStore` | the frontend copy of the backend-owned characters (`/api/characters`) and the active character (`activeId`), the character editor (form, and the images a new character will import), busy flags, the gallery's search (`query`, `setQuery`, `useGalleryCharacters`) and selected character (`selectedId`, `select`), the section the editor was opened from (`returnSection`: Cancel goes back there); actions: load, setActive / toggleActive, startCreate / startCreateFromOutput / startCreateFromImage / startEdit (they show the Characters section), form and form-LoRA edits, saveEditor, remove, reference images (current output, file, remove, thumbnail), setReferenceStrength | - (the backend saves characters and `active_id`) |
 | `ipAdapterStore` | the IP-Adapter status read for the selected model (variants, files on disk or downloading, reference support per focus), running installs and the failed downloads of each installed variant (`installFailures`, `selectFileFailure`, `selectVariantFailure`); actions: refresh (views call it when they show reference support and when the selected model changes), install (follows the downloads through the tasks store), cancelInstall | - |
 | `generationSettingsStore` | size, steps, CFG, negative prompt, seed inputs and behaviors | `settings-store` |
-| `generationStore` | single and continuous generations (with the active character), cancel; lists the output of a cancelled generation the backend still completed | - |
-| `outputsStore` | output ids, current output and its metadata, the filmstrip window (`selectFilmstripIds`, `selectLatestOutputId`), delete/restore, copy | `current-image-store` |
+| `generationStore` | single and continuous generations (with the active character), the generations of story scenes (`generateScene`: the same request building with the scene's input; the output is listed, the seeds, the viewer and undo are left alone), cancel; lists the output of a cancelled generation the backend still completed | - |
+| `outputsStore` | output ids, current output and its metadata, the filmstrip window (`selectFilmstripIds`, `selectLatestOutputId`), which outputs exist (`selectOutputIdSet`), outputs listed without being shown (`addGenerated`), delete/restore, copy | `current-image-store` |
+| `storyStore` | the frontend copy of the backend-owned stories (`/api/stories`), the selected story and scene, the reader (read mode and page), a running "generate scenes" run (current scene, queue, progress), exports in progress; THE story action API (see Story); `useMissingSceneIds`, `useSceneStatus`, `useCanGenerateScenes` | - (the backend saves the stories) |
 | `undoStore` | undo stack (generation steps, deletions) | - |
 | `tasksStore` | latest task event per task (`/ws/tasks`), generation progress (stage, outcome: idle / running / complete / error / cancelled, bar fill), download progress, the running downloads of any source (`selectActiveDownloads`, `useActiveDownloadCount`, `selectActiveDownloadRatio`: the Models badge and the Downloads indicator), `waitForTask` | - |
-| `navigationStore` | the shown section and the sections visited (mounted) so far, focus requests (F6 / Shift+F6 region cycling, `Ctrl+F` search, the first region after `Ctrl+1..4`), `goToSectionAction` (the "Go to <section>" action of hand-off toasts, not offered while that section is shown: `useApplicableAction`) | - |
+| `navigationStore` | the shown section and the sections visited (mounted) so far, focus requests (F6 / Shift+F6 region cycling, `Ctrl+F` search, the first region after `Ctrl+1..5`), `goToSectionAction` (the "Go to <section>" action of hand-off toasts, not offered while that section is shown: `useApplicableAction`) | - |
 | `layoutStore` | the docked Create layout: image and generation widths, collapsed regions (never all), the output details panel (open, tab), the `Ctrl+H` cycle | `layout-store` (version 0) |
 | `boardStore` | the prompt board: card order, collapsed cards, search and state filter (`useVisibleCategoryKeys`, with the card states of `forbiddenRulesStore`), moves (`moveCategoryNextTo`, `moveCategory`), reveal requests (`revealCategory`: expands the card and the board, clears a filter that hides it) | `board-store` (version 0: order, collapsed) |
 | `notificationsStore` | user-facing errors, warnings and confirmations, each with an optional one-click action (`notify({ action })`, `runAction`) | - |
-| `sessionStore` | boot: bootstrap, hydration of every persisted store, legacy seeding (including the layout and the board from `app_state.json` when no layout was ever saved), resuming running installs, loading the characters in the background (never delays or fails boot; a failure shows in the Characters section with Retry) | - |
+| `sessionStore` | boot: bootstrap, hydration of every persisted store, legacy seeding (including the layout and the board from `app_state.json` when no layout was ever saved), resuming running installs, loading the characters and the stories in the background (never delays or fails boot; a failure shows in the Characters or Story section with Retry) | - |
 
 Copying text with a notification goes through one action module, `src/stores/clipboardActions.ts` (`copyTextWithFeedback`), used by the outputs, model catalog and image library stores. Busy / running flag records (`Record<id, true>`) are updated with `withFlag` (`src/stores/flags.ts`). The two online catalogs share one search engine, `src/stores/pagedSearch.ts` (debounced query, abort of the previous request, stale answers ignored, pages appended without duplicates).
 
@@ -466,7 +510,7 @@ Persisted stores are declared with `persistedStoreOptions` (`src/persistence/per
 - On first start, stores without persisted data are seeded from the legacy `app_state.json` and `library.json`, which `GET /api/bootstrap` returns (LoRA references missing from the library are stripped). The app no longer saves its state to these two files: `library.json` is a read-only seed, and the library lives in `library-store`.
 - `layout-store` (version 0) holds the Create layout and `board-store` (version 0) the board (card order, collapsed cards). When they do not exist yet, they are derived once from the layout of the floating-window versions: `workspace-store` v0, else `panel-layouts-store` + `workspace-z-index-store` (the shape the oldest versions left), else the pane and category positions of `app_state.json`. The Image and Generation pane widths become the region widths (clamped); a region whose panes were all closed starts collapsed; the details panel opens on the Used sub-prompts tab when only that pane was open, and is closed when both the Output browser and the Used sub-prompts panes were. The category windows give the board order, read top to bottom, grouped into rows (tops within 64 px), then left to right (ties go to the front window); panes and deleted categories are dropped, categories without a window come last, every card starts expanded, and free positions are dropped. The legacy files are only read, never written or deleted.
 - `library-store` is version 2: entries may carry a `source` (model library provenance), and the LoRA selection is `selectedLoras: [{id, weight}]`. Older data migrates on load: version 0 entries get `source: null`, and the `selectedLoraIds` of versions 0 and 1 become `selectedLoras` at weight 1. The `last_lora_ids` of a legacy `app_state.json` seed the selection at weight 1 too.
-- The backend owns the favorite online images (`<data dir>/image_favorites.json`, version 1) and the characters (`<data dir>/characters/characters.json`, version 1, plus `characters/images/*.png`; see Characters).
+- The backend owns the favorite online images (`<data dir>/image_favorites.json`, version 1), the characters (`<data dir>/characters/characters.json`, version 1, plus `characters/images/*.png`; see Characters) and the stories (`<data dir>/stories/stories.json`, version 1; see Story). Both start empty when their file does not exist. Output metadata files gained an optional `story` key; files without it load unchanged (no migration needed, nothing is rewritten).
 - The frontend reads outputs through the backend API: `/api/outputs`, `/api/outputs/{id}`, `/api/outputs/{id}/image`, `/api/outputs/{id}/thumbnail` (a WebP of at most 256 px, made on first request and remade when the picture is newer; cached in `<data dir>/cache/output_thumbnails`, derived data that is safe to delete; 404 for an unknown output, 422 for an invalid id), `/api/outputs/{id}/trash` and `/api/trash/{id}/restore`.
 
 ### Extension points
@@ -477,6 +521,7 @@ Persisted stores are declared with `persistedStoreOptions` (`src/persistence/per
 - **Downloads:** `services/downloads.py` `DownloadManager.start(DownloadSpec(url, dest, title, headers, expected_sha256, expected_size), on_complete=...)` is generic: any feature that needs a file gets streaming, verification, retries, cancel (`POST /api/downloads/{task_id}/cancel`) and progress events.
 - **Model providers:** implement the `ModelProvider` protocol of `services/model_providers/base.py` (`info`, `search`, `get_version`, `find_by_hash`, `download_source`; run every version through `complete_version` so the shared install rules apply) and add it to the registry in `services/container.py`. A Hugging Face provider would plug in there; the API, the install flow and the UI take the provider id from `GET /api/models/info`.
 - **New shortcuts:** add the command to `APP_COMMANDS` and its handler in `src/app/commands.ts`, and the binding to `keymap.json` (a test checks both agree).
+- **Story dock panels:** add `{ label, component }` to `STORY_DOCK_PANELS` (`src/features/story/storyDock.ts`); the component works through the story store's actions (see Story).
 - **Image providers:** implement the `ImageProvider` protocol (`search_images(ImageFeedRequest)`, parsing the images' generation data into `RemoteImage.params` / `resources`) with the id of the model provider that resolves its images' models, and add it to the image provider registry in `services/container.py`.
 
 ### Model library API
@@ -523,6 +568,24 @@ Errors: 422 for invalid parameters or a cursor this backend did not produce; 404
 Image sources (`kind`): `output` (an output's image), `file` (a PNG, JPEG, WebP or BMP file), `url` (at most 25 MB; error messages never quote the URL's query) and `character_image` (a copy of one of the character's images, e.g. for the thumbnail; refused when creating). A generation request names the active character with `character_id` (409 for an unknown character).
 
 Errors: 404 for an unknown character, image, output or file; 409 when a character already has 4 reference images; 422 for an invalid body (e.g. a locked seed without a seed) or a file that is not a supported image; 502 when an image URL cannot be downloaded; 503 when `characters.json` cannot be read (it is then never overwritten).
+
+### Stories API
+
+| Endpoint | Purpose |
+| --- | --- |
+| `GET /api/stories` | every story with its scenes, in creation order |
+| `POST /api/stories` | creates a story (`{"title", "character_ids"}`) |
+| `GET` / `PATCH` / `DELETE /api/stories/{id}` | one story; PATCH changes the fields sent (title, character_ids); DELETE keeps its outputs |
+| `GET /api/stories/{id}/export` | the story as one self-contained HTML document (`text/html`) |
+| `PUT /api/stories/{id}/scene-order` | `{"scene_ids": [...]}`: every scene id of the story once, in the new order |
+| `POST /api/stories/{id}/scenes` | adds a scene (`SceneCreateRequest`: fields, `index`, `output_id` = its first variant and picture); untitled: 'Scene <n>' |
+| `PATCH` / `DELETE /api/stories/{id}/scenes/{scene_id}` | changes the fields sent (title, text, extra_tags, negative_tags, locks, character_ids, seed; only the last two accept null) / deletes the scene |
+| `POST /api/stories/{id}/scenes/{scene_id}/duplicate` | inserts a copy after it ('<title> (copy)') |
+| `POST /api/stories/{id}/scenes/{scene_id}/variants` | `{"output_id"}`: an existing output becomes a variant and the picture |
+| `PUT /api/stories/{id}/scenes/{scene_id}/chosen` | `{"output_id"}`: picks one of the variants |
+| `DELETE /api/stories/{id}/scenes/{scene_id}/variants/{output_id}` | removes a variant (the output is kept) |
+
+Every scene change answers the whole story. A generation request names a scene with `story: {"story_id", "scene_id"}` (409 for an unknown one, before anything is generated). Errors: 404 for an unknown story, scene, variant or output; 422 for an invalid body (a blank title, a null text, an order that is not a permutation); 503 when `stories.json` cannot be read (it is then never overwritten).
 
 ### IP-Adapter API
 
@@ -622,13 +685,13 @@ Tests never touch the real data directory, the model folders or the network, and
 
 ```powershell
 cd backend
-uv run pytest              # 745 tests: API tests (TestClient), service unit tests, the download manager against a
-                           # local HTTP server, the install, image library and character flows end to end, and the
+uv run pytest              # 776 tests: API tests (TestClient), service unit tests, the download manager against a
+                           # local HTTP server, the install, image library, character and story flows end to end, and the
                            # e2e backend itself (tests/e2e: reset, fake generator, synthetic Civitai)
 
 cd frontend
-npm test                   # 1376 Vitest tests: domain, stores, persistence, API client, components, Electron helpers
-npm run test:e2e           # 366 Playwright tests in the real browser (183 per theme; about 25 min; see below)
+npm test                   # 1469 Vitest tests: domain, stores, persistence, API client, components, Electron helpers
+npm run test:e2e           # 396 Playwright tests in the real browser (198 per theme; about 25 min; see below)
 npm run typecheck          # tsc -b
 npm run build              # type-check + production bundle
 npm run gen:api            # regenerate backend/openapi.json, src/api/schema.gen.ts and src/api/defaults.gen.ts
@@ -689,19 +752,20 @@ The specs, one folder per area (each spec runs in both projects, dark and light)
 | Folder | Covers |
 | --- | --- |
 | `smoke.spec.ts` | every section is visible (no portal overlay, no blank screen) with no page overflow, the docked regions never overlap and Generate is on top, tooltips create no overlay, baselines of every section at 1920 x 1080 and 1280 x 720 |
-| `shell/` | the rail (click, `Ctrl+1..4`, `aria-current`, focus, tooltips, About and the data directory), splitters (drag and keyboard, limits, saved widths), collapse and the strips (generate from the collapsed panel), the `Ctrl+H` cycle, the 1280 x 720 fit, F6 / Shift+F6 and `Ctrl+F`, the layout migration from the floating-window stores, the Downloads indicator and the Models badge, toasts (placement clear of Generate, Go to Create), boot spinner and failure + Retry |
+| `shell/` | the rail (click, `Ctrl+1..5`, `aria-current`, focus, tooltips, About and the data directory), splitters (drag and keyboard, limits, saved widths), collapse and the strips (generate from the collapsed panel), the `Ctrl+H` cycle, the 1280 x 720 fit, F6 / Shift+F6 and `Ctrl+F`, the layout migration from the floating-window stores, the Downloads indicator and the Models badge, toasts (placement clear of Generate, Go to Create), boot spinner and failure + Retry |
 | `categories/` | the board (grid without overlap, search and state filter, collapse and collapse all, reorder by drag and by keyboard, Sort by priority with the button and `Ctrl+O`, reveal on Add category, the empty board, the legacy order), a 320 px board at 1280 x 720, the state colors of rows, cards and the Used sub-prompts list (computed colors against `stateColors.ts`, contrast, non-color cues, element baselines), category flows (create, rename, priority, activation text, skip, lock, add / edit / delete sub-prompts, bulk edit, delete with confirmation), forbidden rule flows |
 | `generation/`, `outputs/`, `library/` | Generate / Continuous / Cancel with progress, a failing generation, the Checkpoint picker, the no-model call to action, More options, the sticky actions at 1280 x 720 and in the narrowest panel, the command bar (model, character, LoRA weights), the viewer (output actions, arrow keys and buttons, Copy prompt, trash and undo, missing pictures, the empty history, the narrowest viewer), the filmstrip (thumbnails, keyboard, Jump to latest, 44 outputs), the details tabs and their persistence, LoRA weights (typed, stepped, clamped, saved, used by the generation) |
 | `models/`, `images/` | search and filters, the result grids and detail panels (selection, `Escape` and focus return, 1280 x 720), statuses, downloads with progress, Cancel, stalls, Failed + Retry / Dismiss, resumed downloads, embeddings, the token dialog, the Local library, the image grid, Load more and infinite scroll, Use these LoRAs, Use this checkpoint, favorites, Add to category, the hand-off toasts landing in Create |
 | `characters/` | the gallery (search, selection, details, activation), the editor (new, edit, validation, reference images, delete, focus), Create character from an output and from an image, the Character section of the generation panel (300 px), generation with an active character, the IP-Adapter section (download, stall + Cancel, failure), 1280 x 720 |
+| `story/` | the storyboard (stories, scene cards, scene details, docked; 1280 x 720), create a story and add / edit / duplicate / delete scenes (saved), reorder by keyboard and by drag, generate a scene and every missing scene with the fake generator (progress, Cancel), character consistency (the story character's tags, LoRA and locked seed in every scene's output, a scene's own character), regenerate and pick a variant, a failing generation, Add to story from Create (an existing story, a new one, Go to Story), Use the current output, read mode (keys, buttons, Escape; 1280 x 720), Export (the downloaded HTML, opened on its own) |
 | `journeys/` | task flows across sections: the first run (empty app guidance, Browse models, Use a checkpoint, add a category, Generate), compose + generate + review, remix an online image (Use these LoRAs, tags to a new category, Generate), keep a character (create from an output, activate, two outputs with the same locked seed), download a model and use it, and a board of 42 categories (no overlap, search, collapse all, reorder) |
 
 - Servers: each run starts its own e2e backend and Vite dev server, on `E2E_BACKEND_PORT` / `E2E_FRONTEND_PORT` (default 18100 / 15200; set other ports to run several suites side by side, e.g. `E2E_BACKEND_PORT=18101 E2E_FRONTEND_PORT=15201 npx playwright test e2e/categories`). Vite runs with HMR off and its own dependency cache per port; Playwright's output goes to `test-results/e2e-<frontend port>`. `frontend/e2e/support/env.ts` owns the ports, URLs and shared Playwright settings.
-- The e2e backend (`backend/tests/e2e/server.py`, never imported by production code) runs the real `create_app` on a temp data dir and temp model folders seeded from synthetic fixture data (`backend/tests/e2e/fixtures`: every visual state of categories, prompts, forbidden rules, outputs, the library with LoRA weights, characters), with a paced fake generator (a real picture, one progress event per step, cancellable) and a synthetic Civitai / Hugging Face (`fake_civitai.py`: search, versions, images, downloads with progress, stalls and cancel). The browser's requests to other hosts go to the same synthetic network. Before every test, `POST /__e2e__/reset` gives the test a fresh app on fresh data. Its options (`backend/tests/e2e/options.py`, set per test with `test.use({ e2eOptions })`):
+- The e2e backend (`backend/tests/e2e/server.py`, never imported by production code) runs the real `create_app` on a temp data dir and temp model folders seeded from synthetic fixture data (`backend/tests/e2e/fixtures`: every visual state of categories, prompts, forbidden rules, outputs, the library with LoRA weights, characters, stories), with a paced fake generator (a real picture, one progress event per step, cancellable) and a synthetic Civitai / Hugging Face (`fake_civitai.py`: search, versions, images, downloads with progress, stalls and cancel). The browser's requests to other hosts go to the same synthetic network. Before every test, `POST /__e2e__/reset` gives the test a fresh app on fresh data. Its options (`backend/tests/e2e/options.py`, set per test with `test.use({ e2eOptions })`):
   - `generator`: `step_delay_ms` (default 60 per step), `fail_message` (every generation fails with it);
   - `network`: `chunk_delay_ms` (default 150), `download_chunks` (MiB per file, default 6), `stall_at_percent` (downloads stop there until cancelled), `corrupt_downloads` (the first N Civitai downloads fail their SHA-256 check, later ones succeed), `civitai_error_status` (e.g. 503), `civitai_delay_ms`;
   - `files`: data dir files written over the fixture data (`storeFile` and `fixtureStoreFile` in `e2e/support/backend.ts`, `layoutStoreFile` in `e2e/support/shell.ts`);
-  - `remove`: data dir files or folders deleted once everything is seeded (`output` for an empty history, `output/0000000004.png` for an output whose picture is missing, `characters`, `stores/board-store` + `stores/layout-store` to migrate the fixture's legacy `workspace-store` v0).
+  - `remove`: data dir files or folders deleted once everything is seeded (`output` for an empty history, `output/0000000004.png` for an output whose picture is missing, `characters`, `stories`, `stores/board-store` + `stores/layout-store` to migrate the fixture's legacy `workspace-store` v0).
 - The synthetic catalog (`fixtures/civitai_catalog.json`) has LoRAs, checkpoints and an embedding in every status (to download, in the library, on disk, not supported, refused pickle file, NSFW), and a feed of 24 safe, locally usable images on two pages plus special images (NSFW, Flux, unidentified LoRA, no generation data).
 - Every test fails on a console error, an uncaught page error or a request the synthetic network could not answer. `expectDockedLayout` (`e2e/support/shell.ts`) checks that the rail, the Create header and the three regions tile the window without overlapping and that Generate is on top; `expectNoPageOverflow` that nothing scrolls horizontally. `assertAppVisible` samples the viewport with `elementFromPoint` and fails when a Fluent portal mount node, an unexpected overlay or nothing covers the app, or when the screen is (nearly) one color; `expectOnTop` checks that one element is not covered; `expectNoHorizontalOverflow` that nothing sticks out of a window. State colors are compared with the token table (`resolveColor`, `computedStyle`) and text contrast is measured on the painted colors (`textContrast`, `expectReadable`).
 - Wait for the app's own save before reading a persisted store (`savedStore(page, name, accepts)`, called before the action), then read it with `backend.storedState(name)`.
