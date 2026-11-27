@@ -1,5 +1,5 @@
 // The navigation rail in the real browser: a click shows a section (aria-current, the others hidden) and keeps the
-// focus on the rail; Ctrl+1..4 show a section and move the focus into it (its first region, with a visible focus
+// focus on the rail; Ctrl+1..5 show a section and move the focus into it (its first region, with a visible focus
 // ring); the tooltips say what each section is for and its shortcut. Baseline of the rail in both themes.
 import { tokens } from '@fluentui/react-theme';
 import { SECTION_DESCRIPTIONS, SECTION_IDS, SECTION_LABELS, type SectionId } from '../../src/app/sections';
@@ -14,6 +14,7 @@ const SHORTCUTS: Readonly<Record<SectionId, string>> = {
 	models: 'Control+2',
 	images: 'Control+3',
 	characters: 'Control+4',
+	story: 'Control+5',
 };
 
 test('a rail click shows its section, marks it current and keeps the focus on the rail', async ({ app, page }, testInfo) => {
@@ -45,9 +46,9 @@ test('a click on the icon of a rail item shows its section too', async ({ app })
 	await expect(app.navItem('images')).toHaveAttribute('aria-current', 'page');
 });
 
-test('Ctrl+1..4 show the sections and move the focus to their first region, with a visible focus ring', async ({ app, page }, testInfo) => {
+test('Ctrl+1..5 show the sections and move the focus to their first region, with a visible focus ring', async ({ app, page }, testInfo) => {
 	await app.open();
-	for (const section of ['models', 'images', 'characters', 'create'] as const) {
+	for (const section of ['models', 'images', 'characters', 'story', 'create'] as const) {
 		await page.keyboard.press(SHORTCUTS[section]);
 		await expect(app.section(section)).toBeVisible();
 		await expect(app.navItem(section)).toHaveAttribute('aria-current', 'page');
