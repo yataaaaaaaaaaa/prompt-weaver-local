@@ -364,6 +364,7 @@ prompt-weaver-local/
                            fixtures/characters: a version 1 characters file)
       e2e/                 the e2e backend (server.py, reset options.py, seed.py, fake_civitai.py, images.py) and its
                            synthetic fixtures (data dir template, model files, Civitai catalog); never imported by the app
+    scripts/bench_generation.py  generation benchmark on the real GPU (see "Generation benchmark"); not a test
     run_backend.py
   frontend/
     electron/              main.cjs (backend start, window, dialogs), preload.cjs (bridge), ipcChannels.cjs,
@@ -641,6 +642,31 @@ uv run --extra dev pytest -q tests
 ```
 
 If `VIRTUAL_ENV` points at another virtual environment, unset it before running `uv` commands in `backend/`.
+
+### Generation benchmark (real GPU)
+
+`backend/scripts/bench_generation.py` measures generation speed with real model files (it is not part of any test
+suite). For each generation of a fixed sequence (cold, no LoRA x N, LoRAs x N, a weight change, a LoRA set change, no
+LoRA again x N) it reports the wall time, the setup time (model / LoRA / IP-Adapter changes, textual inversions, prompt
+encoding), the first step, the sampling speed (it/s over steps 2..N) and the finish time (VAE decode, saving); `--gpu`
+adds GPU utilization, peak VRAM, peak shared GPU memory (VRAM spilled into system RAM) and the lowest available RAM,
+`--probe` the worst `/api/health` answer time during each generation (how long other UI requests waited).
+
+```powershell
+cd backend
+# the runtime alone, in this process (stop any backend first: one GPU process at a time)
+uv run python scripts/bench_generation.py runtime --model <checkpoint.safetensors> --lora <lora.safetensors>[=weight] --lora ... --gpu --json out.json
+# end to end through a running backend (POST /api/generate; start it with PROMPT_WEAVER_DATA_DIR pointing at a temp dir)
+uv run python scripts/bench_generation.py http --url http://127.0.0.1:8000 --model <checkpoint> --lora ... --gpu --probe
+```
+
+Defaults: 768 x 1344, 30 steps, CFG 3, seed 1234, `--repeat 3`; `--prompt` / `--negative` accept inline `<lora:...>`
+tags and `embedding:name`, `--sequence` picks scenarios (`cold,base,loras,weight,set,none,base-after`). The script uses
+only the public generate API and stdlib HTTP, so it also measures older versions (run it with their interpreter).
+
+Reference (RTX 4060 Ti 16 GB, bubbleHentai_v20 SDXL fp16, model CPU offload, defaults): no LoRA 26.1 s at 1.65 it/s,
+3 LoRAs 42 s at 0.94 it/s (unfused PEFT adapters), weight change 42 s, LoRA set change 46 s (incremental; a full
+reload was 52-62 s before `diffusion-lora-runtime` 0.4.0), peak VRAM 5.5 GB allocated / 7.4 GB reserved by torch.
 
 Component tests render through the app's real root providers (`src/test/render.tsx` wraps `AppProviders` with the theme forced to light; pass `colorScheme: 'dark'` for the dark theme), so they exercise the provider configuration the app ships with.
 
